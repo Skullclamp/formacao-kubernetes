@@ -2,6 +2,8 @@
 
 Folha de consulta para os laboratórios. Utilize-a como referência, não como substituto da compreensão dos comandos.
 
+> Para uma referência mais completa, incluindo conteúdos das Sessões 2 e 3, consulte também o [`Docker Cheat Sheet`](docker-cheat-sheet.md).
+
 ## Ambiente
 
 ```bash
