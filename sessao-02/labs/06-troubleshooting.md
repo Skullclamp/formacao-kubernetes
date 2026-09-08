@@ -25,8 +25,6 @@ correção
 validação
 ```
 
-Não comece por alterar ficheiros aleatoriamente.
-
 ## 1. Estado de referência
 
 ```bash
@@ -40,7 +38,7 @@ A aplicação deverá estar funcional antes de o desafio começar.
 
 ## 2. Receber o incidente
 
-O formador irá introduzir **uma falha controlada** no seu ambiente.
+O irá-se introduzir **uma falha controlada** no seu ambiente.
 
 Não será indicada a causa. Trabalhe apenas a partir do sintoma e das evidências que conseguir recolher.
 
@@ -70,7 +68,7 @@ curl http://localhost:8080/info
 
 ## 5. Explicação
 
-Em cerca de 60 segundos, explique ao formador:
+Explique:
 
 1. qual era o sintoma;
 2. que evidência recolheu;
@@ -78,7 +76,7 @@ Em cerca de 60 segundos, explique ao formador:
 4. que alteração efetuou;
 5. como confirmou a recuperação.
 
-## Desafio adicional
+## Desafio Final
 
 A aplicação estar com `/health` funcional garante obrigatoriamente que está pronta para servir pedidos que necessitam da base de dados?
 
