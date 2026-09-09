@@ -9,9 +9,10 @@
 
 No final da sessão deverá conseguir operar uma aplicação já containerizada, ligá-la a outros serviços, garantir persistência de dados e executar troubleshooting básico num host Docker.
 
-## Plano de formação
+## Documentação da sessão
 
 - [Plano revisto da Sessão 2](plano_sessao_2.md)
+- [Manual do formando](manual_formando.md)
 
 ## Percurso
 
