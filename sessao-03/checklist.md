@@ -1,85 +1,115 @@
 # Checklist — Sessão 3
 
+## Laboratório Integrado
+
+Utilize esta checklist em conjunto com:
+
+[Laboratório Integrado da Sessão 3](formando/labs/laboratorio_integrado_sessao_3.md)
+
 ## Preparação da VM
+
+- [ ] Parti de uma VM Ubuntu Server limpa.
+- [ ] Atualizei o catálogo e os pacotes do sistema.
+- [ ] Instalei `ca-certificates`, `curl` e `git`.
+- [ ] Adicionei a chave e o repositório oficial Docker.
+- [ ] Instalei Docker Engine, Docker CLI, `containerd`, Buildx e Compose.
+- [ ] Executei `docker run --rm hello-world` com sucesso.
+- [ ] Consigo explicar a relação Docker CLI → Engine → containerd → runc.
+- [ ] Adicionei o utilizador ao grupo `docker` e compreendi a implicação de segurança.
+- [ ] Instalei e validei Trivy.
+
+## Recursos da formação
 
 - [ ] Clonei o repositório ou executei `git pull`.
 - [ ] Entrei em `formacao-kubernetes/sessao-03`.
-- [ ] Confirmei que `formando/docker/Dockerfile` existe.
 - [ ] Executei `./comum/prepare-source.sh`.
 - [ ] Confirmei que `app/composer.json` existe.
-- [ ] Confirmei `docker version` e `docker compose version`.
-- [ ] Confirmei `trivy --version` antes do Lab 05.
 
 ## Build
 
-- [ ] Analisei `Dockerfile.inicial` antes de construir.
-- [ ] Construí manualmente a imagem inicial com `docker build`.
-- [ ] Consigo explicar o contexto `.` no final de `docker build`.
+- [ ] Consigo explicar imagem versus container.
+- [ ] Analisei `Dockerfile.inicial`.
+- [ ] Construí manualmente a imagem inicial.
+- [ ] Consigo explicar `-f`, `-t` e o contexto `.` em `docker build`.
 - [ ] Consultei `docker history`.
-- [ ] Analisei o Dockerfile multi-stage.
 - [ ] Construí manualmente `1.0.0` com `--build-arg`.
-- [ ] Construí manualmente `1.1.0` e observei a cache.
-- [ ] Consigo explicar por que `composer.json` e `composer.lock` entram antes do restante código.
-- [ ] Só depois consultei/executei `build.sh` como automação.
+- [ ] Construí `1.1.0` e observei reutilização da cache.
+- [ ] Consigo explicar a finalidade do multi-stage build.
+- [ ] Só depois analisei `build.sh` como automação.
 
 ## Segurança
 
-- [ ] Avaliei a origem e adequação da imagem base.
-- [ ] Construí o exemplo `Dockerfile.bad` com um valor fictício.
-- [ ] Observei por que `ARG`/`ENV` não são mecanismos seguros para secrets persistentes.
-- [ ] Executei um exemplo com BuildKit secret mount.
+- [ ] Consigo explicar o conceito de hardening.
+- [ ] Demonstrei por que `ARG`/`ENV` não são secret managers.
+- [ ] Executei o exemplo com BuildKit secret.
 - [ ] Executei o exemplo de Compose secret.
+- [ ] Consigo explicar `/run/secrets/<nome>`.
 - [ ] Compreendi que `.env` não é um secret manager.
 
 ## Saúde e operação
 
-- [ ] Executei `docker compose ... config` manualmente com base + override.
-- [ ] Iniciei a stack com o comando Compose completo antes de usar o wrapper.
-- [ ] Validei `/health`.
-- [ ] Validei `/ready`.
-- [ ] Consultei o Docker `HEALTHCHECK`.
-- [ ] Compreendi que health e readiness podem divergir.
-- [ ] Consultei limites de CPU/memória e restart policy.
-- [ ] Só depois utilizei `compose-prod.sh` como wrapper.
+- [ ] Consultei o Docker `HEALTHCHECK` da imagem.
+- [ ] Consigo distinguir `/health`, `/ready` e `/info`.
+- [ ] Validei o Compose com base + override + `.env.prod`.
+- [ ] Consigo explicar `--env-file` e os vários `-f`.
+- [ ] Identifiquei limites de CPU/memória, restart policy e logging.
+- [ ] Só depois utilizei o wrapper `compose-prod.sh`.
 
-## Scan e identidade
+## Scan
 
-- [ ] Analisei a imagem com Trivy.
-- [ ] Interpretei o exit code do quality gate didático.
-- [ ] Criei `symfony-demo:stable` com `docker tag`.
-- [ ] Confirmei que `1.1.0` e `stable` podem apontar para o mesmo image ID local.
-- [ ] Consigo explicar a diferença entre tag e digest.
+- [ ] Executei Trivy sobre a imagem.
+- [ ] Consigo explicar `--scanners`, `--severity` e `--ignore-unfixed`.
+- [ ] Compreendi o significado de `--exit-code 1` num quality gate didático.
+- [ ] Sei que a contagem de vulnerabilidades varia ao longo do tempo.
 
-## Registry
+## Tag, digest e registry
 
-- [ ] Fiz pull de uma imagem pública do GHCR.
-- [ ] Quando aplicável, executei `docker tag` manualmente para o meu namespace.
-- [ ] Quando aplicável, executei `docker push` manualmente.
+- [ ] Consigo explicar o que é um container registry.
+- [ ] Consigo decompor `ghcr.io/skullclamp/symfony-demo:1.0.0`.
+- [ ] Criei uma segunda tag local com `docker tag`.
+- [ ] Confirmei que duas tags podem apontar para o mesmo conteúdo.
+- [ ] Consigo distinguir tag de digest.
+- [ ] Fiz `docker pull` de uma imagem pública.
+- [ ] Quando aplicável, fiz `docker push` para o meu namespace.
 - [ ] Observei um RepoDigest.
-- [ ] Só depois consultei/executei `push.sh` como automação.
 - [ ] Compreendi `build once / promote the same artifact`.
 
-## Deployment integrado
+## Deployment single-host
 
-- [ ] Abri `deploy-prod.sh` e identifiquei o algoritmo antes de o executar.
-- [ ] Abri `validate.sh` e identifiquei as validações realizadas.
+- [ ] Validei a configuração Compose efetiva.
+- [ ] Iniciei os serviços manualmente antes de usar scripts de deployment.
+- [ ] Validei `/health`, `/ready` e `/info`.
+- [ ] Consultei o estado Docker `healthy/unhealthy`.
+- [ ] Consigo explicar porque Compose single-host não é Alta Disponibilidade.
+
+## Persistência e backup
+
+- [ ] Criei `lab_marker` na base de dados.
+- [ ] Insertei dados de controlo.
+- [ ] Executei um `pg_dump` manual.
+- [ ] Confirmei que `backup.sql` tem conteúdo.
+- [ ] Consigo explicar persistência versus backup.
+
+## Update, falha e rollback
+
+- [ ] Abri `deploy-prod.sh` e identifiquei as suas fases.
 - [ ] Fiz deploy de `1.0.0`.
-- [ ] Criei um marcador persistente na base de dados.
-- [ ] Abri `backup-postgres.sh` e identifiquei o `pg_dump`.
-- [ ] Efetuei backup lógico.
 - [ ] Atualizei para `1.1.0`.
-- [ ] Confirmei a preservação do marcador.
-- [ ] Testei `1.2.0-rc1`.
-- [ ] Detetei o estado `unhealthy` e o exit code de falha.
-- [ ] Comparei manualmente `/health` com `/healthz` antes do rollback.
-- [ ] Abri `rollback.sh` antes de o executar.
-- [ ] Fiz rollback para `1.1.0`.
-- [ ] Confirmei novamente os dados.
+- [ ] Confirmei que os dados permaneceram.
+- [ ] Executei `1.2.0-rc1` e registei o exit code.
+- [ ] Consultei `docker inspect` e logs antes de corrigir.
+- [ ] Comparei `/health` com `/healthz`.
+- [ ] Consegui explicar a causa do estado `unhealthy`.
+- [ ] Só depois executei rollback para `1.1.0`.
+- [ ] Validei novamente aplicação e dados.
 
 ## Conceitos finais
 
-- [ ] Consigo explicar por que razão primeiro fazemos manualmente e só depois automatizamos.
-- [ ] Consigo explicar por que razão uma tag é diferente de um digest.
-- [ ] Consigo explicar por que razão persistência não substitui backup.
-- [ ] Consigo explicar por que Docker Compose single-host não é HA.
-- [ ] Sei que Docker `HEALTHCHECK` não se transforma automaticamente numa probe Kubernetes.
+- [ ] Fazer manualmente → observar → explicar → automatizar.
+- [ ] Imagem ≠ Container.
+- [ ] `.env` ≠ Secret Manager.
+- [ ] Docker `HEALTHCHECK` ≠ Kubernetes Probe.
+- [ ] Tag ≠ Digest.
+- [ ] Persistência ≠ Backup.
+- [ ] Build Once → Promote the Same Artifact.
+- [ ] Compose Single-host ≠ Alta Disponibilidade ≠ Kubernetes.
