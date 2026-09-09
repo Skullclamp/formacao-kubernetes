@@ -39,7 +39,40 @@ Falha
 Rollback
 ```
 
-## Aplicação utilizada
+## 1. Começar numa VM nova
+
+Os recursos da sessão estão no GitHub. Antes de executar qualquer laboratório, o formando deve ter uma cópia local do repositório.
+
+### Primeira utilização
+
+```bash
+git clone https://github.com/Skullclamp/formacao-kubernetes.git
+cd formacao-kubernetes/sessao-03
+```
+
+### Se o repositório já existir
+
+```bash
+cd formacao-kubernetes
+git pull
+cd sessao-03
+```
+
+Confirme que está na raiz da Sessão 3:
+
+```bash
+pwd
+test -f formando/docker/Dockerfile && echo 'OK: diretoria correta'
+test -x comum/prepare-source.sh && echo 'OK: prepare-source disponível'
+```
+
+Todos os comandos dos Labs 01–07 assumem como diretoria de trabalho:
+
+```text
+formacao-kubernetes/sessao-03
+```
+
+## 2. Preparar o código da aplicação
 
 O laboratório utiliza:
 
@@ -49,7 +82,7 @@ O laboratório utiliza:
 - PostgreSQL 16;
 - Docker Compose.
 
-O código da aplicação não é armazenado neste diretório. É preparado através de:
+O código da aplicação não é armazenado permanentemente na pasta da sessão. Depois do clone, execute:
 
 ```bash
 ./comum/prepare-source.sh
@@ -57,20 +90,19 @@ O código da aplicação não é armazenado neste diretório. É preparado atrav
 
 O script descarrega a versão de referência e aplica os endpoints pedagógicos `/info`, `/health` e `/ready`.
 
-## Preparação
-
-A partir da raiz do repositório:
+Confirme:
 
 ```bash
-cd sessao-03
-./comum/prepare-source.sh
+test -f app/composer.json && echo 'OK: aplicação preparada'
 ```
 
-Confirmar:
+## 3. Pré-requisitos
 
 ```bash
 docker version
 docker compose version
+git --version
+curl --version
 ```
 
 Para o Lab 05:
@@ -78,6 +110,31 @@ Para o Lab 05:
 ```bash
 trivy --version
 ```
+
+## 4. Regra pedagógica dos scripts
+
+Os scripts existem para demonstrar automação e para suportar o cenário operacional final. **Não substituem a aprendizagem manual.**
+
+A progressão da sessão é:
+
+```text
+FAZER manualmente
+      ↓
+OBSERVAR
+      ↓
+EXPLICAR
+      ↓
+AUTOMATIZAR
+```
+
+Nos Labs 01–06, os comandos principais são executados manualmente antes de usar qualquer script equivalente. No Lab 07, os scripts são utilizados deliberadamente porque o objetivo já é integrar deploy, validação, update, falha e rollback.
+
+Sempre que um script for introduzido:
+
+1. identifique os passos que já executou manualmente;
+2. abra o script;
+3. localize esses passos no código;
+4. só depois execute o script.
 
 ## Documentação da sessão
 
@@ -116,24 +173,9 @@ docker pull ghcr.io/skullclamp/symfony-demo:1.2.0-rc1
 
 ## Push para um registry pessoal
 
-Para publicar num namespace próprio é necessária autenticação e permissão de escrita:
-
-```bash
-export IMAGE_REPO=ghcr.io/UTILIZADOR_GITHUB/symfony-demo
-./formando/scripts/push.sh 1.0.0
-```
+Para publicar num namespace próprio é necessária autenticação e permissão de escrita. O Lab 06 ensina primeiro `docker tag` e `docker push` manualmente; só depois apresenta `push.sh` como automatização.
 
 Nunca colocar tokens no repositório.
-
-## Deployment single-host
-
-```bash
-cp formando/compose/.env.prod.example formando/compose/.env.prod
-./formando/scripts/compose-prod.sh config
-./formando/scripts/deploy-prod.sh 1.0.0
-./formando/scripts/deploy-prod.sh 1.1.0
-./formando/scripts/rollback.sh 1.1.0
-```
 
 ## Saúde e prontidão
 
@@ -152,18 +194,6 @@ PostgreSQL utiliza um named volume. A substituição do container ou da imagem n
 ```text
 Persistência ≠ Backup
 ```
-
-## Scan de vulnerabilidades
-
-```bash
-trivy image \
-  --scanners vuln \
-  --severity HIGH,CRITICAL \
-  --ignore-unfixed \
-  symfony-demo:1.1.0
-```
-
-Os resultados variam com a base de vulnerabilidades disponível; não devem ser comparados através de contagens fixas.
 
 ## Conceito principal
 
