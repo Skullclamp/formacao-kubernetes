@@ -10,16 +10,121 @@ A Sessão 2 concentrou-se em **operar** containers. Nesta sessão o foco passa p
 Código → Dockerfile → imagem → scan → registry → deploy → update → rollback
 ```
 
-## 2. Preparar a VM
+# 2. Ponto de partida — Ubuntu Server limpo
 
-Os recursos encontram-se no GitHub. Numa VM nova:
+A VM parte de uma instalação limpa de Ubuntu Server. Antes de clonar os recursos da formação é necessário instalar Docker Engine, Buildx, Docker Compose, Git e `curl`.
+
+## 2.1. Atualizar o sistema
+
+```bash
+sudo apt update
+sudo apt upgrade -y
+
+sudo apt install -y \
+  ca-certificates \
+  curl \
+  git
+```
+
+## 2.2. Remover eventuais pacotes em conflito
+
+```bash
+sudo apt remove -y \
+  docker.io \
+  docker-compose \
+  docker-compose-v2 \
+  docker-doc \
+  docker-buildx \
+  podman-docker \
+  containerd \
+  runc
+```
+
+## 2.3. Adicionar a chave oficial Docker
+
+```bash
+sudo install -m 0755 -d /etc/apt/keyrings
+
+sudo curl -fsSL \
+  https://download.docker.com/linux/ubuntu/gpg \
+  -o /etc/apt/keyrings/docker.asc
+
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+```
+
+## 2.4. Adicionar o repositório oficial Docker
+
+```bash
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+sudo apt update
+```
+
+## 2.5. Instalar Docker Engine, containerd, Buildx e Compose
+
+```bash
+sudo apt install -y \
+  docker-ce \
+  docker-ce-cli \
+  containerd.io \
+  docker-buildx-plugin \
+  docker-compose-plugin
+```
+
+## 2.6. Validar a instalação
+
+```bash
+sudo systemctl status docker --no-pager
+sudo docker run --rm hello-world
+sudo docker version
+sudo docker info
+sudo docker compose version
+sudo docker buildx version
+```
+
+Se necessário:
+
+```bash
+sudo systemctl start docker
+sudo systemctl enable docker
+```
+
+## 2.7. Executar Docker sem `sudo`
+
+```bash
+sudo usermod -aG docker "$USER"
+exit
+```
+
+Volte a ligar por SSH e confirme:
+
+```bash
+groups
+docker version
+docker info
+docker run --rm hello-world
+docker compose version
+```
+
+> O grupo `docker` concede privilégios elevados sobre o host. Na formação é utilizado numa VM de laboratório para simplificar a execução dos exercícios.
+
+# 3. Obter os recursos da formação
+
+## Primeira utilização
 
 ```bash
 git clone https://github.com/Skullclamp/formacao-kubernetes.git
 cd formacao-kubernetes/sessao-03
 ```
 
-Se o repositório já estiver clonado:
+## Se o repositório já estiver clonado
 
 ```bash
 cd formacao-kubernetes
@@ -27,7 +132,7 @@ git pull
 cd sessao-03
 ```
 
-Todos os comandos da sessão assumem que está na raiz:
+Todos os comandos da sessão assumem que está em:
 
 ```text
 formacao-kubernetes/sessao-03
@@ -36,20 +141,12 @@ formacao-kubernetes/sessao-03
 Confirme:
 
 ```bash
+pwd
 test -f formando/docker/Dockerfile && echo 'OK: diretoria correta'
 test -x comum/prepare-source.sh && echo 'OK: prepare-source disponível'
 ```
 
-## 3. Pré-requisitos
-
-- Docker Engine funcional;
-- Docker Compose;
-- Git;
-- `curl`;
-- Trivy para o Lab 05;
-- acesso à Internet para obter o Symfony Demo e imagens públicas.
-
-Preparar a aplicação:
+# 4. Preparar a aplicação
 
 ```bash
 ./comum/prepare-source.sh
@@ -61,7 +158,24 @@ Confirmar:
 test -f app/composer.json && echo 'OK: source preparado'
 ```
 
-## 4. Regra de aprendizagem
+# 5. Pré-requisitos antes dos laboratórios
+
+```bash
+docker version
+docker info
+docker compose version
+docker buildx version
+git --version
+curl --version
+```
+
+Para o Lab 05:
+
+```bash
+trivy --version
+```
+
+# 6. Regra de aprendizagem
 
 Nos Labs 01–06, deverá primeiro executar o processo **manualmente**. Os scripts existem como exemplos de automação e atalhos depois de compreender os passos.
 
@@ -79,7 +193,7 @@ Não execute um script pela primeira vez sem saber que operações está a autom
 
 No Lab 07 os scripts são usados deliberadamente para integrar o ciclo operacional completo.
 
-## 5. Cenário
+# 7. Cenário
 
 A aplicação é a Symfony Demo `v3.1.0`, executada com PHP 8.4 + Apache e PostgreSQL 16.
 
@@ -93,7 +207,7 @@ Os endpoints adicionais são:
 
 `/health` responde à pergunta “o processo da aplicação está operacional?”. `/ready` acrescenta a dependência da base de dados.
 
-## 6. Percurso dos laboratórios
+# 8. Percurso dos laboratórios
 
 | Lab | Tema | Forma de trabalho | Resultado esperado |
 |---:|---|---|---|
@@ -105,7 +219,7 @@ Os endpoints adicionais são:
 | 06 | Registry e promoção | `tag` e `push` manuais; script depois | promoção compreendida |
 | 07 | Deploy/update/rollback | automação operacional transparente | ciclo completo validado |
 
-## 7. Regras de trabalho
+# 9. Regras de trabalho
 
 1. Não colocar tokens ou passwords reais nos ficheiros versionados.
 2. Não usar `latest` nos exercícios em que se pretende rastreabilidade.
@@ -115,7 +229,7 @@ Os endpoints adicionais são:
 6. Um deployment Compose num único host não é Alta Disponibilidade.
 7. Antes de executar um script, saber explicar os passos que ele automatiza.
 
-## 8. Versões de referência
+# 10. Versões de referência
 
 ```text
 1.0.0      → versão inicial
@@ -129,10 +243,13 @@ Imagens públicas:
 ghcr.io/skullclamp/symfony-demo
 ```
 
-## 9. Evidência final
+# 11. Evidência final
 
 No final deverá conseguir mostrar:
 
+- Docker Engine, Compose e Buildx funcionais;
+- repositório clonado na VM;
+- source Symfony preparado;
 - Dockerfile interpretado;
 - imagem construída manualmente;
 - cache observada e explicada;
