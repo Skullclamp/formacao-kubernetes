@@ -82,6 +82,7 @@ trivy --version
 ## Documentação da sessão
 
 - [Plano da Sessão 3](plano_sessao_3.md)
+- [Manual do formando](manual_formando.md)
 - [Guia do formando](formando/guia_formando.md)
 - [Cheat sheet](cheat_sheet.md)
 - [Checklist final](checklist.md)
