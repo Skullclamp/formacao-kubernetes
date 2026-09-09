@@ -1,31 +1,99 @@
 # Cheat Sheet — Sessão 3
 
-## Preparar source
+> Todos os comandos assumem que está em `formacao-kubernetes/sessao-03`.
+
+## Obter os recursos numa VM nova
 
 ```bash
+git clone https://github.com/Skullclamp/formacao-kubernetes.git
+cd formacao-kubernetes/sessao-03
 ./comum/prepare-source.sh
 ```
 
-## Build
+Se já tiver o repositório:
 
 ```bash
-./formando/scripts/build.sh 1.0.0
-./formando/scripts/build.sh 1.1.0
+cd formacao-kubernetes
+git pull
+cd sessao-03
+./comum/prepare-source.sh
+```
 
+## Build manual
+
+```bash
+docker build \
+  -f formando/docker/Dockerfile \
+  --build-arg APP_VERSION=1.0.0 \
+  --build-arg SOURCE_REF=v3.1.0 \
+  -t symfony-demo:1.0.0 \
+  .
+```
+
+Nova versão para observar cache:
+
+```bash
+docker build \
+  -f formando/docker/Dockerfile \
+  --build-arg APP_VERSION=1.1.0 \
+  --build-arg SOURCE_REF=v3.1.0 \
+  -t symfony-demo:1.1.0 \
+  .
+```
+
+Observar:
+
+```bash
 docker image ls symfony-demo
 docker history symfony-demo:1.1.0
+```
+
+Só depois de compreender o comando manual:
+
+```bash
+./formando/scripts/build.sh 1.1.0
+```
+
+## Compose manual
+
+```bash
+cp formando/compose/.env.prod.example formando/compose/.env.prod
+
+docker compose \
+  --env-file formando/compose/.env.prod \
+  -f formando/compose/compose.yaml \
+  -f formando/compose/compose.prod.yaml \
+  config
+```
+
+```bash
+docker compose \
+  --env-file formando/compose/.env.prod \
+  -f formando/compose/compose.yaml \
+  -f formando/compose/compose.prod.yaml \
+  up -d
+```
+
+Depois pode usar o wrapper:
+
+```bash
+./formando/scripts/compose-prod.sh ps
 ```
 
 ## Health
 
 ```bash
-docker inspect symfony-demo:1.1.0 \
-  --format '{{json .Config.Healthcheck}}'
+curl -fsS http://localhost:8080/health
+curl -fsS http://localhost:8080/ready
+curl -fsS http://localhost:8080/info
+```
+
+```bash
+CID=$(./formando/scripts/compose-prod.sh ps -q app)
+docker inspect "$CID" --format '{{json .State.Health}}'
 ```
 
 ## Trivy
-
-Scan informativo:
 
 ```bash
 trivy image \
@@ -35,7 +103,7 @@ trivy image \
   symfony-demo:1.1.0
 ```
 
-Exemplo de quality gate apenas para CRITICAL:
+Quality gate didático:
 
 ```bash
 trivy image \
@@ -46,19 +114,41 @@ trivy image \
   symfony-demo:1.1.0
 ```
 
-## Tags e digest
+## Tags
 
 ```bash
-docker image inspect symfony-demo:1.1.0 \
-  --format '{{.Id}}'
+docker tag symfony-demo:1.1.0 symfony-demo:stable
 
-docker image inspect "$IMAGE_REPO:1.1.0" \
+docker image inspect symfony-demo:1.1.0 --format '{{.Id}}'
+docker image inspect symfony-demo:stable --format '{{.Id}}'
+```
+
+## GHCR — push manual primeiro
+
+```bash
+export IMAGE_REPO=ghcr.io/UTILIZADOR_GITHUB/symfony-demo
+
+docker tag \
+  symfony-demo:1.0.0 \
+  "$IMAGE_REPO:1.0.0"
+
+docker push "$IMAGE_REPO:1.0.0"
+```
+
+Digest:
+
+```bash
+docker image inspect "$IMAGE_REPO:1.0.0" \
   --format '{{range .RepoDigests}}{{println .}}{{end}}'
 ```
 
-## GHCR
+Depois da aprendizagem manual:
 
-### Pull público
+```bash
+./formando/scripts/push.sh 1.0.0
+```
+
+## Pull público
 
 ```bash
 docker pull ghcr.io/skullclamp/symfony-demo:1.0.0
@@ -66,35 +156,33 @@ docker pull ghcr.io/skullclamp/symfony-demo:1.1.0
 docker pull ghcr.io/skullclamp/symfony-demo:1.2.0-rc1
 ```
 
-### Push para namespace pessoal
+## Deployment integrado — Lab 07
 
-```bash
-export CR_PAT='TOKEN'
-echo "$CR_PAT" | docker login ghcr.io \
-  -u UTILIZADOR_GITHUB --password-stdin
-
-export IMAGE_REPO=ghcr.io/UTILIZADOR_GITHUB/symfony-demo
-./formando/scripts/push.sh 1.0.0
-```
-
-Nunca partilhar o token.
-
-## Compose produção
-
-```bash
-cp formando/compose/.env.prod.example formando/compose/.env.prod
-./formando/scripts/compose-prod.sh config
-./formando/scripts/compose-prod.sh up -d
-./formando/scripts/compose-prod.sh ps
-./formando/scripts/compose-prod.sh logs -f app
-```
-
-## Deployment / rollback
+Nesta fase a automação é intencional:
 
 ```bash
 ./formando/scripts/deploy-prod.sh 1.0.0
 ./formando/scripts/deploy-prod.sh 1.1.0
+```
+
+Falha controlada:
+
+```bash
 ./formando/scripts/deploy-prod.sh 1.2.0-rc1
+```
+
+Diagnóstico:
+
+```bash
+CID=$(./formando/scripts/compose-prod.sh ps -q app)
+docker inspect "$CID" --format '{{json .State.Health}}'
+curl -i http://localhost:8080/health
+curl -i http://localhost:8080/healthz
+```
+
+Rollback:
+
+```bash
 ./formando/scripts/rollback.sh 1.1.0
 ```
 
@@ -104,10 +192,14 @@ cp formando/compose/.env.prod.example formando/compose/.env.prod
 ./formando/scripts/backup-postgres.sh
 ```
 
-## Endpoints
+## Regra da sessão
 
-```bash
-curl -fsS http://localhost:8080/health
-curl -fsS http://localhost:8080/ready
-curl -fsS http://localhost:8080/info
+```text
+FAZER manualmente
+      ↓
+OBSERVAR
+      ↓
+EXPLICAR
+      ↓
+AUTOMATIZAR
 ```
