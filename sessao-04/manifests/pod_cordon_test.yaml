@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cordon-test
+  labels:
+    app: cordon-test
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-wk-01
+  containers:
+    - name: web
+      image: nginx
+      ports:
+        - containerPort: 80
+  restartPolicy: Always
