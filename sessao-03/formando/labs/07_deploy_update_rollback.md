@@ -2,7 +2,26 @@
 
 **Duração prevista:** 50 minutos
 
-**Objetivo:** executar um deployment single-host controlado, validar saúde/prontidão, atualizar e regressar a uma versão conhecida como boa sem perder os dados.
+## Objetivo
+
+Executar um deployment single-host controlado, compreender o algoritmo operacional automatizado, validar saúde/prontidão, atualizar e regressar a uma versão conhecida como boa sem perder os dados.
+
+## Ponto de partida
+
+Executar a partir de:
+
+```text
+formacao-kubernetes/sessao-03
+```
+
+Confirme:
+
+```bash
+test -f formando/compose/compose.yaml && echo 'OK: Compose disponível'
+test -x formando/scripts/deploy-prod.sh && echo 'OK: scripts disponíveis'
+```
+
+Neste laboratório os scripts são utilizados de forma deliberada. Nos labs anteriores executou manualmente build, Compose, tag, push e validações. Agora o objetivo é integrar esses conhecimentos num processo operacional repetível.
 
 ## 1. Preparar
 
@@ -12,35 +31,65 @@ cp formando/compose/.env.prod.example formando/compose/.env.prod
 
 Se utilizar outro registry, editar apenas `IMAGE_REPO`.
 
-## 2. Validar Compose
+## 2. Compreender antes de executar
+
+Abra o script principal:
+
+```bash
+sed -n '1,320p' formando/scripts/deploy-prod.sh
+```
+
+Não é necessário dominar toda a sintaxe Bash. Identifique o algoritmo:
+
+```text
+1. validar configuração Compose
+2. verificar antecipadamente a porta publicada
+3. obter/pull das imagens
+4. iniciar PostgreSQL
+5. aguardar DB healthy
+6. verificar/inicializar schema do laboratório
+7. iniciar aplicação
+8. validar endpoints
+9. validar Docker HEALTHCHECK
+```
+
+Abra também o validador:
+
+```bash
+sed -n '1,260p' formando/scripts/validate.sh
+```
+
+Localize as verificações de:
+
+- `/health`;
+- `/ready`;
+- `/info`;
+- Docker health status.
+
+## 3. Validar Compose
 
 ```bash
 ./formando/scripts/compose-prod.sh config
 ```
 
-Confirmar que não existe `build:` para o serviço `app`.
+Confirme que não existe `build:` para o serviço `app`: nesta fase o deployment consome uma imagem já construída e promovida.
 
-## 3. Deployment inicial
+## 4. Deployment inicial — 1.0.0
 
 ```bash
 ./formando/scripts/deploy-prod.sh 1.0.0
 ```
 
-O script:
+Enquanto executa, relacione cada mensagem apresentada com o algoritmo identificado no passo 2.
 
-1. valida a configuração Compose;
-2. verifica antecipadamente a porta publicada;
-3. faz pull das imagens;
-4. inicia PostgreSQL;
-5. aguarda o healthcheck da base de dados;
-6. verifica se o schema da aplicação já existe;
-7. numa base vazia, cria o schema inicial do laboratório;
-8. inicia a aplicação;
-9. valida `/health`, `/ready`, `/info` e Docker HEALTHCHECK.
+Validar novamente:
 
-> A criação automática do schema é uma conveniência específica do laboratório. Em produção, a evolução do schema deve ser efetuada através de migrações explícitas e versionadas.
+```bash
+./formando/scripts/validate.sh
+curl -fsS http://localhost:8080/info
+```
 
-## 4. Criar evidência persistente
+## 5. Criar evidência persistente
 
 ```bash
 ./formando/scripts/compose-prod.sh exec -T db \
@@ -55,37 +104,72 @@ SELECT * FROM lab_marker;
 SQL
 ```
 
-## 5. Backup lógico
+Esta tabela serve apenas como evidência pedagógica de persistência.
+
+## 6. Backup lógico
+
+Antes de executar, abra:
+
+```bash
+sed -n '1,220p' formando/scripts/backup-postgres.sh
+```
+
+Identifique o `pg_dump` utilizado.
+
+Depois execute:
 
 ```bash
 ./formando/scripts/backup-postgres.sh
 ```
 
-Persistência e backup são mecanismos distintos.
+Mensagem-chave:
 
-## 6. Atualizar para 1.1.0
+```text
+Persistência
+     ≠
+Backup
+```
+
+## 7. Atualizar para 1.1.0
 
 ```bash
 ./formando/scripts/deploy-prod.sh 1.1.0
 ```
 
-Validar:
+Validar versão:
 
 ```bash
 curl -fsS http://localhost:8080/info
+```
+
+Validar dados:
+
+```bash
 ./formando/scripts/compose-prod.sh exec -T db \
-  psql -U symfony -d symfony -c 'SELECT * FROM lab_marker;'
+  psql -U symfony -d symfony \
+  -c 'SELECT * FROM lab_marker;'
 ```
 
 O marcador deve continuar presente.
 
-## 7. Falha controlada — 1.2.0-rc1
+Explique:
+
+```text
+imagem/container da aplicação mudou
+           ↓
+volume PostgreSQL permaneceu
+           ↓
+dados permaneceram
+```
+
+## 8. Falha controlada — 1.2.0-rc1
 
 ```bash
 set +e
 ./formando/scripts/deploy-prod.sh 1.2.0-rc1
 RC=$?
 set -e
+
 echo "EXIT_CODE=$RC"
 ```
 
@@ -94,19 +178,65 @@ Resultado esperado:
 - `/health` pode responder;
 - `/ready` pode responder;
 - `/info` apresenta `1.2.0-rc1`;
-- o Docker HEALTHCHECK fica `unhealthy`, porque a imagem aponta o healthcheck para um caminho incorreto;
+- Docker HEALTHCHECK fica `unhealthy` porque a imagem aponta o teste para um caminho incorreto;
 - o script de deployment devolve erro.
 
-Diagnóstico:
+## 9. Diagnosticar antes do rollback
+
+Não execute imediatamente o rollback. Primeiro prove a causa.
+
+Consultar estado:
 
 ```bash
 ./formando/scripts/compose-prod.sh ps
+```
+
+Obter o container:
+
+```bash
 CID=$(./formando/scripts/compose-prod.sh ps -q app)
-docker inspect "$CID" --format '{{json .State.Health}}'
+```
+
+Consultar Docker health:
+
+```bash
+docker inspect "$CID" \
+  --format '{{json .State.Health}}'
+```
+
+Consultar logs:
+
+```bash
 ./formando/scripts/compose-prod.sh logs --tail 100 app
 ```
 
-## 8. Rollback
+Comparar os dois caminhos:
+
+```bash
+curl -i http://localhost:8080/health
+curl -i http://localhost:8080/healthz
+```
+
+Pergunta:
+
+> Porque pode a aplicação responder em `/health` e o Docker considerar o container `unhealthy`?
+
+## 10. Compreender o rollback
+
+Abra antes de executar:
+
+```bash
+sed -n '1,240p' formando/scripts/rollback.sh
+```
+
+Identifique:
+
+- alteração da versão;
+- pull;
+- atualização da stack;
+- validação final.
+
+## 11. Executar rollback
 
 ```bash
 ./formando/scripts/rollback.sh 1.1.0
@@ -117,23 +247,32 @@ Confirmar:
 ```bash
 ./formando/scripts/validate.sh
 ./formando/scripts/compose-prod.sh exec -T db \
-  psql -U symfony -d symfony -c 'SELECT * FROM lab_marker;'
+  psql -U symfony -d symfony \
+  -c 'SELECT * FROM lab_marker;'
 ```
 
 A versão deverá voltar a `1.1.0`, o healthcheck deverá ficar `healthy` e o marcador deverá permanecer.
 
-## 9. Síntese
+## 12. Síntese
 
 ```text
+processo manual aprendido
+        ↓
+automação compreendida
+        ↓
 1.0.0
   ↓ deploy
 1.1.0
   ↓ update
 1.2.0-rc1
-  ↓ unhealthy
+  ↓ diagnóstico: unhealthy
 1.1.0
   ↓ rollback
 healthy + dados preservados
 ```
 
 > Kubernetes não reutiliza automaticamente a metadata de Docker HEALTHCHECK como liveness/readiness probe.
+
+### Questão final
+
+Que vantagens tem automatizar o deployment **depois** de compreender manualmente os passos que o compõem?
