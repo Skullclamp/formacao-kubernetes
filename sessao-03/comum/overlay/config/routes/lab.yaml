@@ -1,0 +1,14 @@
+lab_info:
+  path: /info
+  controller: App\Controller\LabController::info
+  methods: [GET]
+
+lab_health:
+  path: /health
+  controller: App\Controller\LabController::health
+  methods: [GET]
+
+lab_ready:
+  path: /ready
+  controller: App\Controller\LabController::ready
+  methods: [GET]

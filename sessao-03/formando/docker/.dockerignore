@@ -1,0 +1,6 @@
+app/.git/
+app/vendor/
+app/var/cache/
+app/var/log/
+app/.env.local
+app/.env.*.local

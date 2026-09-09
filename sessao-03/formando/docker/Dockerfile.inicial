@@ -1,0 +1,30 @@
+FROM php:8.4-apache-bookworm
+
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    APP_ENV=dev
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       curl git unzip libicu-dev libpq-dev libsqlite3-dev \
+    && docker-php-ext-install -j"$(nproc)" intl opcache pdo_pgsql pdo_sqlite \
+    && a2enmod rewrite \
+    && printf 'ServerName localhost\n' > /etc/apache2/conf-available/servername.conf \
+    && a2enconf servername \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+
+WORKDIR /var/www/html
+COPY app/ ./
+COPY formando/docker/000-default.conf /etc/apache2/sites-available/000-default.conf
+
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader \
+    && mkdir -p var/cache var/log \
+    && chown -R www-data:www-data var
+
+EXPOSE 80
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
+    CMD curl -fsS http://localhost/health >/dev/null || exit 1
+
+CMD ["apache2-foreground"]

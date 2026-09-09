@@ -1,0 +1,17 @@
+services:
+  app:
+    image: ${IMAGE_REPO}:${APP_VERSION}
+    environment:
+      APP_ENV: prod
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: local
+
+  db:
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: local

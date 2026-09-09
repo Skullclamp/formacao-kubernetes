@@ -1,0 +1,11 @@
+app/.git/
+app/vendor/
+app/var/cache/
+app/var/log/
+.git/
+app/.env.local
+app/.env.*.local
+backups/
+*.zip
+*.tar
+*.sql
