@@ -33,7 +33,7 @@ Utilize apenas um valor fictício de laboratório:
 ```bash
 docker build \
   -f formando/exemplos/secrets/Dockerfile.bad \
-  --build-arg DEMO_SECRET=segredo-falso-lab \
+  --build-arg API_TOKEN=segredo-falso-lab \
   -t secret-demo:bad \
   formando/exemplos/secrets
 ```
@@ -47,7 +47,7 @@ docker image inspect secret-demo:bad
 
 Perguntas:
 
-- O valor ficou visível no histórico ou metadata?
+- O valor ficou visível na configuração ou metadata da imagem?
 - Deverá um secret ser tratado como `ARG` ou `ENV` permanente?
 - Que risco existiria com uma credencial real?
 
@@ -100,7 +100,14 @@ Analise:
 cat formando/exemplos/secrets/compose.secret-demo.yaml
 ```
 
-Crie apenas a cópia de exemplo local indicada pelo laboratório, sem credenciais reais, e execute:
+O ficheiro Compose espera `demo_secret.txt` na mesma diretoria. Crie-o a partir do exemplo público:
+
+```bash
+cp formando/exemplos/secrets/demo_secret.example.txt \
+   formando/exemplos/secrets/demo_secret.txt
+```
+
+Executar:
 
 ```bash
 docker compose \
@@ -108,13 +115,19 @@ docker compose \
   up --abort-on-container-exit
 ```
 
-No container, um Compose secret é disponibilizado como ficheiro em:
+No container, o secret é disponibilizado como ficheiro em:
 
 ```text
-/run/secrets/<nome>
+/run/secrets/demo_secret
 ```
 
 Isto é diferente de transformar automaticamente o secret numa variável de ambiente.
+
+Limpar o ficheiro local:
+
+```bash
+rm -f formando/exemplos/secrets/demo_secret.txt
+```
 
 ## 4. `.env`
 
