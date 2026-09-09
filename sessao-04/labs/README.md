@@ -1,3 +1,9 @@
-# Labs — Sessão 4
+# Laboratórios — Sessão 4
 
-Guiões práticos para preparação dos Nodes, bootstrap do Control Plane, instalação do CNI, Worker join, validação e manutenção.
+A Sessão 4 utiliza um **laboratório integrado e progressivo**.
+
+Comece em:
+
+- [`laboratorio_integrado_sessao_4.md`](laboratorio_integrado_sessao_4.md)
+
+O laboratório pressupõe uma VM `k8s-cp-01` e uma VM `k8s-wk-01` por formando.
