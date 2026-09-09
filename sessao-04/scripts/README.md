@@ -1,5 +1,9 @@
 # Scripts — Sessão 4
 
-Automação auxiliar da sessão.
+Os scripts desta pasta são auxiliares e devem ser lidos antes de serem executados.
 
-> Executar manualmente e compreender o procedimento antes de utilizar a automação equivalente.
+- `preflight_check.sh` — validação apenas de leitura dos principais pré-requisitos;
+- `verify_cluster.sh` — recolhe o estado pós-instalação do cluster;
+- `fetch_calico_operator.sh` — descarrega recursos oficiais do Calico para inspeção local; não os aplica.
+
+> Não guardar tokens, kubeconfigs ou credenciais em scripts versionados.
