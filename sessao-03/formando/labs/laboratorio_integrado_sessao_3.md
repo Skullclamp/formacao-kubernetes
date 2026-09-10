@@ -456,6 +456,12 @@ stage runtime
   ↓ apenas o necessário para executar
 ```
 
+### O que é um multi-stage build?
+
+É um Dockerfile com mais do que um `FROM`, em que cada stage pode ter uma finalidade diferente. Neste cenário, o primeiro stage contém ferramentas necessárias para construir a aplicação; o segundo contém apenas o necessário para a executar.
+
+Isto ajuda a reduzir o tamanho e, sobretudo, a **superfície de ataque** da imagem final, porque compiladores e outras ferramentas de build não precisam de existir no runtime.
+
 Comparar tamanhos e histórico:
 
 ```bash
@@ -480,9 +486,66 @@ sed -n '1,220p' formando/scripts/build.sh
 
 # 6. Hardening e secrets
 
-## 6.1. Limites do hardening deste laboratório
+## 6.1. O que é hardening?
 
-O Dockerfile otimizado reduz componentes no runtime através de multi-stage e limita os diretórios de escrita. Contudo, **não deve ser apresentado como uma imagem completamente non-root**.
+**Hardening** é o processo de reduzir a superfície de ataque e limitar o impacto de uma eventual falha ou comprometimento, mantendo apenas o que é necessário para a aplicação funcionar.
+
+Não existe um único comando chamado `hardening`. É um conjunto de decisões de construção e configuração.
+
+No contexto de containers, exemplos de hardening incluem:
+
+- usar imagens base de origem conhecida e mantidas;
+- reduzir pacotes e ferramentas presentes na imagem final;
+- separar ferramentas de build do runtime através de multi-stage;
+- executar com o menor privilégio possível;
+- limitar diretórios onde o processo pode escrever;
+- não incluir passwords, tokens ou chaves na imagem;
+- definir limites de CPU e memória;
+- analisar vulnerabilidades conhecidas;
+- manter imagens e dependências atualizadas;
+- evitar montar o Docker socket sem necessidade.
+
+```text
+Mais componentes + mais privilégios + mais credenciais expostas
+                        ↓
+                 maior superfície de ataque
+
+Menos componentes + menor privilégio + secrets protegidos
+                        ↓
+                 menor superfície de ataque
+```
+
+### O que significa “superfície de ataque”?
+
+É o conjunto de componentes, interfaces, serviços, permissões e dependências que podem ser usados como ponto de entrada ou abuso por um atacante. Reduzir a superfície de ataque não elimina o risco; reduz oportunidades e impacto potencial.
+
+### Hardening aplicado neste laboratório
+
+O Dockerfile otimizado já demonstra algumas medidas:
+
+```text
+multi-stage
+   ↓
+menos ferramentas no runtime
+
+.dockerignore
+   ↓
+menos ficheiros enviados ao build
+
+permissões limitadas em var/
+   ↓
+menos escrita desnecessária
+
+HEALTHCHECK + limites de recursos
+   ↓
+mais controlo operacional
+
+Trivy
+   ↓
+visibilidade sobre vulnerabilidades conhecidas
+```
+
+Contudo, **não deve ser apresentado como uma imagem completamente non-root**.
 
 Verificar:
 
@@ -493,9 +556,68 @@ docker image inspect symfony-demo:1.1.0 \
 
 Um valor vazio significa que não existe uma instrução `USER` explícita na imagem final. A imagem oficial Apache arranca com os privilégios necessários ao seu modelo de execução e os workers Apache usam o utilizador configurado pelo Apache. A conversão deste cenário para um runtime integralmente non-root exige alterações adicionais e fica fora do laboratório principal.
 
+> **Ideia-chave:** hardening não significa “container seguro”. Significa aplicar várias medidas de redução de risco e validar continuamente o resultado.
+
 ---
 
-## 6.2. Demonstrar o que NÃO fazer com secrets
+## 6.2. O que é um secret?
+
+Um **secret** é informação sensível que não deve ser exposta no código, na imagem, no histórico Git, nos logs ou em comandos partilhados.
+
+Exemplos:
+
+- passwords;
+- tokens de acesso;
+- chaves API;
+- chaves privadas;
+- certificados privados;
+- credenciais de bases de dados;
+- credenciais de acesso a registries.
+
+Um valor de configuração normal, como `APP_ENV=prod`, não é necessariamente um secret. A diferença está na sensibilidade do valor.
+
+```text
+Configuração
+APP_ENV=prod
+APP_PORT=8080
+      ↓
+pode normalmente ser conhecida
+
+Secret
+DB_PASSWORD=...
+API_TOKEN=...
+PRIVATE_KEY=...
+      ↓
+deve ser protegido
+```
+
+### Porque não colocar secrets numa imagem?
+
+Uma imagem pode ser:
+
+- enviada para um registry;
+- copiada para vários hosts;
+- inspecionada por operadores;
+- reutilizada em diferentes ambientes;
+- mantida durante muito tempo em caches ou backups.
+
+Se o secret fizer parte da imagem, deixa de estar separado do artefacto e torna-se muito mais difícil controlar quem lhe pode aceder ou efetuar rotação.
+
+O objetivo é separar:
+
+```text
+Imagem da aplicação
+       +
+Configuração/secret fornecido no momento adequado
+       ↓
+Container em execução
+```
+
+---
+
+## 6.3. Demonstrar o que NÃO fazer com secrets
+
+Construir o exemplo didático incorreto:
 
 ```bash
 docker build \
@@ -505,7 +627,9 @@ docker build \
   formando/exemplos/secrets
 ```
 
-Em vez de depender apenas de `docker history`, observe diretamente a configuração final da imagem:
+Neste exemplo, `ARG` recebe o valor durante o build e depois `ENV` grava esse valor na configuração final da imagem. Esse é precisamente o comportamento que queremos demonstrar como inadequado para informação sensível.
+
+Observar diretamente a configuração final da imagem:
 
 ```bash
 docker image inspect secret-demo:bad \
@@ -518,19 +642,43 @@ Também pode consultar:
 docker history --no-trunc secret-demo:bad
 ```
 
-> O detalhe apresentado pelo histórico pode variar com o builder. A evidência importante neste exemplo é que o valor passado para `ENV` fica na configuração final da imagem.
+> O detalhe apresentado pelo histórico pode variar com o builder. A evidência principal neste exemplo é que o valor passado para `ENV` fica na configuração final da imagem e acompanha o artefacto.
 
 Conclusão:
 
 ```text
-ARG / ENV no Dockerfile
-        ≠
-forma segura de transportar secrets
+ARG
+  ↓
+serve para parametrizar o build
+
+ENV
+  ↓
+persiste configuração na imagem/container
+
+ARG / ENV
+  ↓
+não devem ser usados para transportar secrets de build
 ```
 
 ---
 
-## 6.3. BuildKit secret com origem no ambiente do host
+## 6.4. Build secret: para que serve?
+
+Há situações em que o **processo de build** necessita temporariamente de uma credencial, por exemplo para aceder a um repositório privado de dependências.
+
+Nesse caso, queremos:
+
+```text
+Secret disponível durante uma instrução RUN
+                ↓
+usado para obter o recurso necessário
+                ↓
+não copiado para a imagem final
+```
+
+É para este cenário que usamos **BuildKit secrets**.
+
+### BuildKit secret com origem no ambiente do host
 
 Para não escrever o valor do laboratório no histórico do shell, ler de forma silenciosa:
 
@@ -561,6 +709,20 @@ docker build \
 - `env=API_TOKEN` — usa a variável de ambiente do host como origem;
 - no Dockerfile, o secret é disponibilizado apenas na instrução `RUN` que o declara.
 
+No Dockerfile, a instrução relevante é conceptualmente:
+
+```dockerfile
+RUN --mount=type=secret,id=API_TOKEN,env=API_TOKEN ...
+```
+
+Isto não é igual a:
+
+```dockerfile
+ENV API_TOKEN=...
+```
+
+No primeiro caso o valor é disponibilizado temporariamente à instrução `RUN`; no segundo fica guardado na configuração da imagem.
+
 Validar que não foi persistido como variável da imagem:
 
 ```bash
@@ -574,6 +736,8 @@ Executar o exemplo:
 docker run --rm secret-demo:buildkit
 ```
 
+O container apenas apresenta a mensagem criada durante o build; o secret usado no build não deve existir no runtime.
+
 Limpar a variável:
 
 ```bash
@@ -584,7 +748,25 @@ unset API_TOKEN
 
 ---
 
-## 6.4. Compose secret com origem no ambiente do host
+## 6.5. Secret em runtime com Docker Compose
+
+Um secret de **runtime** é diferente de um build secret.
+
+```text
+Build secret
+   ↓
+necessário enquanto a imagem é construída
+   ↓
+não deve chegar ao container final
+
+Runtime secret
+   ↓
+necessário enquanto a aplicação está a executar
+   ↓
+deve ser disponibilizado apenas ao serviço que dele necessita
+```
+
+Neste laboratório usamos Docker Compose para demonstrar essa entrega explícita.
 
 Introduzir um valor fictício sem o escrever no histórico:
 
@@ -602,7 +784,9 @@ secrets:
     environment: DEMO_SECRET
 ```
 
-E concede o secret ao serviço:
+Isto diz ao Compose onde obter o valor. Não significa que a variável seja automaticamente injetada no ambiente do container.
+
+O serviço tem de receber autorização explícita:
 
 ```yaml
 services:
@@ -628,6 +812,8 @@ No container, o secret é entregue em:
 /run/secrets/demo_secret
 ```
 
+Isto permite à aplicação ler o valor a partir de um ficheiro montado em runtime sem o incorporar na imagem.
+
 A origem deste exemplo é uma variável no host; o conteúdo não é passado através do atributo `environment:` do serviço.
 
 Limpar:
@@ -638,9 +824,37 @@ unset DEMO_SECRET
 
 > Uma variável de ambiente no host também não é um secret manager. Aqui serve apenas como origem temporária para demonstrar o mecanismo Compose sem guardar o valor no repositório. Em produção, a origem normalmente seria integrada com mecanismos próprios de gestão de secrets.
 
+### Mensagem a reter sobre secrets
+
+```text
+Secret ≠ configuração normal
+
+Secret de build
+  → necessário para construir
+  → usar mecanismo temporário de BuildKit
+
+Secret de runtime
+  → necessário para executar
+  → entregar apenas ao serviço que necessita
+
+Nunca embutir o secret na imagem
+Nunca versionar secrets reais no Git
+Nunca assumir que .env é um secret manager
+```
+
 ---
 
 # 7. HEALTHCHECK e controlos operacionais
+
+## 7.1. O que é um HEALTHCHECK?
+
+Um container pode estar com o processo principal em execução e, mesmo assim, a aplicação não estar funcional. O `HEALTHCHECK` define um teste que o Docker executa periodicamente para obter uma indicação de saúde.
+
+```text
+processo a correr
+      ≠
+aplicação saudável
+```
 
 Consultar o healthcheck da imagem:
 
@@ -648,6 +862,12 @@ Consultar o healthcheck da imagem:
 docker image inspect symfony-demo:1.1.0 \
   --format '{{json .Config.Healthcheck}}'
 ```
+
+Nesta aplicação, `/health` representa saúde básica e `/ready` representa prontidão incluindo PostgreSQL.
+
+> Docker `HEALTHCHECK` não é convertido automaticamente em probes Kubernetes. No Kubernetes as probes são configuradas explicitamente.
+
+## 7.2. Preparar configuração e controlos operacionais
 
 Preparar o ficheiro de configuração do laboratório:
 
@@ -697,11 +917,17 @@ logging:
 - `cpus` — limita CPU;
 - `logging.driver: local` — utiliza o driver local do Docker.
 
-> Docker `HEALTHCHECK` não é convertido automaticamente em probes Kubernetes.
+Estes controlos não tornam a aplicação altamente disponível. Apenas definem comportamento e limites dentro daquele host Docker.
 
 ---
 
 # 8. Scan com Trivy
+
+## 8.1. O que é um scan de vulnerabilidades?
+
+Um scanner como o Trivy compara componentes presentes na imagem com informação conhecida sobre vulnerabilidades publicadas, normalmente identificadas por CVEs.
+
+Serve para encontrar **evidência conhecida de risco**, não para provar que uma imagem é segura.
 
 Scan informativo:
 
@@ -728,13 +954,33 @@ Os resultados dependem da data das bases de vulnerabilidades e da imagem analisa
 
 ## 9.1. O que é um registry?
 
-Um container registry armazena e distribui imagens.
+Um **container registry** é um serviço utilizado para armazenar e distribuir imagens de containers.
+
+```text
+Código-fonte
+   ↓
+Git repository
+
+Imagem construída
+   ↓
+Container registry
+```
+
+Exemplos: Docker Hub, GitHub Container Registry (GHCR), GitLab Container Registry, Harbor, Amazon ECR, Azure Container Registry e Google Artifact Registry.
+
+Nesta formação usamos GHCR:
 
 ```text
 ghcr.io/skullclamp/symfony-demo:1.0.0
 │       │          │            │
 registry namespace repositório   tag
 ```
+
+## 9.2. O que são tag e digest?
+
+Uma **tag** é um nome legível associado a uma imagem. É conveniente para humanos, mas pode ser reatribuída a outro conteúdo.
+
+Um **digest** é uma identificação derivada do conteúdo publicado. Para o mesmo conteúdo, o digest mantém-se estável e permite identificar de forma imutável aquele artefacto.
 
 Criar uma segunda tag local:
 
@@ -756,17 +1002,19 @@ Digest → identidade imutável daquele conteúdo publicado
 
 ---
 
-## 9.2. Consumir uma imagem pública do GHCR
+## 9.3. Consumir uma imagem pública do GHCR
 
 ```bash
 docker pull ghcr.io/skullclamp/symfony-demo:1.0.0
 ```
 
+`pull` obtém as layers e metadata necessárias para disponibilizar a imagem localmente.
+
 As imagens públicas da formação podem ser obtidas anonimamente.
 
 ---
 
-## 9.3. Publicar opcionalmente no namespace do formando
+## 9.4. Publicar opcionalmente no namespace do formando
 
 Esta etapa é útil para praticar autenticação/tag/push, mas pode ser omitida se o tempo da sessão for insuficiente.
 
@@ -830,9 +1078,13 @@ promover o mesmo artefacto
 
 # 10. Primeiro deployment manual da stack
 
-Para manter a regra **manual → observar → automatizar**, vamos executar manualmente as fases essenciais do primeiro deployment.
+## 10.1. O que significa deployment neste laboratório?
 
-Definir uma forma curta de invocar o Compose não é necessário; execute o comando completo para perceber quais os ficheiros envolvidos.
+Aqui, **deployment** significa colocar a versão selecionada da aplicação em execução com a sua configuração e dependências, num único host Docker.
+
+Não significa Alta Disponibilidade nem orquestração distribuída.
+
+Para manter a regra **manual → observar → automatizar**, vamos executar manualmente as fases essenciais do primeiro deployment.
 
 Validar:
 
@@ -986,6 +1238,18 @@ http://IP_DA_VM:8080/ready
 
 # 12. Persistência e backup
 
+## 12.1. O que é persistência?
+
+Um container é descartável: pode ser removido e recriado. Dados que precisem de sobreviver ao ciclo de vida do container devem ficar fora da camada gravável do container, por exemplo num named volume.
+
+```text
+container DB removido/recriado
+          ↓
+named volume mantém os dados
+```
+
+Mas persistência não é backup. Um volume pode ser eliminado, corrompido ou perdido juntamente com o host.
+
 Criar um marcador:
 
 ```bash
@@ -1015,6 +1279,10 @@ Confirmar:
 - `psql -U` — define o utilizador PostgreSQL;
 - `-d` — define a base de dados;
 - `-c` — executa o SQL indicado.
+
+## 12.2. O que é um backup lógico?
+
+Um backup lógico exporta a estrutura e/ou dados da base de dados através das ferramentas do próprio SGBD. No PostgreSQL, `pg_dump` cria uma representação lógica que pode posteriormente ser restaurada com ferramentas adequadas.
 
 Backup lógico manual:
 
@@ -1071,6 +1339,8 @@ Validar:
 
 ## 13.1. Update para 1.1.0
 
+Um **update** substitui a versão da aplicação por uma versão mais recente pretendida, mantendo a configuração e os dados persistentes que não pertencem ao container da aplicação.
+
 ```bash
 ./formando/scripts/deploy-prod.sh 1.1.0
 ```
@@ -1113,6 +1383,24 @@ A imagem `1.2.0-rc1` está preparada deliberadamente com um caminho incorreto no
 
 ## 13.3. Diagnosticar antes do rollback
 
+**Troubleshooting** é o processo sistemático de recolher evidência, formular uma hipótese, testá-la e só depois aplicar uma correção.
+
+```text
+Sintoma
+  ↓
+Evidência
+  ↓
+Hipótese
+  ↓
+Teste
+  ↓
+Correção
+  ↓
+Validação
+```
+
+Neste caso:
+
 ```bash
 ./formando/scripts/compose-prod.sh ps
 CID=$(./formando/scripts/compose-prod.sh ps -q app)
@@ -1138,6 +1426,8 @@ Não faça rollback antes de conseguir explicar a causa.
 ---
 
 ## 13.4. Rollback para 1.1.0
+
+**Rollback** significa regressar a uma versão anteriormente conhecida como funcional quando a nova versão não satisfaz os critérios de operação.
 
 Abrir o script:
 
@@ -1206,8 +1496,11 @@ A sessão seguinte introduz precisamente a necessidade de orquestração distrib
 ```text
 Imagem ≠ Container
 Build context ≠ diretoria do Dockerfile
+Hardening = redução contínua da superfície de ataque
+Secret ≠ configuração normal
 ARG/ENV ≠ Secret Manager
 .env de projeto ≠ Secret Manager
+Build secret ≠ Runtime secret
 BuildKit secret é temporário durante o build
 Docker HEALTHCHECK ≠ Kubernetes Probe
 Tag ≠ Digest
