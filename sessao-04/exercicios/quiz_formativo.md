@@ -22,22 +22,26 @@
 
 6. Em que nó se executa `kubeadm join`?
 
-7. Um contexto `kubeconfig` associa principalmente:
-   - a) container + Pod
-   - b) cluster + utilizador + namespace opcional
-   - c) Node + Service
-   - d) runtime + CRI
+7. Qual é a versão minor inicial do cluster nesta sessão?
 
-8. Porque pode um `kubectl` executado num Worker sem kubeconfig tentar ligar a `localhost:8080`?
+8. Qual é a versão minor de destino?
 
-9. O que faz `kubectl cordon k8s-wk-01`?
+9. Porque é necessário mudar o repositório `pkgs.k8s.io` da série 1.36 para a série 1.37 durante o upgrade?
 
-10. Porque pode `kubectl drain ... --ignore-daemonsets` recusar continuar perante um Pod criado diretamente?
+10. Para que serve `kubeadm upgrade plan`?
 
-11. Depois de `drain --force`, porque esse Pod não reaparece automaticamente?
+11. Porque o Control Plane é atualizado antes do Worker?
 
-12. Indica três comandos úteis para investigar um Node `NotReady`.
+12. Qual comando é usado no Worker durante o upgrade?
+   - a) `kubeadm upgrade apply`
+   - b) `kubeadm upgrade node`
+   - c) `kubeadm init`
+   - d) `kubeadm join`
 
-13. Porque é importante confirmar que MicroK8s/k3s/Minikube ou um cluster anterior não estão ativos antes de `kubeadm init`?
+13. Porque se drena o nó antes de atualizar o `kubelet` numa mudança minor?
 
-14. Qual é a finalidade de `kubeadm upgrade plan` nesta sessão?
+14. Porque pode existir version skew temporário durante o processo?
+
+15. Que componentes deves voltar a validar depois do upgrade?
+
+16. Porque "funcionou no laboratório" não significa necessariamente "é oficialmente testado pelo fornecedor"?
