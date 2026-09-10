@@ -55,6 +55,15 @@ RUN composer install \
     --prefer-dist \
     --optimize-autoloader
 
+# Prepara explicitamente os assets para runtime de produção:
+# - sass:build gera o CSS resultante dos ficheiros Sass;
+# - asset-map:compile compila/copía os assets versionados para public/assets;
+# - o teste final faz o build falhar se o manifest não tiver sido criado.
+# Isto evita produzir uma imagem funcional em PHP mas incompleta no browser.
+RUN php bin/console sass:build --no-interaction \
+    && php bin/console asset-map:compile --no-interaction \
+    && test -f public/assets/manifest.json
+
 # -------------------------
 # STAGE 2 — RUNTIME
 # -------------------------
@@ -79,7 +88,8 @@ RUN apt-get update \
 COPY --from=build /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
 COPY --from=build /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
 
-# Copia a aplicação já preparada no stage build e instala o VirtualHost Apache.
+# Copia a aplicação já preparada no stage build, incluindo public/assets,
+# e instala o VirtualHost Apache.
 WORKDIR /var/www/html
 COPY --from=build /var/www/html /var/www/html
 COPY formando/docker/000-default.conf /etc/apache2/sites-available/000-default.conf
