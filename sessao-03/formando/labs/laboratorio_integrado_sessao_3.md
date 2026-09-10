@@ -348,6 +348,32 @@ less formando/docker/Dockerfile.inicial
 
 > A imagem base `php:8.4-apache-bookworm` já contém PHP e Apache. O bloco `apt-get install` do Dockerfile instala ferramentas/bibliotecas adicionais e as dependências necessárias para compilar extensões PHP; não está a instalar o Apache de raiz.
 
+### Porque também temos de preparar os assets?
+
+A Symfony Demo atual utiliza **AssetMapper**, **ImportMap** e **Sass**. Uma aplicação web não é composta apenas pelo código PHP: o browser também necessita de CSS, JavaScript, fontes e outros recursos frontend.
+
+Em desenvolvimento, o Symfony pode servir assets dinamicamente. Para uma imagem usada como artefacto de deployment, queremos que os assets versionados sejam compilados para `public/assets/` e servidos diretamente pelo servidor web.
+
+A sequência relevante é:
+
+```text
+Código Symfony
+      ↓
+composer install
+      ↓
+importmap / dependências frontend
+      ↓
+sass:build
+      ↓
+asset-map:compile
+      ↓
+public/assets/
+      ↓
+Apache serve CSS/JS ao browser
+```
+
+No `Dockerfile.inicial` o bloco de instalação executa os auto-scripts do Composer e, de forma explícita, compila Sass antes de executar `asset-map:compile`. A imagem inicial continua a ser deliberadamente simples e single-stage; o objetivo aqui é ficar funcional, não ainda otimizada.
+
 Construir:
 
 ```bash
@@ -387,12 +413,23 @@ docker image ls symfony-demo
 docker history symfony-demo:naive
 ```
 
-### Testar a imagem inicial isoladamente
+### Confirmar que os assets foram compilados
 
-Executar numa porta temporária do host:
+Antes de executar a imagem, pode confirmar diretamente no artefacto que `public/assets/` existe:
 
 ```bash
-docker run --rm -d \
+docker run --rm symfony-demo:naive \
+  sh -lc 'test -f /var/www/html/public/assets/manifest.json && echo "OK: assets compilados"'
+```
+
+O `manifest.json` é produzido pela compilação do AssetMapper e relaciona os nomes lógicos dos assets com os ficheiros versionados.
+
+### Testar a imagem inicial isoladamente
+
+Para manter o container disponível durante os testes no browser, nesta fase **não usamos `--rm`**:
+
+```bash
+docker run -d \
   --name symfony-naive \
   -p 8081:80 \
   symfony-demo:naive
@@ -410,6 +447,15 @@ curl -i http://localhost:8081/health
 ```
 
 Neste teste isolado não existe PostgreSQL. Por isso, `/health` é o endpoint mais adequado: permite confirmar que Apache e a aplicação arrancaram. O endpoint `/ready` poderá indicar indisponibilidade porque valida também a dependência da base de dados.
+
+Confirmar também que os ficheiros frontend estão presentes dentro do container:
+
+```bash
+docker exec symfony-naive \
+  find /var/www/html/public/assets -maxdepth 2 -type f | head -20
+```
+
+Deverá observar ficheiros CSS/JS versionados e os ficheiros de metadata do AssetMapper.
 
 #### Ver a aplicação no navegador do PC do formando
 
@@ -454,6 +500,8 @@ Pode também validar diretamente o endpoint pedagógico:
 http://IP_DA_VM:8081/health
 ```
 
+A página principal deve surgir com a apresentação gráfica completa. Se o HTML aparecer mas sem estilos, confirme primeiro se existem ficheiros em `/var/www/html/public/assets` e consulte os pedidos HTTP no browser/logs antes de atribuir o problema à rede.
+
 O resultado desta experiência deve ser interpretado assim:
 
 ```text
@@ -465,18 +513,19 @@ IP da VM
       ↓ -p 8081:80
 80 do container
       ↓
-Apache + Symfony
+Apache + Symfony + assets compilados
 ```
 
 > O acesso por PuTTY confirma que existe conectividade entre o PC e a VM, mas não garante por si só que a porta `8081` esteja permitida. Se `curl http://localhost:8081/health` funcionar na VM mas o browser não conseguir aceder, o problema está provavelmente na conectividade/regras entre o PC e essa porta da VM, e não no build da imagem.
 
-Depois da validação no browser, parar o teste:
+Depois da validação no browser, parar e remover o teste:
 
 ```bash
 docker stop symfony-naive
+docker rm symfony-naive
 ```
 
-Como o container foi criado com `--rm`, será removido após parar.
+Esta separação permite observar a diferença entre parar um container e removê-lo explicitamente.
 
 ---
 
