@@ -1,9 +1,18 @@
 # Sessão 8 — Gestão e Operações Avançadas
 
-## Foco
+**Estado:** planeada — âmbito provisório
 
+## Foco
 **OPERAR E ESTENDER**
 
-A sessão consolida práticas avançadas de administração e operação de clusters Kubernetes.
+## Resultados de aprendizagem
+- automatizar tarefas recorrentes de administração;
+- gerir upgrades, configuração e políticas operacionais;
+- explicar mecanismos de extensão do Kubernetes;
+- definir práticas repetíveis e auditáveis.
 
-Os recursos serão adicionados progressivamente neste diretório.
+## Delimitação
+Incide no lifecycle e extensibilidade da plataforma. O deployment da aplicação começa na Sessão 9.
+
+## Continuidade
+Entrega aos developers uma plataforma administrada sobre a qual implementar a aplicação.

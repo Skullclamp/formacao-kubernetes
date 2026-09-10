@@ -1,9 +1,18 @@
 # Sessão 10 — Kubernetes para Developers II
 
-## Foco
+**Estado:** planeada — âmbito provisório
 
+## Foco
 **OPERAR E INDUSTRIALIZAR A APLICAÇÃO**
 
-A sessão final consolida escalabilidade, observabilidade, segurança, cloud-native e gestão do deployment da aplicação.
+## Resultados de aprendizagem
+- implementar escalabilidade e probes;
+- observar o comportamento da aplicação;
+- reforçar segurança de imagem, workload e pipeline;
+- estruturar uma entrega cloud-native repetível.
 
-Os recursos serão adicionados progressivamente neste diretório.
+## Delimitação
+A segurança é aplicada à aplicação e à entrega. RBAC, admission e governação pertencem à Sessão 6.
+
+## Resultado final
+Uma aplicação implantada de forma observável, escalável e segura.

@@ -361,9 +361,10 @@ Calico 3.32 é oficialmente testado com Kubernetes 1.34, 1.35 e 1.36. Como esta 
 
 # 9. Adicionar o Worker
 
-No Control Plane, gera um comando atual:
+No Control Plane, gera um comando atual. Não guardes o resultado em ficheiros versionados; se estiver ativo o tracing da shell, desativa-o primeiro:
 
 ```bash
+set +x
 sudo kubeadm token create --print-join-command
 ```
 
@@ -411,6 +412,8 @@ cluster + user + namespace opcional
 ---
 
 # 11. Manutenção: cordon, drain e uncordon
+
+A construção e validação do cluster 1.36.x constituem o percurso essencial. A manutenção e o upgrade seguintes formam o percurso avançado. Se uma falha impedir a continuação, o formador pode fornecer um snapshot previamente validado.
 
 Aplica o Pod direto do laboratório:
 

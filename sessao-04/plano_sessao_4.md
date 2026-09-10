@@ -1,4 +1,4 @@
-# A) Plano de Formação — Sessão 4
+# Plano Pedagógico Público — Sessão 4
 ## Kubernetes Admin I — Instalação, Administração e Upgrade do Cluster
 
 ## 1. Identificação
@@ -149,7 +149,19 @@ cluster 1.37.x validado
 - version skew temporário;
 - validação final.
 
-## 5. Distribuição temporal
+## 5. Percursos de aprendizagem
+
+### Essencial
+
+Preparar os nós, instalar os componentes, construir o cluster 1.36.x e demonstrar que Nodes, CoreDNS e CNI estão saudáveis.
+
+### Avançado
+
+Praticar `cordon`/`drain`/`uncordon`, executar o upgrade 1.36.x → 1.37.x e validar novamente o cluster.
+
+O guia privado do formador define pontos de corte, snapshots, respostas, recuperação e versões/digests ensaiados.
+
+## 6. Distribuição temporal indicativa
 
 | Tempo | Conteúdo / atividade | Tipo |
 |---:|---|---|
@@ -167,7 +179,7 @@ cluster 1.37.x validado
 | 15 min | Validação final + síntese | Consolidação |
 | **240 min** | **Total** | |
 
-## 6. Metodologia
+## 7. Metodologia
 
 ```text
 CONCEITO
@@ -187,7 +199,7 @@ AVANÇAR
 
 Os scripts usados pelo formador em ensaios técnicos não fazem parte do percurso do formando.
 
-## 7. Sequência de upgrade a ensinar
+## 8. Sequência de upgrade a ensinar
 
 ### Control Plane
 
@@ -233,7 +245,7 @@ validar
 
 Não se utiliza `--force` num `drain` de upgrade como comportamento automático.
 
-## 8. Compatibilidade do CNI
+## 9. Compatibilidade do CNI
 
 Calico 3.32 é oficialmente testado com Kubernetes 1.34–1.36. A baseline da formação foi ensaiada com Calico 3.32.2 após a passagem para 1.37, mas isso não equivale a suporte/teste oficial da combinação.
 
@@ -244,7 +256,7 @@ Antes de cada edição, o formador deve:
 3. pré-validar o percurso completo 1.36 → 1.37;
 4. confirmar CoreDNS, `tigerastatus` e Pods Calico depois do upgrade.
 
-## 9. Avaliação formativa
+## 10. Avaliação formativa
 
 O formando demonstra que consegue:
 
@@ -257,12 +269,12 @@ O formando demonstra que consegue:
 - explicar version skew;
 - validar o cluster final.
 
-## 10. Delimitação
+## 11. Delimitação
 
 Incluído: bootstrap, runtime, CNI, join, kubeconfig, manutenção e upgrade real de dois nós.
 
 Fora do âmbito: HA multi-Control-Plane, rollback avançado, backup/restore de etcd, cloud-managed Kubernetes e políticas de rede avançadas.
 
-## 11. Continuidade
+## 12. Continuidade
 
 A Sessão 4 termina com um cluster de dois nós **em Kubernetes 1.37.x**, pronto para a Sessão 5, onde o foco passa para workloads, networking e storage.

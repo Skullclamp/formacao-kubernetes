@@ -1,10 +1,21 @@
 # Sessão 5 — Kubernetes Admin II
 ## Workloads, Networking e Storage
 
-## Foco
+**Estado:** planeada — âmbito provisório
 
+## Foco
 **ADMINISTRAR WORKLOADS E INFRAESTRUTURA**
 
-A sessão parte do cluster funcional construído na Sessão 4 e introduz workloads, exposição em rede, persistência e recuperação de dados.
+Parte do cluster funcional da Sessão 4 e aborda a infraestrutura que suporta aplicações.
 
-Os recursos serão adicionados progressivamente neste diretório.
+## Resultados de aprendizagem
+- administrar Deployments, Services e namespaces;
+- diagnosticar comunicação entre workloads;
+- configurar armazenamento persistente;
+- validar recuperação e continuidade dos dados.
+
+## Delimitação
+Inclui administração de workloads, rede e storage. A integração destes recursos no código da aplicação pertence à Sessão 9.
+
+## Continuidade
+Prepara a governação de recursos, scheduling e segurança da Sessão 6.

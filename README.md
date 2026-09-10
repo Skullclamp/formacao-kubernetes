@@ -25,6 +25,17 @@ Os conteúdos são disponibilizados progressivamente e cada sessão possui um po
 
 Consulte [`docs/estrutura-repositorio.md`](docs/estrutura-repositorio.md) para as convenções de organização.
 
+## Estado de publicação
+
+| Sessão | Estado |
+|---:|---|
+| 1 | Estrutura inicial |
+| 2–3 | Materiais publicados |
+| 4 | Materiais publicados — baseline setembro de 2026 |
+| 5–10 | Planeadas; apenas estrutura e âmbito provisório |
+
+> Uma pasta existente não significa que todos os materiais da sessão estejam concluídos. Cada `README.md` identifica o estado e o âmbito disponível.
+
 ## Aplicação transversal
 
 Ao longo da formação é utilizada a **Symfony Demo Application**, numa variante pedagógica preparada para os laboratórios.

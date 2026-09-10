@@ -1,9 +1,18 @@
 # Sessão 6 — Recursos, Scheduling e Segurança
 
-## Foco
+**Estado:** planeada — âmbito provisório
 
+## Foco
 **GOVERNAR O CLUSTER**
 
-A sessão aprofunda gestão de recursos, decisões de scheduling e mecanismos de segurança, incluindo o princípio do menor privilégio.
+## Resultados de aprendizagem
+- definir requests, limits e quotas;
+- explicar e influenciar decisões de scheduling;
+- aplicar RBAC e o princípio do menor privilégio;
+- validar controlos de admissão e segurança do cluster.
 
-Os recursos serão adicionados progressivamente neste diretório.
+## Delimitação
+Incide na segurança da plataforma. A segurança da aplicação, imagens e pipeline pertence à Sessão 10.
+
+## Continuidade
+Prepara continuidade, observabilidade e resposta a incidentes na Sessão 7.

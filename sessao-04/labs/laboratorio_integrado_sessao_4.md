@@ -301,7 +301,10 @@ Calico 3.32 é oficialmente testado até Kubernetes 1.36. Como este laboratório
 
 No `k8s-cp-01`:
 
+Não guardes o token em ficheiros versionados. Se estiver ativo o tracing da shell, desativa-o antes de gerar o comando:
+
 ```bash
+set +x
 sudo kubeadm token create --print-join-command
 ```
 
@@ -333,10 +336,12 @@ Neste momento tens um cluster **Kubernetes 1.36.x saudável**.
 
 # CP7 — Manutenção controlada
 
+> Este bloco inicia o percurso avançado. Se o cluster ainda não estiver saudável no ponto de corte definido pelo formador, restaura o snapshot disponibilizado e retoma a partir do estado validado.
+
 Aplica o Pod direto:
 
 ```bash
-kubectl apply -f manifests/pod_cordon_test.yaml
+kubectl apply -f ../manifests/pod_cordon_test.yaml
 kubectl get pod cordon-test -o wide
 ```
 

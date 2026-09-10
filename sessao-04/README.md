@@ -89,7 +89,7 @@ O upgrade deixa assim de ser apenas uma discussão teórica. O formando observa 
 
 ## Materiais
 
-- [`plano_sessao_4.md`](plano_sessao_4.md) — objetivos, conteúdos, metodologia e distribuição temporal;
+- [`plano_sessao_4.md`](plano_sessao_4.md) — plano pedagógico público; o guia operacional do formador permanece privado;
 - [`manual_formando.md`](manual_formando.md) — explicação progressiva do percurso;
 - [`labs/laboratorio_integrado_sessao_4.md`](labs/laboratorio_integrado_sessao_4.md) — laboratório manual completo;
 - [`checklist.md`](checklist.md) — preparação das VMs;
@@ -133,5 +133,12 @@ NAME         STATUS   ROLES           VERSION
 k8s-cp-01    Ready    control-plane   v1.37.x
 k8s-wk-01    Ready    <none>          v1.37.x
 ```
+
+## Percursos e contingência
+
+- **Percurso essencial:** preparar as VMs, construir e validar o cluster Kubernetes 1.36.x.
+- **Percurso avançado:** manutenção e upgrade controlado para 1.37.x.
+- Se o cluster não estiver saudável até ao ponto de corte definido pelo formador, deve ser usado um snapshot previamente ensaiado.
+- Snapshots, scripts de recuperação e detalhes da infraestrutura não são publicados neste repositório.
 
 No final, o formando deve conseguir explicar não apenas **que comandos executou**, mas **por que motivo foram necessários, como o cluster mudou de 1.36 para 1.37 e que evidência confirma que continua saudável**.

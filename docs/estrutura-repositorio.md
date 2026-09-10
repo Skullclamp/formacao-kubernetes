@@ -56,7 +56,9 @@ sessao-XX/
 
 ## Conteúdo do formador
 
-Este repositório é público e orientado aos formandos. Recursos como **gabaritos, notas do formador, grelhas de avaliação, scripts de contingência com detalhes internos e apresentações de trabalho** devem permanecer num espaço privado do formador quando não devam ser entregues à turma.
+Este repositório é público e orientado aos formandos. Recursos como **gabaritos, guia de facilitação, grelhas de avaliação, snapshots, scripts de contingência ou reconstrução, resultados de ensaio e detalhes internos da infraestrutura** devem permanecer num espaço privado do formador.
+
+O plano público pode apresentar objetivos, sequência e duração global. O cronograma operacional, pontos de corte, respostas, versões/digests ensaiados e procedimentos de recuperação pertencem ao espaço privado do formador.
 
 ## Convenções de nomes
 
@@ -82,6 +84,8 @@ segredos Kubernetes em claro destinados a ambientes reais
 ```
 
 Quando for necessário mostrar estrutura de configuração, utilizar placeholders ou ficheiros `.example`.
+
+As folhas de evidências publicadas são modelos vazios. Ficheiros preenchidos podem conter nomes, IPs, endpoints e excertos de logs e não devem ser enviados para este repositório.
 
 ## Regra pedagógica
 

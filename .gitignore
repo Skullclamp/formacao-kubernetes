@@ -29,3 +29,11 @@ node_modules/
 # Ficheiros de runtime locais
 *.pid
 *.sock
+
+# Evidências preenchidas e exportações do laboratório
+**/evidencias-*/
+**/*_preenchida.*
+**/*-preenchida.*
+**/capturas/
+**/screenshots/
+**/exports/
