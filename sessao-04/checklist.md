@@ -1,55 +1,56 @@
 # Checklist do Formando — Preparação Manual das VMs
 
-**Objetivo:** chegar ao `kubeadm init` com os dois nós corretamente preparados e Kubernetes **1.36.x** instalado.
+**Nome:** ____________________  **Posto:** ____________________
+
+> Executa as verificações manualmente. Não uses scripts de validação como substituto da observação.
 
 ## 1. Identidade e recursos
 
 | Verificação | k8s-cp-01 | k8s-wk-01 |
 |---|:---:|:---:|
 | Hostname correto | ☐ | ☐ |
-| IP registado | ☐ | ☐ |
 | >= 2 vCPU | ☐ | ☐ |
 | >= 2 GiB RAM | ☐ | ☐ |
-| Resolução entre os nós | ☐ | ☐ |
-| Relógio sincronizado | ☐ | ☐ |
+| IP registado | ☐ | ☐ |
+| Resolução entre nós | ☐ | ☐ |
+| Hora sincronizada | ☐ | ☐ |
 
-## 2. Sem Kubernetes residual
+## 2. VM limpa
 
 ```bash
-snap list microk8s 2>/dev/null
-systemctl list-units --type=service | grep -Ei 'microk8s|k3s|minikube'
-sudo ss -ltnp | grep -E ':(6443|2379|2380|10250|10257|10259)\b'
+snap list microk8s 2>/dev/null || true
+systemctl list-units --type=service | grep -Ei 'microk8s|k3s|minikube' || true
+sudo ss -ltnp | grep -E ':(6443|2379|2380|10250|10257|10259)\b' || true
+
+dpkg-query -W -f='${Package} ${Version}\n' kubeadm kubelet kubectl 2>/dev/null || true
+
+grep -R "pkgs.k8s.io/core:/stable:" \
+  /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true
 ```
 
-Antes do bootstrap, as VMs não devem ter outro cluster Kubernetes ativo.
+- [ ] sem Kubernetes residual;
+- [ ] sem repositório 1.37 residual;
+- [ ] se existir 1.37 instalado, repor snapshot/VM limpa antes de continuar.
 
 ## 3. Linux
 
-```text
-[ ] swap desativada
-[ ] overlay carregado
-[ ] br_netfilter carregado
-[ ] net.ipv4.ip_forward = 1
-[ ] bridge-nf-call-iptables = 1
-[ ] cgroup v2
-```
+| Verificação | CP | Worker |
+|---|:---:|:---:|
+| swap desativada | ☐ | ☐ |
+| `overlay` | ☐ | ☐ |
+| `br_netfilter` | ☐ | ☐ |
+| `ip_forward = 1` | ☐ | ☐ |
+| bridge iptables = 1 | ☐ | ☐ |
+| cgroup v2 | ☐ | ☐ |
 
-```bash
-swapon --show
-lsmod | grep -E 'overlay|br_netfilter'
-sysctl net.ipv4.ip_forward
-sysctl net.bridge.bridge-nf-call-iptables
-stat -fc %T /sys/fs/cgroup
-```
+## 4. containerd
 
-## 4. containerd / CRI
-
-```text
-[ ] containerd ativo
-[ ] CRI não desativado
-[ ] socket /run/containerd/containerd.sock disponível
-[ ] SystemdCgroup = true na configuração efetiva
-```
+| Verificação | CP | Worker |
+|---|:---:|:---:|
+| série 2.2.x | ☐ | ☐ |
+| serviço ativo | ☐ | ☐ |
+| CRI ativo | ☐ | ☐ |
+| `SystemdCgroup = true` | ☐ | ☐ |
 
 ```bash
 containerd --version
@@ -60,12 +61,12 @@ sudo ctr plugins ls | grep -i cri
 
 ## 5. Kubernetes inicial
 
-```text
-[ ] kubeadm 1.36.x
-[ ] kubelet 1.36.x
-[ ] kubectl 1.36.x
-[ ] kubeadm/kubelet/kubectl em apt hold
-```
+| Verificação | CP | Worker |
+|---|:---:|:---:|
+| `kubeadm` 1.35.x | ☐ | ☐ |
+| `kubelet` 1.35.x | ☐ | ☐ |
+| `kubectl` 1.35.x | ☐ | ☐ |
+| pacotes em `apt hold` | ☐ | ☐ |
 
 ```bash
 kubeadm version
@@ -74,4 +75,4 @@ kubectl version --client
 apt-mark showhold
 ```
 
-> O destino 1.37.x só é configurado no bloco de upgrade, depois de o cluster 1.36.x estar construído e validado.
+**Não avançar se qualquer componente Kubernetes estiver em 1.36 ou 1.37 antes do bootstrap.**
