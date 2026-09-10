@@ -1343,31 +1343,7 @@ Esta limitação prepara a transição para a administração de Kubernetes na s
 
 ---
 
-# 30. Autoavaliação
-
-Tente responder antes de consultar o manual:
-
-1. Qual é a diferença entre Docker CLI, Engine, containerd e runc?
-2. O que representa o último `.` em `docker build ... .`?
-3. Para que serve `.dockerignore`?
-4. Porque deve copiar `composer.json`/`composer.lock` antes do restante código quando pretende aproveitar a cache?
-5. O que separa um multi-stage build?
-6. Porque `ARG` não é um mecanismo seguro para secrets?
-7. Onde são disponibilizados Compose secrets no container?
-8. Qual é a diferença entre `/health` e `/ready`?
-9. Docker `HEALTHCHECK` é automaticamente transformado numa probe Kubernetes?
-10. O que faz `--severity HIGH,CRITICAL` no Trivy?
-11. O que é um container registry?
-12. Qual é a diferença entre tag e digest?
-13. O que significa `build once, promote the same artifact`?
-14. Porque um named volume não é um backup?
-15. Que evidência demonstra a causa da falha da versão `1.2.0-rc1`?
-16. Qual a versão conhecida como válida para rollback?
-17. Porque Docker Compose single-host não é Alta Disponibilidade?
-
----
-
-# 31. Glossário
+# 30. Glossário
 
 | Termo | Significado |
 |---|---|
@@ -1394,29 +1370,7 @@ Tente responder antes de consultar o manual:
 
 ---
 
-# 32. Coerência com a Apresentação e Laboratório
-
-A apresentação e o laboratório integrado seguem a mesma sequência conceptual:
-
-| Tema | Apresentação | Manual | Laboratório integrado |
-|---|---|---|---|
-| Build once / promoção | Enquadramento inicial | 21 | promoção do artefacto |
-| Dockerfile / build context | Bloco Dockerfile | 10–11 | construção inicial |
-| Layers / cache / multi-stage | Bloco otimização | 12 | builds comparativos |
-| Hardening / secrets | Bloco segurança | 13 | experiências com secrets |
-| Recursos / restart / health / logging | Controlos operacionais | 15–16 | validação da stack |
-| Trivy / tag / digest | Scan e identidade | 17–19 | scan e identificação |
-| GHCR / registry | Registry e promoção | 18–20 | pull / tag / push |
-| Compose de produção | Ficheiros Compose | 14 | configuração efetiva |
-| Deploy / update / falha / rollback | Laboratório single-host | 22–27 | ciclo integrado |
-| Persistência / backup | Volume ≠ backup | 23 | marcador + `pg_dump` |
-| Limites single-host | Síntese | 28 | conclusão |
-
-**Critério de coerência:** nenhum conceito avaliado no laboratório deve surgir sem explicação prévia no manual e enquadramento na apresentação.
-
----
-
-# 33. Recursos de Consulta
+# 31. Recursos de Consulta
 
 - Docker Documentation — https://docs.docker.com/
 - Docker Engine on Ubuntu — https://docs.docker.com/engine/install/ubuntu/
@@ -1432,7 +1386,7 @@ A apresentação e o laboratório integrado seguem a mesma sequência conceptual
 
 ---
 
-# 34. Transição para a Sessão 4
+# 32. Transição para a Sessão 4
 
 A Sessão 3 termina com um artefacto preparado, validado, versionado e publicável, e com um ciclo operacional completo num único host.
 
