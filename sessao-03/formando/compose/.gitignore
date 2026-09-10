@@ -1,2 +1,5 @@
+# Ficheiro local de ambiente: pode conter configuração específica da VM e não deve ser versionado.
 .env.prod
+
+# Backups SQL gerados durante o laboratório são artefactos locais e não pertencem ao repositório.
 backups/
