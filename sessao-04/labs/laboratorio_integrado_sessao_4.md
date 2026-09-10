@@ -1,98 +1,73 @@
 # Laboratório Integrado — Sessão 4
-## Kubernetes Admin I: construir em 1.36 e atualizar para 1.37
+## Kubernetes Admin I: instalar 1.35.x, operar e atualizar para 1.36.x
 
 **Duração:** 4 horas  
 **Nível:** intermédio  
-**Topologia:** `k8s-cp-01` + `k8s-wk-01`  
-**Stack inicial:** Ubuntu 26.04 LTS · Kubernetes 1.36.x · containerd · Calico/Tigera Operator  
-**Resultado final:** Kubernetes 1.37.x
+**Topologia:** `k8s-cp-01` + `k8s-wk-01`
 
-## Regra pedagógica
-
-Não existe script de instalação para o formando.
+## Baseline
 
 ```text
-CONCEITO
-   ↓
-PORQUE É NECESSÁRIO
-   ↓
-COMANDO MANUAL
-   ↓
-O QUE OBSERVAR
-   ↓
-EVIDÊNCIA
-   ↓
-EXPLICAÇÃO
+Ubuntu:              26.04 LTS
+Kubernetes inicial:  1.35.8
+Kubernetes final:    1.36.4
+containerd:          2.2.x
+Calico:              3.32.2
+Tigera Operator:     1.42.6
+Pod CIDR:            192.168.0.0/16
+Service CIDR:        10.96.0.0/12
 ```
 
-Usa [`../folha_evidencias.md`](../folha_evidencias.md) durante o percurso.
+Os patches 1.35.x e 1.36.x devem ser confirmados antes da turma. O laboratório fixa sempre uma versão concreta descoberta no repositório APT; não instala simplesmente "a mais recente".
+
+## Método
+
+```text
+COMPREENDER → EXECUTAR → OBSERVAR → REGISTAR → EXPLICAR
+```
+
+Usa `../folha_evidencias.md` durante o percurso.
 
 ---
 
-# 0. Resultado final
+# CP1 — Confirmar identidade e limpar o ponto de partida
 
-```text
-NAME         STATUS   ROLES           VERSION
-k8s-cp-01    Ready    control-plane   v1.37.x
-k8s-wk-01    Ready    <none>          v1.37.x
-```
-
----
-
-# CP1 — Preparar os dois nós Linux
-
-Executar em **`k8s-cp-01` e `k8s-wk-01`**.
-
-## 1.1. Identidade e recursos
+Executar nos **dois nós**.
 
 ```bash
 hostname
 ip -br address
 free -h
+swapon --show
 ```
 
-Cada VM deve ter pelo menos cerca de 2 vCPU e 2 GiB RAM para este laboratório.
-
-## 1.2. Resolução entre os nós
-
-Em `/etc/hosts`, usa os IPs reais:
+Esperado:
 
 ```text
-<IP_CP>      k8s-cp-01
-<IP_WORKER>  k8s-wk-01
+Control Plane → k8s-cp-01
+Worker        → k8s-wk-01
 ```
 
-Valida:
+## 1.1. Confirmar que não existe Kubernetes residual
 
 ```bash
-getent hosts k8s-cp-01
-getent hosts k8s-wk-01
-ping -c 2 k8s-cp-01
-ping -c 2 k8s-wk-01
+snap list microk8s 2>/dev/null || true
+systemctl list-units --type=service | grep -Ei 'microk8s|k3s|minikube' || true
+sudo ss -ltnp | grep -E ':(6443|2379|2380|10250|10257|10259)\b' || true
+
+dpkg-query -W -f='${Package} ${Version}\n' kubeadm kubelet kubectl 2>/dev/null || true
+
+grep -R "pkgs.k8s.io/core:/stable:" \
+  /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true
 ```
 
-## 1.3. Garantir que não existe Kubernetes residual
+Se a VM já tiver Kubernetes 1.37 ou um cluster anterior, **não tentes fazer downgrade ad hoc**. Para esta formação, repõe o snapshot/VM limpa e recomeça.
+
+## 1.2. Swap, módulos e sysctl
 
 ```bash
-snap list microk8s 2>/dev/null
-systemctl list-units --type=service | grep -Ei 'microk8s|k3s|minikube'
-sudo ss -ltnp | grep -E ':(6443|2379|2380|10250|10257|10259)\b'
-```
-
-Se surgirem processos como `kubelite`, `kube-apiserver`, `etcd`, `kube-scheduler` ou `kube-controller-manager`, não avances até perceberes a origem.
-
-## 1.4. Swap
-
-```bash
-swapon --show
 sudo swapoff -a
-```
 
-No laboratório, a decisão é persistida em `/etc/fstab`.
-
-## 1.5. Módulos e sysctl
-
-```bash
 cat <<'EOF' | sudo tee /etc/modules-load.d/k8s.conf
 overlay
 br_netfilter
@@ -109,9 +84,10 @@ EOF
 sudo sysctl --system
 ```
 
-Valida:
+Validar:
 
 ```bash
+swapon --show
 lsmod | grep -E 'overlay|br_netfilter'
 sysctl net.ipv4.ip_forward
 sysctl net.bridge.bridge-nf-call-iptables
@@ -119,37 +95,74 @@ stat -fc %T /sys/fs/cgroup
 timedatectl status
 ```
 
-**Checkpoint CP1:** explica ao formador que evidência confirma que os dois hosts estão prontos.
+## 1.3. Resolução entre nós
+
+Regista os IPs reais e configura `/etc/hosts` em ambos:
+
+```text
+<IP_CP>      k8s-cp-01
+<IP_WORKER>  k8s-wk-01
+```
+
+```bash
+getent hosts k8s-cp-01
+getent hosts k8s-wk-01
+ping -c 2 k8s-cp-01
+ping -c 2 k8s-wk-01
+```
 
 ---
 
-# CP2 — Instalar e configurar containerd
+# CP2 — Instalar containerd 2.2.x
 
-Nos dois nós:
+A série **containerd 2.2.x** é escolhida porque é uma série recomendada em comum para Kubernetes 1.35 e 1.36.
+
+Executar nos **dois nós**.
+
+## 2.1. Repositório Docker apenas para `containerd.io`
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y containerd
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"${UBUNTU_CODENAME:-$VERSION_CODENAME}\") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+
+sudo apt-get update
+apt-cache madison containerd.io
+```
+
+Seleciona automaticamente o patch 2.2.x mais recente disponível:
+
+```bash
+CONTAINERD_PKG_VERSION="$(
+  apt-cache madison containerd.io |
+  awk '$3 ~ /^2\.2\./ {print $3; exit}'
+)"
+
+printf 'containerd.io selecionado: %s\n' "$CONTAINERD_PKG_VERSION"
+test -n "$CONTAINERD_PKG_VERSION"
+
+sudo apt-get install -y containerd.io="$CONTAINERD_PKG_VERSION"
+```
+
+## 2.2. Configuração CRI e cgroups
+
+```bash
 sudo mkdir -p /etc/containerd
 containerd config default | sudo tee /etc/containerd/config.toml >/dev/null
-```
-
-Confirma que `cri` não está desativado:
-
-```bash
-sudo grep -n 'disabled_plugins' /etc/containerd/config.toml
-```
-
-Edita:
-
-```bash
 sudo nano /etc/containerd/config.toml
 ```
 
-Na secção `runc.options`, garante:
+Confirma duas condições:
 
 ```text
-SystemdCgroup = true
+1. cri NÃO está em disabled_plugins
+2. SystemdCgroup = true nas opções do runtime runc
 ```
 
 Depois:
@@ -157,38 +170,71 @@ Depois:
 ```bash
 sudo systemctl restart containerd
 sudo systemctl enable containerd
+
+containerd --version
 systemctl is-active containerd
 containerd config dump | grep -i -A5 -B5 SystemdCgroup
 sudo ctr plugins ls | grep -i cri
 sudo ss -lx | grep containerd
 ```
 
-**Checkpoint CP2:** explica `kubelet → CRI → containerd → runc → kernel`.
+Modelo mental:
+
+```text
+kubelet → CRI → containerd → runc → kernel
+```
 
 ---
 
-# CP3 — Instalar Kubernetes 1.36.x
+# CP3 — Instalar exatamente Kubernetes 1.35.x
 
-Nos dois nós:
+Executar nos **dois nós**.
+
+## 3.1. Garantir que não ficou um repositório Kubernetes de outra minor
+
+```bash
+grep -R "pkgs.k8s.io/core:/stable:" \
+  /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true
+```
+
+Numa VM limpa, configura o repositório 1.35:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gpg
 sudo mkdir -p -m 755 /etc/apt/keyrings
 
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.36/deb/Release.key \
-  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.35/deb/Release.key \
+  | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' \
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.35/deb/ /' \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
+apt-cache madison kubeadm
+```
+
+## 3.2. Fixar explicitamente o pacote 1.35.x
+
+```bash
+K8S_PKG_VERSION="$(
+  apt-cache madison kubeadm |
+  awk '$3 ~ /^1\.35\./ {print $3; exit}'
+)"
+
+printf 'Kubernetes package: %s\n' "$K8S_PKG_VERSION"
+test -n "$K8S_PKG_VERSION"
+
+sudo apt-get install -y \
+  kubelet="$K8S_PKG_VERSION" \
+  kubeadm="$K8S_PKG_VERSION" \
+  kubectl="$K8S_PKG_VERSION"
+
 sudo apt-mark hold kubelet kubeadm kubectl
 sudo systemctl enable --now kubelet
 ```
 
-Valida:
+Validar:
 
 ```bash
 kubeadm version
@@ -197,33 +243,44 @@ kubectl version --client
 apt-mark showhold
 ```
 
-As versões devem pertencer à série **1.36.x**. A baseline de referência é 1.36.4.
+**Não avances se aparecer 1.36 ou 1.37.**
 
 ---
 
-# CP4 — Inicializar o Control Plane
+# CP4 — Inicializar o Control Plane em 1.35.x
 
-Esta secção é **APENAS em `k8s-cp-01`**.
-
-Confirma primeiro:
+Executar **apenas em `k8s-cp-01`**.
 
 ```bash
 hostname
-free -h
-systemctl is-active containerd
-swapon --show
-sudo ss -ltnp | grep -E ':(6443|2379|2380|10257|10259)\b'
 ```
 
-Executa:
+Guarda de segurança contra nó errado:
 
 ```bash
-sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+test "$(hostname -s)" = "k8s-cp-01" || {
+  echo "ERRO: kubeadm init só pode ser executado em k8s-cp-01"
+  exit 1
+}
 ```
 
-Se um preflight falhar, corrige a causa. Não uses `--ignore-preflight-errors` apenas para esconder o sintoma.
+Deriva a versão Kubernetes a partir do pacote instalado:
 
-Configura o kubeconfig:
+```bash
+K8S_PKG_VERSION="$(dpkg-query -W -f='${Version}' kubeadm)"
+K8S_SEMVER="v${K8S_PKG_VERSION%%-*}"
+printf 'Bootstrap Kubernetes: %s\n' "$K8S_SEMVER"
+```
+
+Inicializa:
+
+```bash
+sudo kubeadm init \
+  --kubernetes-version="$K8S_SEMVER" \
+  --pod-network-cidr=192.168.0.0/16
+```
+
+Configura `kubectl`:
 
 ```bash
 mkdir -p "$HOME/.kube"
@@ -232,94 +289,105 @@ sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
 chmod 600 "$HOME/.kube/config"
 ```
 
-Valida:
-
 ```bash
 kubectl cluster-info
 kubectl get nodes
 kubectl get pods -n kube-system
 ```
 
-**Observação:** antes do CNI, `k8s-cp-01` pode estar `NotReady` e CoreDNS pode não estar operacional.
+Antes do CNI, `NotReady` pode ser esperado.
 
 ---
 
-# CP5 — Instalar Calico via Tigera Operator
+# CP5 — Instalar Calico 3.32.2 via Tigera Operator
 
-Executar no Control Plane. A release deve ser previamente validada pelo formador. A edição de referência foi ensaiada com `v3.32.2`.
+Executar no **Control Plane**.
 
 ```bash
 export CALICO_VERSION=v3.32.2
 
 kubectl create -f \
-https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/v1_crd_projectcalico_org.yaml
+  https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/v1_crd_projectcalico_org.yaml
 
 kubectl create -f \
-https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml
+  https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml
 ```
 
-Obtém os Custom Resources:
+Validar o Operator e a imagem utilizada:
+
+```bash
+kubectl get pods -n tigera-operator
+kubectl -n tigera-operator get deploy tigera-operator \
+  -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+```
+
+Para Calico 3.32.2, a referência esperada do Operator é `quay.io/tigera/operator:v1.42.6`.
+
+Obtém e inspeciona os Custom Resources:
 
 ```bash
 curl -LO \
-https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/custom-resources.yaml
+  https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/custom-resources.yaml
 
 grep -n 'cidr:' custom-resources.yaml
 ```
 
-Confirma `192.168.0.0/16`, ajusta manualmente se necessário e aplica:
+O CIDR deve ser `192.168.0.0/16`. Depois:
 
 ```bash
 kubectl create -f custom-resources.yaml
-```
 
-Acompanha:
-
-```bash
 kubectl get tigerastatus
 kubectl get pods -n tigera-operator -o wide
 kubectl get pods -n calico-system -o wide
 kubectl get nodes
 ```
 
-Enquanto ainda não existir Worker, alguns Deployments podem ficar `Pending` por causa da taint `control-plane:NoSchedule`.
-
-```bash
-kubectl get events -A --sort-by=.lastTimestamp
-kubectl describe node k8s-cp-01 | grep -i Taints
-```
-
-**Não removas a taint.**
-
-### Compatibilidade
-
-Calico 3.32 é oficialmente testado até Kubernetes 1.36. Como este laboratório termina em 1.37, o formador deve pré-validar a combinação pós-upgrade ou usar uma release Calico oficialmente testada com 1.37 quando disponível.
+Calico 3.32 é oficialmente testado com Kubernetes 1.35 e 1.36, por isso este percurso permanece dentro da matriz de testes publicada.
 
 ---
 
-# CP6 — Adicionar o Worker
+# CP6 — Gerar o join no Control Plane e integrar o Worker
 
-No `k8s-cp-01`:
+## 6.1. Gerar o comando — APENAS `k8s-cp-01`
 
-Não guardes o token em ficheiros versionados. Se estiver ativo o tracing da shell, desativa-o antes de gerar o comando:
+```bash
+hostname
+```
+
+```bash
+test "$(hostname -s)" = "k8s-cp-01" || {
+  echo "ERRO: o token de join é criado no Control Plane, não no Worker"
+  exit 1
+}
+```
 
 ```bash
 set +x
-sudo kubeadm token create --print-join-command
+sudo kubeadm token create --print-join-command \
+  --kubeconfig /etc/kubernetes/admin.conf
 ```
 
-No `k8s-wk-01`, executa o comando **real** devolvido pelo CP com `sudo`.
+> Se executares este comando no Worker, não existe um `admin.conf` de Control Plane e o comando falha. **Não copies o kubeconfig administrativo para o Worker para contornar o erro.**
+
+## 6.2. Executar o join — APENAS `k8s-wk-01`
+
+No Worker:
 
 ```bash
-sudo kubeadm join <ENDPOINT_REAL>:6443 --token <TOKEN_REAL> \
-  --discovery-token-ca-cert-hash sha256:<HASH_REAL>
+hostname
 ```
 
-Os valores acima são placeholders. Não executes `<TOKEN_REAL>`, `VALOR_REAL`, `<HASH_REAL>` ou `...` literalmente.
+```bash
+test "$(hostname -s)" = "k8s-wk-01" || {
+  echo "ERRO: kubeadm join só pode ser executado em k8s-wk-01"
+  exit 1
+}
+```
 
-> No Worker executa-se `kubeadm join`, nunca `kubeadm init`.
+Executa, com `sudo`, **o comando real** produzido no Control Plane.
 
-No Control Plane:
+De volta ao Control Plane:
 
 ```bash
 kubectl get nodes -o wide
@@ -330,155 +398,168 @@ kubectl get tigerastatus
 
 Aguarda a convergência até os dois Nodes estarem `Ready` e CoreDNS/Calico operacionais.
 
-Neste momento tens um cluster **Kubernetes 1.36.x saudável**.
-
 ---
 
-# CP7 — Manutenção controlada
+# CP7 — Manutenção: cordon, drain e uncordon
 
-> Este bloco inicia o percurso avançado. Se o cluster ainda não estiver saudável no ponto de corte definido pelo formador, restaura o snapshot disponibilizado e retoma a partir do estado validado.
-
-Aplica o Pod direto:
+No Control Plane:
 
 ```bash
 kubectl apply -f ../manifests/pod_cordon_test.yaml
 kubectl get pod cordon-test -o wide
-```
 
-Cordon:
-
-```bash
 kubectl cordon k8s-wk-01
-kubectl get nodes
-```
-
-Drain sem force:
-
-```bash
 kubectl drain k8s-wk-01 --ignore-daemonsets
 ```
 
-Lê a mensagem. O Pod direto sem controller deve obrigar a uma decisão explícita.
+O primeiro `drain` deve chamar a atenção para o Pod direto sem controller. Lê a mensagem.
 
-Só neste exercício:
+Só para este exercício controlado:
 
 ```bash
 kubectl drain k8s-wk-01 --ignore-daemonsets --force
 kubectl get pod cordon-test
 kubectl uncordon k8s-wk-01
+kubectl get nodes
 ```
-
-O Pod não reaparece porque não existe controller.
 
 ---
 
-# CP8 — Upgrade do Control Plane para 1.37.x
+# CP8 — Ponto de recuperação antes do upgrade
 
-## 8.1. Confirmar o estado inicial
+Antes de alterar versões:
 
 ```bash
 kubectl get nodes -o wide
-sudo kubeadm upgrade plan
+kubectl get pods -A -o wide
+kubectl get tigerastatus
+kubectl cluster-info
 ```
 
-## 8.2. Mudar o repositório APT
+Cria na plataforma de virtualização um snapshot coordenado das duas VMs:
+
+```text
+k8s-cp-01 → pre-upgrade-1.35
+k8s-wk-01 → pre-upgrade-1.35
+```
+
+Se o upgrade falhar gravemente no laboratório, este é o ponto de retorno. Não se ensina um downgrade APT improvisado.
+
+---
+
+# CP9 — Upgrade do Control Plane: 1.35.x → 1.36.x
+
+Executar primeiro em **`k8s-cp-01`**.
+
+## 9.1. Mudar o repositório para 1.36
 
 ```bash
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.37/deb/Release.key \
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.36/deb/Release.key \
   | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.37/deb/ /' \
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
-sudo apt-cache madison kubeadm
+
+K8S_PKG_VERSION_136="$(
+  apt-cache madison kubeadm |
+  awk '$3 ~ /^1\.36\./ {print $3; exit}'
+)"
+K8S_TARGET="v${K8S_PKG_VERSION_136%%-*}"
+
+printf 'Pacote destino: %s\n' "$K8S_PKG_VERSION_136"
+printf 'Kubernetes destino: %s\n' "$K8S_TARGET"
+test -n "$K8S_PKG_VERSION_136"
 ```
 
-Regista a versão real do pacote. Nos comandos seguintes:
-
-```text
-<PKG_1_37> = versão APT real
-<K8S_1_37> = versão Kubernetes real, por exemplo v1.37.0
-```
-
-## 8.3. Atualizar kubeadm
+## 9.2. Atualizar kubeadm e o Control Plane
 
 ```bash
 sudo apt-mark unhold kubeadm
-sudo apt-get install -y kubeadm='<PKG_1_37>'
+sudo apt-get install -y kubeadm="$K8S_PKG_VERSION_136"
 sudo apt-mark hold kubeadm
+
 kubeadm version
-```
-
-## 8.4. Planear e aplicar
-
-```bash
 sudo kubeadm upgrade plan
-sudo kubeadm upgrade apply <K8S_1_37>
+sudo kubeadm upgrade apply "$K8S_TARGET"
 ```
 
-Observa:
+Validar antes de continuar:
 
 ```bash
 kubectl get nodes -o wide
+kubectl get pods -A -o wide
 ```
 
-É normal existir temporariamente version skew.
-
-## 8.5. Atualizar kubelet e kubectl do Control Plane
+## 9.3. Atualizar kubelet e kubectl do Control Plane
 
 ```bash
 kubectl drain k8s-cp-01 --ignore-daemonsets
-```
 
-```bash
 sudo apt-mark unhold kubelet kubectl
-sudo apt-get install -y kubelet='<PKG_1_37>' kubectl='<PKG_1_37>'
+sudo apt-get install -y \
+  kubelet="$K8S_PKG_VERSION_136" \
+  kubectl="$K8S_PKG_VERSION_136"
 sudo apt-mark hold kubelet kubectl
+
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
-```
 
-```bash
 kubectl uncordon k8s-cp-01
 kubectl get nodes -o wide
 ```
 
+Neste momento, é normal o Worker ainda estar na versão 1.35.x.
+
 ---
 
-# CP9 — Upgrade do Worker para 1.37.x
+# CP10 — Upgrade do Worker para 1.36.x
 
-No Worker, muda primeiro o repositório para a série 1.37 usando o mesmo procedimento.
-
-Atualiza `kubeadm`:
+No **Worker**, muda o repositório para 1.36 e calcula novamente a versão de pacote:
 
 ```bash
-sudo apt-mark unhold kubeadm
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.36/deb/Release.key \
+  | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
 sudo apt-get update
-sudo apt-get install -y kubeadm='<PKG_1_37>'
+
+K8S_PKG_VERSION_136="$(
+  apt-cache madison kubeadm |
+  awk '$3 ~ /^1\.36\./ {print $3; exit}'
+)"
+test -n "$K8S_PKG_VERSION_136"
+
+sudo apt-mark unhold kubeadm
+sudo apt-get install -y kubeadm="$K8S_PKG_VERSION_136"
 sudo apt-mark hold kubeadm
+
 sudo kubeadm upgrade node
 ```
 
-No Control Plane:
+No **Control Plane**:
 
 ```bash
 kubectl drain k8s-wk-01 --ignore-daemonsets
 ```
 
-> Num upgrade, não uses `--force` por omissão. Se o drain recusar, investiga primeiro.
-
-No Worker:
+No **Worker**:
 
 ```bash
 sudo apt-mark unhold kubelet kubectl
-sudo apt-get install -y kubelet='<PKG_1_37>' kubectl='<PKG_1_37>'
+sudo apt-get install -y \
+  kubelet="$K8S_PKG_VERSION_136" \
+  kubectl="$K8S_PKG_VERSION_136"
 sudo apt-mark hold kubelet kubectl
+
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 ```
 
-No Control Plane:
+No **Control Plane**:
 
 ```bash
 kubectl uncordon k8s-wk-01
@@ -486,7 +567,9 @@ kubectl uncordon k8s-wk-01
 
 ---
 
-# CP10 — Validação final
+# CP11 — Validação final
+
+No Control Plane:
 
 ```bash
 kubectl get nodes -o wide
@@ -496,29 +579,48 @@ kubectl cluster-info
 kubectl config current-context
 ```
 
-Confirma:
+Esperado:
 
 ```text
-[ ] k8s-cp-01 Ready e v1.37.x
-[ ] k8s-wk-01 Ready e v1.37.x
-[ ] Worker schedulable
-[ ] CoreDNS Running
-[ ] Calico/Tigera operacional
-[ ] API acessível
+k8s-cp-01   Ready   control-plane   v1.36.x
+k8s-wk-01   Ready   <none>          v1.36.x
 ```
+
+Confirma também:
+
+```bash
+kubectl get pods -n kube-system -o wide
+kubectl get pods -n calico-system -o wide
+```
+
+`kubeadm upgrade apply` gere os add-ons CoreDNS e kube-proxy no processo de upgrade; mesmo assim, o formando deve confirmar o seu estado final.
 
 ---
 
-# Questões de consolidação
+# Se algo correr mal
 
-1. Porque usamos o repositório 1.36 na instalação e 1.37 no upgrade?
-2. Porque se atualiza primeiro o `kubeadm`?
-3. Porque o Control Plane é atualizado antes do Worker?
-4. Em que momento existe version skew?
-5. Porque o kubelet deve ser drenado antes de um upgrade minor?
-6. Porque `kubeadm upgrade node` é usado no Worker?
-7. Porque não devemos usar `--force` automaticamente num drain de upgrade?
-8. Porque voltamos a validar CoreDNS e CNI no final?
-9. Porque uma combinação pré-validada localmente não é sinónimo de suporte oficial do fornecedor?
+```text
+PARAR
+  ↓
+recolher evidência
+  ↓
+não avançar para o próximo nó
+  ↓
+decidir correção ou restauro
+```
 
-Na Sessão 5, o foco passa de **construir e evoluir o cluster** para **executar e expor workloads e preservar os seus dados**.
+Comandos úteis:
+
+```bash
+kubectl get nodes -o wide
+kubectl get pods -A -o wide
+kubectl get events -A --sort-by=.lastTimestamp
+kubectl get tigerastatus
+journalctl -u kubelet -n 80 --no-pager
+systemctl status containerd --no-pager
+sudo ls -la /etc/kubernetes/tmp/ 2>/dev/null || true
+```
+
+Num laboratório descartável, se o estado ficar inconsistente, restaura os snapshots `pre-upgrade-1.35` das duas VMs.
+
+Consulta também [`../troubleshooting.md`](../troubleshooting.md) e [`../compatibilidade.md`](../compatibilidade.md).
