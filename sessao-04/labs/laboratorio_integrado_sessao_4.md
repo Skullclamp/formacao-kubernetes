@@ -111,6 +111,8 @@ ping -c 2 k8s-cp-01
 ping -c 2 k8s-wk-01
 ```
 
+> Os valores entre `< >` são placeholders de documentação. Substitui-os pelos valores reais; não os executes literalmente.
+
 ---
 
 # CP2 — Instalar containerd 2.2.x
@@ -351,9 +353,19 @@ Calico 3.32 é oficialmente testado com Kubernetes 1.35 e 1.36, por isso este pe
 
 ## 6.1. Gerar o comando — APENAS `k8s-cp-01`
 
+Primeiro confirma o nó:
+
 ```bash
 hostname
 ```
+
+Esperado:
+
+```text
+k8s-cp-01
+```
+
+Guarda de segurança:
 
 ```bash
 test "$(hostname -s)" = "k8s-cp-01" || {
@@ -362,21 +374,52 @@ test "$(hostname -s)" = "k8s-cp-01" || {
 }
 ```
 
+Gera o comando real de adesão:
+
 ```bash
 set +x
 sudo kubeadm token create --print-join-command \
-  --kubeconfig /etc/kubernetes/admin.conf
+  --kubeconfig=/etc/kubernetes/admin.conf
 ```
 
-> Se executares este comando no Worker, não existe um `admin.conf` de Control Plane e o comando falha. **Não copies o kubeconfig administrativo para o Worker para contornar o erro.**
+O resultado será um comando completo semelhante a:
+
+```text
+kubeadm join IP_REAL_DO_CP:6443 --token TOKEN_REAL --discovery-token-ca-cert-hash sha256:HASH_REAL
+```
+
+**Não copies o exemplo acima.** Copia exatamente o comando produzido pelo teu Control Plane.
+
+Se aparecer um erro semelhante a:
+
+```text
+failed to load admin kubeconfig: open /root/.kube/config: no such file or directory
+```
+
+confirma imediatamente:
+
+```bash
+hostname
+sudo ls -l /etc/kubernetes/admin.conf
+```
+
+Esse erro foi observado ao tentar gerar o token no **Worker**. O `admin.conf` administrativo pertence ao Control Plane. **Não copies `/etc/kubernetes/admin.conf` para o Worker para contornar o erro.**
 
 ## 6.2. Executar o join — APENAS `k8s-wk-01`
 
-No Worker:
+No Worker, confirma primeiro:
 
 ```bash
 hostname
 ```
+
+Esperado:
+
+```text
+k8s-wk-01
+```
+
+Guarda de segurança:
 
 ```bash
 test "$(hostname -s)" = "k8s-wk-01" || {
@@ -385,9 +428,64 @@ test "$(hostname -s)" = "k8s-wk-01" || {
 }
 ```
 
-Executa, com `sudo`, **o comando real** produzido no Control Plane.
+Executa **com privilégios de root**, usando `sudo`, o comando real produzido no Control Plane:
 
-De volta ao Control Plane:
+```text
+sudo kubeadm join IP_REAL_DO_CP:6443 --token TOKEN_REAL --discovery-token-ca-cert-hash sha256:HASH_REAL
+```
+
+Não executar literalmente valores como:
+
+```text
+<IP_CONTROL_PLANE>
+<TOKEN>
+<HASH>
+...
+```
+
+Em Bash, `<` e `>` têm significado de redirecionamento. Se escreveres `<IP_CONTROL_PLANE>` literalmente, podes obter um erro como:
+
+```text
+-bash: IP_CONTROL_PLANE: No such file or directory
+```
+
+Se executares `kubeadm join` sem `sudo`, o preflight falha com:
+
+```text
+[ERROR IsPrivilegedUser]: user is not running as root
+```
+
+A correção é usar `sudo kubeadm join ...`; **não** ignorar este preflight com `--ignore-preflight-errors`.
+
+## 6.3. Validar o join no sítio certo
+
+Depois de um `join` bem-sucedido, **não uses `kubectl get nodes` no Worker para validar o cluster**. O Worker não recebe um kubeconfig administrativo em `$HOME/.kube/config`.
+
+Se executares no Worker:
+
+```bash
+kubectl get nodes
+```
+
+é normal obter algo semelhante a:
+
+```text
+The connection to the server localhost:8080 was refused
+```
+
+Isto significa que o `kubectl` local não tem kubeconfig/contexto configurado; **não significa que o `kubeadm join` tenha falhado**.
+
+No Worker, valida o estado local do nó:
+
+```bash
+sudo systemctl is-active kubelet
+sudo systemctl status kubelet --no-pager
+sudo ls -l /etc/kubernetes/kubelet.conf
+```
+
+O ficheiro `/etc/kubernetes/kubelet.conf` deve existir depois de um `join` bem-sucedido.
+
+Depois volta ao **Control Plane** e valida o cluster:
 
 ```bash
 kubectl get nodes -o wide
@@ -397,6 +495,18 @@ kubectl get tigerastatus
 ```
 
 Aguarda a convergência até os dois Nodes estarem `Ready` e CoreDNS/Calico operacionais.
+
+Modelo mental desta etapa:
+
+```text
+k8s-cp-01
+  ├─ kubeadm token create
+  └─ kubectl get nodes
+          │
+          ▼
+k8s-wk-01
+  └─ sudo kubeadm join ...
+```
 
 ---
 
