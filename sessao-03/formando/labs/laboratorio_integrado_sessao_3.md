@@ -586,6 +586,17 @@ docker history symfony-demo:naive
 
 ## 6.1. Construir a versão otimizada
 
+Antes do build, confirme que o source preparado contém os três ficheiros usados para a layer de dependências:
+
+```bash
+test -f app/composer.json \
+  && test -f app/composer.lock \
+  && test -f app/symfony.lock \
+  && echo "OK: ficheiros Composer/Symfony presentes"
+```
+
+Executar:
+
 ```bash
 docker build \
   -f formando/docker/Dockerfile \
@@ -607,9 +618,84 @@ ARG APP_VERSION
 
 Não deve ser utilizado para transportar secrets.
 
+### Nota importante — Composer e `APP_ENV=prod`
+
+O Dockerfile otimizado instala apenas dependências de produção através de `composer install --no-dev`. A Symfony Demo possui auto-scripts Composer que executam comandos da aplicação, como limpeza da cache e preparação de assets.
+
+Por esse motivo, o **stage de build** define explicitamente:
+
+```dockerfile
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    APP_ENV=prod \
+    APP_DEBUG=0
+```
+
+Isto evita executar os auto-scripts em ambiente `dev` depois de as dependências de desenvolvimento terem sido excluídas com `--no-dev`.
+
+A instalação é feita em duas passagens:
+
+```text
+composer.json + composer.lock + symfony.lock
+        ↓
+composer install --no-dev --no-scripts
+        ↓
+COPY do restante código
+        ↓
+composer install --no-dev
+        ↓
+auto-scripts executados com APP_ENV=prod
+```
+
+A primeira passagem favorece a reutilização da cache. A segunda só é executada depois de o código necessário aos scripts Symfony estar presente.
+
 ---
 
-## 6.2. Observar a cache
+## 6.2. Diagnosticar um erro de Composer durante o build
+
+Se o build falhar num passo `composer install`, volte a executar com saída detalhada e sem reutilizar a cache:
+
+```bash
+docker build \
+  --no-cache \
+  --progress=plain \
+  -f formando/docker/Dockerfile \
+  --build-arg APP_VERSION=1.0.0 \
+  --build-arg SOURCE_REF=v3.1.0 \
+  -t symfony-demo:debug-build \
+  .
+```
+
+Procure na saída a primeira mensagem de erro, em particular se surge depois de um auto-script como `cache:clear`, `assets:install`, `importmap:install` ou `sass:build`.
+
+Confirme também que está a usar a versão atual dos recursos da formação:
+
+```bash
+cd ~/formacao-kubernetes
+git pull
+cd sessao-03
+./comum/prepare-source.sh
+```
+
+E valide a configuração relevante no Dockerfile:
+
+```bash
+grep -nE 'APP_ENV|APP_DEBUG|composer\.json|symfony\.lock|composer install' \
+  formando/docker/Dockerfile
+```
+
+### O que observar
+
+Deverá existir `APP_ENV=prod` no stage `build`, e a primeira cópia de dependências deverá incluir:
+
+```dockerfile
+COPY app/composer.json app/composer.lock app/symfony.lock ./
+```
+
+> **Boa prática:** diagnosticar a primeira causa real do erro antes de alterar dependências, remover scripts ou acrescentar pacotes à imagem.
+
+---
+
+## 6.3. Observar a cache
 
 Faça um novo build:
 
@@ -626,19 +712,21 @@ Procure `CACHED` na saída.
 
 ### Porque funciona?
 
-O Dockerfile copia primeiro os ficheiros que descrevem dependências e só depois o restante código. Se `composer.json` e `composer.lock` não mudarem, a instalação das dependências pode reutilizar cache.
+O Dockerfile copia primeiro os ficheiros que descrevem dependências e as recipes Symfony e só depois o restante código. Se `composer.json`, `composer.lock` e `symfony.lock` não mudarem, a instalação inicial das dependências pode reutilizar cache.
 
 ```text
-composer.json / composer.lock
+composer.json / composer.lock / symfony.lock
         ↓
-composer install
+composer install --no-dev --no-scripts
         ↓ cache reutilizável
 código da aplicação
+        ↓
+composer install --no-dev
 ```
 
 ---
 
-## 6.3. Conceito — multi-stage
+## 6.4. Conceito — multi-stage
 
 ```text
 stage build
@@ -656,7 +744,7 @@ O objetivo é reduzir componentes desnecessários no runtime e separar construç
 
 ---
 
-## 6.4. Só agora observar a automação
+## 6.5. Só agora observar a automação
 
 ```bash
 sed -n '1,220p' formando/scripts/build.sh
