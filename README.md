@@ -14,32 +14,15 @@ Os conteúdos são disponibilizados progressivamente, acompanhando a evolução 
 formacao-kubernetes/
 ├── README.md
 ├── docs/
-│   ├── pre-requisitos.md
-│   ├── como-usar-repositorio.md
-│   ├── ambiente-laboratorio.md
-│   └── comandos-rapidos.md
 ├── app/
 │   └── symfony-demo/
-│       └── README.md
 ├── sessao-02/
-│   ├── README.md
-│   ├── plano_sessao_2.md
-│   ├── labs/
-│   ├── compose/
-│   ├── desafios/
-│   └── checklist.md
 ├── sessao-03/
-│   ├── README.md
-│   ├── plano_sessao_3.md
-│   ├── checklist.md
-│   ├── cheat_sheet.md
-│   ├── referencias.md
-│   ├── comum/
-│   └── formando/
 └── sessao-04/
     ├── README.md
     ├── plano_sessao_4.md
     ├── manual_formando.md
+    ├── compatibilidade.md
     ├── checklist.md
     ├── checklist_operacional.md
     ├── folha_evidencias.md
@@ -86,12 +69,14 @@ Sessão 2 — OPERAR CONTAINERS
 Sessão 3 — CONSTRUIR E PROMOVER IMAGENS
         ↓
 Sessão 4 — CONSTRUIR E EVOLUIR O CLUSTER
-             Kubernetes 1.36.x
+             Kubernetes 1.35.x
                     ↓
-             upgrade 1.37.x
+                  upgrade
+                    ↓
+             Kubernetes 1.36.x
 ```
 
-Na Sessão 4, o laboratório é executado manualmente pelos formandos: preparar os nós, configurar `containerd`, construir o cluster com `kubeadm`, instalar o CNI, integrar o Worker, praticar manutenção e concluir com o upgrade controlado para Kubernetes 1.37.x.
+Na Sessão 4, o laboratório é executado manualmente pelos formandos: preparar os nós, configurar `containerd`, instalar explicitamente Kubernetes 1.35.x, construir o cluster com `kubeadm`, instalar o CNI, integrar o Worker, praticar manutenção, preparar um ponto de recuperação e concluir com o upgrade controlado para Kubernetes 1.36.x.
 
 ## Método de troubleshooting
 
