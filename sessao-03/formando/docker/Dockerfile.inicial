@@ -1,11 +1,15 @@
 # Imagem base: PHP 8.4 com Apache sobre Debian Bookworm.
+# Esta primeira imagem continua deliberadamente simples/single-stage para permitir
+# comparar mais tarde com o Dockerfile multi-stage otimizado.
 FROM php:8.4-apache-bookworm
 
-# Configuração base do ambiente:
+# Configuração do ambiente durante o build e runtime:
 # - permite ao Composer correr como root durante o build;
-# - define o ambiente da aplicação como desenvolvimento nesta versão inicial.
+# - usa APP_ENV=prod para que o comportamento observado seja próximo do deployment;
+# - desativa o debug e evita a Web Debug Toolbar na imagem usada no laboratório.
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
-    APP_ENV=dev
+    APP_ENV=prod \
+    APP_DEBUG=0
 
 # Instala ferramentas e bibliotecas necessárias e ativa extensões PHP/Apache:
 # - apt-get update atualiza o índice de pacotes;
@@ -36,9 +40,16 @@ COPY app/ ./
 # cujo DocumentRoot aponta para /var/www/html/public.
 COPY formando/docker/000-default.conf /etc/apache2/sites-available/000-default.conf
 
-# Instala dependências PHP da aplicação e prepara as diretorias graváveis.
-# chown entrega var/cache e var/log ao utilizador do processo web www-data.
+# Instala as dependências PHP e executa os auto-scripts definidos em composer.json.
+# Na Symfony Demo esses scripts incluem preparação de importmap/assets e Sass.
+# Em seguida, executa explicitamente a sequência de deployment recomendada para
+# AssetMapper: primeiro compila Sass e depois compila os assets versionados para
+# public/assets, para que Apache possa servi-los diretamente em APP_ENV=prod.
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader \
+    && php bin/console sass:build --no-interaction \
+    && php bin/console asset-map:compile --no-interaction \
+    && test -d public/assets \
+    && test -f public/assets/manifest.json \
     && mkdir -p var/cache var/log \
     && chown -R www-data:www-data var
 
