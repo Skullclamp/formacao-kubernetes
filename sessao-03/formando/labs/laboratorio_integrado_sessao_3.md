@@ -461,11 +461,11 @@ Se o repositório já existir:
 
 ```bash
 cd ~/formacao-kubernetes
-git pull
+sudo git pull
 cd sessao-03
 ```
 
-- `git pull` — obtém alterações remotas e integra-as na cópia local.
+- `sudo git pull` — obtém alterações remotas e integra-as na cópia local com privilégios administrativos.
 
 Confirmar:
 
@@ -671,7 +671,7 @@ Confirme também que está a usar a versão atual dos recursos da formação:
 
 ```bash
 cd ~/formacao-kubernetes
-git pull
+sudo git pull
 cd sessao-03
 ./comum/prepare-source.sh
 ```
