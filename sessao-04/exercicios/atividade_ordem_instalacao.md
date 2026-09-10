@@ -1,4 +1,6 @@
-# Atividade — Ordenar a Instalação
+# Atividade — Ordenar a Instalação e Evolução do Cluster
+
+## Parte A — Bootstrap
 
 Distribuir fora de ordem:
 
@@ -8,18 +10,35 @@ Distribuir fora de ordem:
 [kubeadm init]
 [kubeadm join]
 [pré-requisitos Linux]
-[kubelet / kubeadm / kubectl]
-[validação do cluster]
+[kubelet / kubeadm / kubectl 1.36.x]
+[validação do cluster 1.36.x]
 ```
 
-## Tarefa
+Ordena os elementos e justifica cada transição.
 
-1. Ordena os elementos.
-2. Justifica cada transição.
-3. Classifica-a como **dependência técnica** ou **ordem pedagógica**.
-4. Indica em que nó se executa `kubeadm init`.
-5. Indica em que nó se executa `kubeadm join`.
-6. Responde: um Worker pode fazer `join` antes do CNI? O que poderias observar?
-7. Se alguns Pods do Calico/CoreDNS ficarem `Pending` quando só existe o Control Plane com `NoSchedule`, isso prova que o CNI está avariado? Justifica.
+## Parte B — Upgrade
 
-**Tempo:** 5–7 minutos.
+Distribuir fora de ordem:
+
+```text
+[mudar repositório para 1.37]
+[atualizar kubeadm do Control Plane]
+[kubeadm upgrade plan]
+[kubeadm upgrade apply]
+[drain do Control Plane]
+[atualizar kubelet/kubectl do Control Plane]
+[atualizar kubeadm do Worker]
+[kubeadm upgrade node]
+[drain do Worker]
+[atualizar kubelet/kubectl do Worker]
+[validação final 1.37.x]
+```
+
+Ordena e responde:
+
+1. Porque o Control Plane vem antes do Worker?
+2. Em que momento pode existir version skew?
+3. Porque `kubeadm` é atualizado antes do `kubelet`?
+4. Porque se valida o cluster novamente no final?
+
+**Tempo:** 8–10 minutos.
