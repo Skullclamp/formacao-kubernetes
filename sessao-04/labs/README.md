@@ -1,9 +1,10 @@
-# Laboratórios — Sessão 4
+# Laboratório — Sessão 4
 
-A Sessão 4 utiliza um **laboratório integrado e progressivo**.
+O laboratório é executado **manualmente** em duas VMs por formando:
 
-Comece em:
+- `k8s-cp-01` — Control Plane;
+- `k8s-wk-01` — Worker.
 
-- [`laboratorio_integrado_sessao_4.md`](laboratorio_integrado_sessao_4.md)
+Percurso: [`laboratorio_integrado_sessao_4.md`](laboratorio_integrado_sessao_4.md).
 
-O laboratório pressupõe uma VM `k8s-cp-01` e uma VM `k8s-wk-01` por formando.
+Não existe um script de instalação para o formando. Cada checkpoint exige execução, observação e interpretação dos comandos.
