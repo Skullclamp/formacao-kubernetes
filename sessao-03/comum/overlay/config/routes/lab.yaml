@@ -1,13 +1,16 @@
+# /info — expõe metadata da versão e do ambiente em execução.
 lab_info:
   path: /info
   controller: App\Controller\LabController::info
   methods: [GET]
 
+# /health — verifica apenas se a aplicação está viva e responde HTTP.
 lab_health:
   path: /health
   controller: App\Controller\LabController::health
   methods: [GET]
 
+# /ready — verifica se a aplicação está pronta, incluindo acesso ao PostgreSQL.
 lab_ready:
   path: /ready
   controller: App\Controller\LabController::ready
