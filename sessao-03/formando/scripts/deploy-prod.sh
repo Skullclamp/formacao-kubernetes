@@ -23,22 +23,13 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-# Atualiza APP_VERSION no .env.prod.
-# Se a variável já existir, sed substitui a linha; se não existir, printf acrescenta-a.
-if grep -q '^APP_VERSION=' "$ENV_FILE"; then
-  sed -i "s/^APP_VERSION=.*/APP_VERSION=${VERSION}/" "$ENV_FILE"
-else
-  printf '\nAPP_VERSION=%s\n' "$VERSION" >> "$ENV_FILE"
-fi
+# Antes de alterar APP_VERSION, valida o estado atual da stack.
+# Isto permite distinguir o container app da própria stack de um verdadeiro
+# conflito de porta provocado por outro container ou processo do host.
+CURRENT_COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$BASE_FILE" -f "$PROD_FILE")
+"${CURRENT_COMPOSE[@]}" config >/dev/null
 
-# Guarda o comando Compose completo num array para reutilização consistente.
-COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$BASE_FILE" -f "$PROD_FILE")
-
-# Valida a configuração efetiva antes de alterar containers.
-# O output é descartado; interessa o exit code do comando.
-"${COMPOSE[@]}" config >/dev/null
-
-# Determina a porta publicada pela aplicação.
+# Determina a porta publicada pela aplicação a partir da configuração atual.
 # Dá prioridade à variável exportada no shell, depois ao .env.prod e por fim a 8080.
 APP_PORT="${APP_PORT:-$(awk -F= '$1=="APP_PORT"{print $2}' "$ENV_FILE" | tail -1)}"
 APP_PORT="${APP_PORT:-8080}"
@@ -50,13 +41,22 @@ if ! [[ "$APP_PORT" =~ ^[0-9]+$ ]] || (( APP_PORT < 1 || APP_PORT > 65535 )); th
 fi
 
 # Obtém o ID do container app já pertencente a esta stack, se existir.
-OWN_CID="$(${COMPOSE[@]} ps -q app 2>/dev/null || true)"
+# docker compose e docker ps podem devolver o mesmo ID com comprimentos diferentes;
+# por isso normalizamos ambos através de docker inspect antes da comparação.
+OWN_CID="$(${CURRENT_COMPOSE[@]} ps -q app 2>/dev/null || true)"
+OWN_FULL_ID=""
+if [[ -n "$OWN_CID" ]]; then
+  OWN_FULL_ID="$(docker inspect "$OWN_CID" --format '{{.Id}}' 2>/dev/null || true)"
+fi
 
-# Procura outros containers que já publiquem a mesma porta.
-# Se encontrar um container diferente do nosso, interrompe o deployment.
+# Procura containers que publiquem a mesma porta. O container app da própria
+# stack é permitido; qualquer outro container constitui um conflito real.
 while read -r cid; do
   [[ -z "$cid" ]] && continue
-  if [[ "$cid" != "$OWN_CID" ]]; then
+
+  FULL_ID="$(docker inspect "$cid" --format '{{.Id}}' 2>/dev/null || true)"
+
+  if [[ -z "$OWN_FULL_ID" || "$FULL_ID" != "$OWN_FULL_ID" ]]; then
     echo "ERRO: porta ${APP_PORT} já publicada por outro container:" >&2
     docker ps --filter "id=${cid}" --format '  {{.ID}} {{.Names}} {{.Image}} {{.Ports}}' >&2
     exit 1
@@ -65,13 +65,27 @@ done < <(docker ps -q --filter "publish=${APP_PORT}")
 
 # Se não existe ainda container app, verifica também processos do próprio host.
 # ss lista sockets em escuta e evita tentar publicar uma porta já ocupada fora do Docker.
-if [[ -z "$OWN_CID" ]] && command -v ss >/dev/null 2>&1; then
+if [[ -z "$OWN_FULL_ID" ]] && command -v ss >/dev/null 2>&1; then
   if ss -ltn "sport = :${APP_PORT}" | tail -n +2 | grep -q .; then
     echo "ERRO: porta ${APP_PORT} já está em utilização no host." >&2
     ss -ltnp "sport = :${APP_PORT}" >&2 || true
     exit 1
   fi
 fi
+
+# Só depois das verificações prévias altera a versão pretendida.
+# Se APP_VERSION já existir, substitui-a; caso contrário acrescenta-a.
+if grep -q '^APP_VERSION=' "$ENV_FILE"; then
+  sed -i "s/^APP_VERSION=.*/APP_VERSION=${VERSION}/" "$ENV_FILE"
+else
+  printf '\nAPP_VERSION=%s\n' "$VERSION" >> "$ENV_FILE"
+fi
+
+# A partir daqui o Compose representa a configuração alvo do deployment.
+COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$BASE_FILE" -f "$PROD_FILE")
+
+# Valida a configuração efetiva da versão alvo antes de alterar containers.
+"${COMPOSE[@]}" config >/dev/null
 
 # Obtém do registry as imagens configuradas para app e db.
 # pull não reconstrói a aplicação: consome o artefacto já publicado.
@@ -120,5 +134,5 @@ echo "==> Aplicação ${VERSION}"
 # Pequena espera para permitir o arranque antes das validações HTTP/healthcheck.
 sleep 8
 
-# Executa a validação comum: /health, /ready, /info e Docker HEALTHCHECK.
-"$VALIDATE"
+# Valida endpoints, versão efetivamente em execução e Docker HEALTHCHECK.
+"$VALIDATE" "$VERSION"
