@@ -1,86 +1,111 @@
 # Cheat-Sheet — Sessão 4
 
-## Versões
+## Baseline
 
 ```text
-Kubernetes inicial: 1.36.x
-Kubernetes final:   1.37.x
-Baseline:           1.36.4 → 1.37.0
+Kubernetes inicial: 1.35.8
+Kubernetes final:   1.36.4
+containerd:         2.2.x
+Calico:             3.32.2
+Tigera Operator:    1.42.6
 ```
 
-## Refresh kubectl
-
-```bash
-kubectl get nodes
-kubectl get pods -A
-kubectl get pods -n kube-system -o wide
-kubectl describe node <NODE>
-kubectl get events -A --sort-by=.lastTimestamp
-```
+## Regra de nó
 
 ```text
--n <ns>    namespace
--A         todos os namespaces
--o wide    mais detalhe
--o yaml    YAML
--w         watch
---help     ajuda
+kubeadm init          → k8s-cp-01
+kubeadm token create  → k8s-cp-01
+kubeadm join          → k8s-wk-01
 ```
 
-## Pré-requisitos
+Confirma sempre:
 
 ```bash
-swapon --show
-lsmod | grep -E 'overlay|br_netfilter'
-sysctl net.ipv4.ip_forward
-stat -fc %T /sys/fs/cgroup
-sudo ss -ltnp | grep -E ':(6443|2379|2380|10250|10257|10259)\b'
+hostname
 ```
 
-## containerd
+## Diagnosticar versão/repositório
 
 ```bash
-systemctl is-active containerd
-containerd config dump | grep -i -A5 -B5 SystemdCgroup
-sudo ctr plugins ls | grep -i cri
+grep -R "pkgs.k8s.io/core:/stable:" \
+  /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true
+
+dpkg-query -W -f='${Package} ${Version}\n' \
+  kubeadm kubelet kubectl 2>/dev/null || true
+
+apt-cache madison kubeadm
 ```
 
-## Instalação inicial — repositório 1.36
+## Instalação inicial Kubernetes 1.35
 
 ```text
-https://pkgs.k8s.io/core:/stable:/v1.36/deb/
+https://pkgs.k8s.io/core:/stable:/v1.35/deb/
 ```
 
 ```bash
-kubeadm version
-kubelet --version
-kubectl version --client
-apt-mark showhold
+K8S_PKG_VERSION="$(
+  apt-cache madison kubeadm |
+  awk '$3 ~ /^1\.35\./ {print $3; exit}'
+)"
+
+test -n "$K8S_PKG_VERSION"
+
+sudo apt-get install -y \
+  kubelet="$K8S_PKG_VERSION" \
+  kubeadm="$K8S_PKG_VERSION" \
+  kubectl="$K8S_PKG_VERSION"
+
+sudo apt-mark hold kubelet kubeadm kubectl
 ```
 
 ## Bootstrap
 
-**Control Plane:**
-
 ```bash
-sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+K8S_PKG_VERSION="$(dpkg-query -W -f='${Version}' kubeadm)"
+K8S_SEMVER="v${K8S_PKG_VERSION%%-*}"
+
+sudo kubeadm init \
+  --kubernetes-version="$K8S_SEMVER" \
+  --pod-network-cidr=192.168.0.0/16
 ```
 
-**Gerar join:**
+## Kubeconfig — Control Plane
 
 ```bash
-sudo kubeadm token create --print-join-command
+mkdir -p "$HOME/.kube"
+sudo cp /etc/kubernetes/admin.conf "$HOME/.kube/config"
+sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
+chmod 600 "$HOME/.kube/config"
 ```
 
-**Worker:** executar o comando real devolvido pelo CP. Nunca executar `<TOKEN>`, `<HASH>` ou `...` literalmente.
-
-## Calico / CoreDNS
+## Calico
 
 ```bash
-kubectl get pods -n tigera-operator -o wide
-kubectl get pods -n calico-system -o wide
+export CALICO_VERSION=v3.32.2
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/v1_crd_projectcalico_org.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml
+```
+
+## Join — gerar no Control Plane
+
+```bash
+hostname
+# k8s-cp-01
+
+set +x
+sudo kubeadm token create --print-join-command \
+  --kubeconfig /etc/kubernetes/admin.conf
+```
+
+No Worker executa apenas o `kubeadm join ...` real devolvido.
+
+## Estado
+
+```bash
+kubectl get nodes -o wide
+kubectl get pods -A -o wide
+kubectl get events -A --sort-by=.lastTimestamp
 kubectl get tigerastatus
-kubectl get pods -n kube-system -o wide
 ```
 
 ## Manutenção
@@ -91,44 +116,35 @@ kubectl drain k8s-wk-01 --ignore-daemonsets
 kubectl uncordon k8s-wk-01
 ```
 
-## Upgrade para 1.37
-
-Repositório:
-
-```text
-https://pkgs.k8s.io/core:/stable:/v1.37/deb/
-```
-
-### Control Plane
-
-```text
-kubeadm 1.37
-→ kubeadm upgrade plan
-→ kubeadm upgrade apply v1.37.x
-→ drain k8s-cp-01
-→ kubelet + kubectl 1.37
-→ restart kubelet
-→ uncordon
-```
-
-### Worker
-
-```text
-kubeadm 1.37
-→ kubeadm upgrade node
-→ drain k8s-wk-01
-→ kubelet + kubectl 1.37
-→ restart kubelet
-→ uncordon
-```
-
-## Validação final
+## Antes do upgrade
 
 ```bash
 kubectl get nodes -o wide
 kubectl get pods -A -o wide
 kubectl get tigerastatus
-kubectl cluster-info
 ```
 
-Esperado: ambos os Nodes `Ready` em `v1.37.x`.
+Snapshot das duas VMs: `pre-upgrade-1.35`.
+
+## Upgrade para Kubernetes 1.36
+
+```text
+repo v1.36
+→ kubeadm 1.36
+→ kubeadm upgrade plan
+→ kubeadm upgrade apply no CP
+→ drain CP
+→ kubelet/kubectl 1.36
+→ uncordon CP
+→ kubeadm upgrade node no Worker
+→ drain Worker
+→ kubelet/kubectl 1.36
+→ uncordon Worker
+→ validar
+```
+
+Repo de destino:
+
+```text
+https://pkgs.k8s.io/core:/stable:/v1.36/deb/
+```
