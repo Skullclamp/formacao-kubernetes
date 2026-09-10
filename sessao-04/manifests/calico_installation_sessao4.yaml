@@ -1,0 +1,20 @@
+# Sessão 4 — instalação Calico mínima para o laboratório
+#
+# Nesta sessão pretendemos validar o CNI e a conectividade do cluster.
+# Componentes opcionais de observabilidade/API (APIServer, Goldmane e Whisker)
+# ficam fora deste manifesto para reduzir ruído e consumo de recursos no cluster
+# pedagógico de apenas dois nós.
+
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+      - name: default-ipv4-ippool
+        blockSize: 26
+        cidr: 192.168.0.0/16
+        encapsulation: VXLANCrossSubnet
+        natOutgoing: Enabled
+        nodeSelector: all()
