@@ -1,17 +1,33 @@
 services:
   app:
+    # Em produção não usamos build:. O host consome a imagem já construída,
+    # validada e publicada no registry, respeitando o princípio build once.
     image: ${IMAGE_REPO}:${APP_VERSION}
+
+    # Força o ambiente de execução da aplicação para produção.
     environment:
       APP_ENV: prod
+
+    # Reinicia automaticamente após falhas ou reinício do Engine,
+    # mas respeita uma paragem manual explícita do operador.
     restart: unless-stopped
+
+    # Limites de recursos aplicados ao container da aplicação.
     mem_limit: 512m
     cpus: 1.0
+
+    # Usa o driver local do Docker, com rotação/retenção gerida pelo próprio driver.
     logging:
       driver: local
 
   db:
+    # Aplica ao PostgreSQL a mesma política de reinício do cenário single-host.
     restart: unless-stopped
+
+    # Limites didáticos de CPU e memória para a base de dados.
     mem_limit: 512m
     cpus: 1.0
+
+    # Mantém os logs sob o driver local do Docker.
     logging:
       driver: local
