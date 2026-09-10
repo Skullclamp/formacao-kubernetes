@@ -1,5 +1,5 @@
-# Plano de Formação — Sessão 4
-## Kubernetes Admin I — Instalação e Administração do Cluster
+# A) Plano de Formação — Sessão 4
+## Kubernetes Admin I — Instalação, Administração e Upgrade do Cluster
 
 ## 1. Identificação
 
@@ -11,190 +11,258 @@
 | Duração | 4 horas / 240 minutos |
 | Nível | Intermédio |
 | Formandos | Até 5 |
-| Ambiente | 2 VMs Ubuntu 26.04 LTS por formando |
-| Kubernetes | 1.37 |
+| Metodologia | Expositiva e ativa, com forte componente prática |
+| Topologia | 1 Control Plane + 1 Worker por formando |
+| SO | Ubuntu 26.04 LTS |
+| Kubernetes inicial | 1.36.x (Haru) |
+| Kubernetes final | 1.37.x (Garhwal) |
+| Baseline ensaiada | 1.36.4 → 1.37.0 |
 | Runtime | containerd |
 | CNI | Calico via Tigera Operator |
-| Foco | **CONSTRUIR O CLUSTER** |
+| Pod CIDR | 192.168.0.0/16 |
+| Service CIDR | 10.96.0.0/12 |
 
-Cada formando trabalha com um cluster independente composto por `k8s-cp-01` e `k8s-wk-01`. Com cinco formandos, a sala pode necessitar de até dez VMs.
+A Sessão 4 deixa de abordar apenas o bootstrap. O formando constrói um cluster 1.36.x, valida-o, pratica manutenção e executa depois um upgrade real para 1.37.x.
 
 ## 2. Objetivos específicos
 
 No final da sessão, o formando deverá ser capaz de:
 
-1. distinguir o papel do Control Plane e do Worker;
-2. validar pré-requisitos Linux antes do bootstrap;
-3. explicar a cadeia `kubelet → CRI → containerd → runc → kernel`;
-4. instalar e configurar `containerd` com CRI ativo e `SystemdCgroup = true`;
-5. instalar `kubelet`, `kubeadm` e `kubectl` na série 1.37 e aplicar `apt hold`;
-6. inicializar o Control Plane com `kubeadm init`;
-7. configurar e interpretar o `kubeconfig` administrativo;
-8. instalar Calico através do Tigera Operator;
-9. interpretar o estado `NotReady` antes do CNI e estados `Pending` por falta de nó schedulable;
-10. integrar o Worker através de `kubeadm join`;
-11. validar Nodes, CoreDNS, Calico/Tigera e API Server;
-12. utilizar `kubectl config` para consultar contextos;
-13. executar e explicar `cordon`, `drain` e `uncordon`;
-14. interpretar `kubeadm upgrade plan`;
-15. diagnosticar falhas comuns com base em evidências.
+1. explicar a arquitetura mínima Control Plane / Worker;
+2. rever os conceitos Kubernetes essenciais, incluindo ferramentas, comandos e flags mais frequentes;
+3. validar pré-requisitos Linux antes do bootstrap;
+4. explicar `Kubernetes → CRI → containerd → runc → Kernel`;
+5. configurar `containerd` com CRI operacional e `SystemdCgroup = true`;
+6. instalar `kubelet`, `kubeadm` e `kubectl` inicialmente na série 1.36.x;
+7. executar `kubeadm init` apenas no Control Plane e interpretar o resultado;
+8. configurar `kubeconfig`;
+9. instalar e validar Calico/Tigera Operator;
+10. adicionar o Worker com `kubeadm join`;
+11. validar Nodes, Pods, CoreDNS e CNI;
+12. usar `cordon`, `drain` e `uncordon`;
+13. interpretar `kubeadm upgrade plan`;
+14. executar o upgrade do Control Plane 1.36.x → 1.37.x;
+15. executar o upgrade do Worker 1.36.x → 1.37.x;
+16. observar e explicar version skew temporário;
+17. validar novamente o cluster e os add-ons após o upgrade;
+18. distinguir manutenção planeada de falha e diagnosticar problemas por evidências.
 
-## 3. Ambiente de referência
+## 3. Fluxo da sessão
 
 ```text
-Control Plane:   k8s-cp-01
-Worker:          k8s-wk-01
-SO:              Ubuntu 26.04 LTS
-Kubernetes:      1.37
-Runtime:         containerd
-CNI:             Calico via Tigera Operator
-Pod CIDR:        192.168.0.0/16
-Service CIDR:    10.96.0.0/12
+refresh Kubernetes
+      ↓
+pré-requisitos Linux
+      ↓
+containerd / CRI
+      ↓
+Kubernetes 1.36.x
+      ↓
+kubeadm init — k8s-cp-01
+      ↓
+kubeconfig
+      ↓
+Calico / CNI
+      ↓
+kubeadm join — k8s-wk-01
+      ↓
+convergência Calico + CoreDNS
+      ↓
+cluster 1.36.x validado
+      ↓
+cordon / drain / uncordon
+      ↓
+upgrade Control Plane para 1.37.x
+      ↓
+upgrade Worker para 1.37.x
+      ↓
+cluster 1.37.x validado
 ```
 
-## 4. Metodologia
+## 4. Conteúdos
 
-A sessão segue uma metodologia ativa e orientada por evidências:
+### 4.1. Refresh Kubernetes
+
+- Kubernetes como orquestrador declarativo;
+- Control Plane vs Worker;
+- API Server, Scheduler, Controller Manager e etcd;
+- kubelet, containerd, kube-proxy e CNI;
+- diferença entre `kubeadm`, `kubelet` e `kubectl`;
+- leitura de um comando `kubectl`;
+- flags frequentes: `-n`, `-A`, `-o wide`, `-o yaml`, `-w`, `--help`.
+
+### 4.2. Pré-requisitos Linux
+
+- CPU/RAM e topologia;
+- ausência de MicroK8s, k3s, Minikube ou cluster residual;
+- swap;
+- `overlay` e `br_netfilter`;
+- `net.ipv4.ip_forward` e bridge netfilter;
+- cgroup v2;
+- resolução de nomes, relógio e portas.
+
+### 4.3. containerd / CRI
+
+- instalação do runtime;
+- CRI ativo;
+- socket `/run/containerd/containerd.sock`;
+- `SystemdCgroup = true` na configuração efetiva.
+
+### 4.4. Instalação Kubernetes 1.36.x
+
+- repositório `pkgs.k8s.io/core:/stable:/v1.36/deb/`;
+- instalação e `apt-mark hold`;
+- verificação das versões.
+
+### 4.5. Bootstrap
+
+- `kubeadm init --pod-network-cidr=192.168.0.0/16`;
+- certificados e static Pods;
+- `admin.conf` e kubeconfig do utilizador;
+- observação de `NotReady` antes do CNI.
+
+### 4.6. CNI e Worker
+
+- Calico via Tigera Operator;
+- `tigera-operator`, `calico-system`, `tigerastatus`;
+- comportamento de Pods `Pending` quando só existe o Control Plane com `NoSchedule`;
+- `kubeadm token create --print-join-command`;
+- `kubeadm join` apenas no Worker;
+- convergência Calico/CoreDNS.
+
+### 4.7. Manutenção
+
+- Pod direto de observação;
+- `cordon`;
+- `drain` sem `--force` e interpretação da recusa;
+- uso deliberado de `--force` apenas no exercício do Pod sem controller;
+- `uncordon`.
+
+### 4.8. Upgrade 1.36.x → 1.37.x
+
+- repositório `pkgs.k8s.io` por minor release;
+- mudança do repositório APT para 1.37;
+- Control Plane: atualizar `kubeadm` → `upgrade plan` → `upgrade apply`;
+- drain antes do upgrade minor do kubelet;
+- atualizar `kubelet`/`kubectl`, restart e uncordon;
+- Worker: atualizar `kubeadm` → `kubeadm upgrade node` → drain → `kubelet`/`kubectl` → uncordon;
+- version skew temporário;
+- validação final.
+
+## 5. Distribuição temporal
+
+| Tempo | Conteúdo / atividade | Tipo |
+|---:|---|---|
+| 10 min | Enquadramento + refresh Kubernetes | Síntese + conceito |
+| 10 min | Topologia e requisitos | Conceito |
+| 20 min | Pré-requisitos Linux | Conceito + prática |
+| 15 min | containerd / CRI | Prática guiada |
+| 15 min | Instalação Kubernetes 1.36.x | Prática |
+| 15 min | Intervalo | — |
+| 30 min | `kubeadm init` + kubeconfig + `NotReady` | Prática |
+| 20 min | Calico/Tigera | Prática |
+| 20 min | Worker join + convergência + validação | Prática |
+| 10 min | kubeconfig e contextos | Prática |
+| 60 min | Manutenção + upgrade 1.36.x → 1.37.x | Prática orientada |
+| 15 min | Validação final + síntese | Consolidação |
+| **240 min** | **Total** | |
+
+## 6. Metodologia
 
 ```text
 CONCEITO
    ↓
 PRÉ-CONDIÇÃO
    ↓
-EXECUÇÃO MANUAL
+COMANDO MANUAL
    ↓
-OBSERVAÇÃO
+OBSERVAR
    ↓
-EVIDÊNCIA
+REGISTAR EVIDÊNCIA
    ↓
-EXPLICAÇÃO
+EXPLICAR
+   ↓
+AVANÇAR
 ```
 
-Os formandos executam os passos manualmente. Scripts de ensaio e validação usados pelo formador não fazem parte do percurso normal do formando.
+Os scripts usados pelo formador em ensaios técnicos não fazem parte do percurso do formando.
 
-## 5. Conteúdos e atividades
+## 7. Sequência de upgrade a ensinar
 
-### Bloco 1 — Enquadramento e arquitetura
-
-- transição das Sessões 2–3 para Kubernetes;
-- Control Plane vs Worker;
-- API Server, etcd, scheduler, controller manager, kubelet e kube-proxy;
-- topologia de duas VMs.
-
-### Bloco 2 — Pré-requisitos Linux
-
-- hostname e resolução entre nós;
-- memória e CPU;
-- swap;
-- módulos `overlay` e `br_netfilter`;
-- `ip_forward` e bridge netfilter;
-- cgroup v2;
-- sincronização horária;
-- ausência de MicroK8s, k3s, Minikube ou Kubernetes residual;
-- portas de Control Plane e kubelet.
-
-### Bloco 3 — containerd / CRI
-
-- runtime vs CRI;
-- configuração do containerd 2.x;
-- CRI não desativado;
-- `SystemdCgroup = true`;
-- socket `/run/containerd/containerd.sock`.
-
-### Bloco 4 — ferramentas Kubernetes
-
-- repositório `pkgs.k8s.io` da série 1.37;
-- instalação de `kubelet`, `kubeadm`, `kubectl`;
-- `apt-mark hold`;
-- comportamento do kubelet antes de `init`/`join`.
-
-### Bloco 5 — bootstrap do Control Plane
-
-- preflight checks;
-- `kubeadm init --pod-network-cidr=192.168.0.0/16`;
-- certificados e static Pods;
-- configuração de `$HOME/.kube/config`;
-- observação de `NotReady` antes do CNI.
-
-### Bloco 6 — CNI / Calico
-
-- CNI e rede de Pods;
-- CRDs, Tigera Operator e Custom Resources;
-- validação de Pod CIDR;
-- namespaces `tigera-operator` e `calico-system`;
-- taint `control-plane:NoSchedule`;
-- interpretação de Pods `Pending` antes do Worker.
-
-### Bloco 7 — Worker join e convergência
-
-- `kubeadm token create --print-join-command`;
-- `kubeadm join` executado apenas no Worker;
-- diferença entre placeholders e credenciais reais;
-- convergência de Calico/Tigera e CoreDNS;
-- validação dos dois Nodes em `Ready`.
-
-### Bloco 8 — kubeconfig e manutenção
-
-- contextos e `current-context`;
-- segurança de `admin.conf`;
-- Pod direto fixado ao Worker;
-- `cordon`;
-- `drain` sem e com `--force`;
-- `uncordon`;
-- distinção entre manutenção planeada e falha.
-
-### Bloco 9 — upgrades e troubleshooting
-
-- `kubeadm upgrade plan`;
-- ordem conceptual de upgrade;
-- diagnóstico por `get`, `describe`, Events e logs do host;
-- casos: memória insuficiente, portas ocupadas, MicroK8s residual, token inválido, CNI/CoreDNS `Pending`.
-
-## 6. Distribuição do tempo
-
-| Tempo | Atividade | Tipo |
-|---:|---|---|
-| 10 min | Enquadramento e ligação à Sessão 3 | Síntese |
-| 15 min | Arquitetura e topologia | Conceito |
-| 25 min | Pré-requisitos Linux | Prática guiada |
-| 20 min | containerd e CRI | Conceito + prática |
-| 20 min | kubelet, kubeadm e kubectl | Prática |
-| 15 min | Intervalo | — |
-| 40 min | `kubeadm init` e kubeconfig | Prática guiada |
-| 20 min | Calico / Tigera Operator | Prática |
-| 20 min | Worker join e convergência | Prática |
-| 15 min | kubeconfig e contextos | Prática guiada |
-| 25 min | cordon, drain, uncordon e upgrade plan | Prática |
-| 15 min | Síntese, evidências e avaliação formativa | Consolidação |
-| **240 min** | **Total** | |
-
-## 7. Evidências de aprendizagem
-
-O formando regista, ao longo dos checkpoints CP1–CP8:
-
-- estado dos pré-requisitos Linux;
-- runtime e CRI;
-- versões e `apt hold`;
-- estado do Control Plane antes do CNI;
-- estado do Calico/Tigera;
-- Worker integrado;
-- CoreDNS operacional;
-- comportamento de `cordon` e `drain`;
-- estado final do cluster.
-
-## 8. Critérios de conclusão
-
-A sessão está tecnicamente concluída quando:
+### Control Plane
 
 ```text
-[ ] k8s-cp-01 Ready
-[ ] k8s-wk-01 Ready
-[ ] Worker schedulable
-[ ] Calico/Tigera operacional
-[ ] CoreDNS Running
-[ ] API Server acessível
-[ ] kubeconfig/contexto conhecido
-[ ] Pod de manutenção removido
+repo 1.37
+   ↓
+kubeadm 1.37
+   ↓
+kubeadm upgrade plan
+   ↓
+kubeadm upgrade apply v1.37.x
+   ↓
+drain
+   ↓
+kubelet + kubectl 1.37
+   ↓
+restart
+   ↓
+uncordon
+   ↓
+validar
 ```
 
-A sessão está pedagogicamente concluída quando o formando consegue explicar por que razão cada transição ocorreu e que evidência a confirma.
+### Worker
+
+```text
+repo 1.37
+   ↓
+kubeadm 1.37
+   ↓
+kubeadm upgrade node
+   ↓
+drain a partir do Control Plane
+   ↓
+kubelet + kubectl 1.37
+   ↓
+restart
+   ↓
+uncordon
+   ↓
+validar
+```
+
+Não se utiliza `--force` num `drain` de upgrade como comportamento automático.
+
+## 8. Compatibilidade do CNI
+
+Calico 3.32 é oficialmente testado com Kubernetes 1.34–1.36. A baseline da formação foi ensaiada com Calico 3.32.2 após a passagem para 1.37, mas isso não equivale a suporte/teste oficial da combinação.
+
+Antes de cada edição, o formador deve:
+
+1. consultar a matriz Calico atual;
+2. preferir uma release oficialmente testada com Kubernetes 1.37, se disponível;
+3. pré-validar o percurso completo 1.36 → 1.37;
+4. confirmar CoreDNS, `tigerastatus` e Pods Calico depois do upgrade.
+
+## 9. Avaliação formativa
+
+O formando demonstra que consegue:
+
+- explicar o papel dos componentes;
+- justificar a ordem do bootstrap;
+- construir o cluster 1.36;
+- interpretar estados intermédios;
+- executar manutenção controlada;
+- executar o upgrade 1.36 → 1.37;
+- explicar version skew;
+- validar o cluster final.
+
+## 10. Delimitação
+
+Incluído: bootstrap, runtime, CNI, join, kubeconfig, manutenção e upgrade real de dois nós.
+
+Fora do âmbito: HA multi-Control-Plane, rollback avançado, backup/restore de etcd, cloud-managed Kubernetes e políticas de rede avançadas.
+
+## 11. Continuidade
+
+A Sessão 4 termina com um cluster de dois nós **em Kubernetes 1.37.x**, pronto para a Sessão 5, onde o foco passa para workloads, networking e storage.
