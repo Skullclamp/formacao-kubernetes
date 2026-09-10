@@ -2,13 +2,11 @@
 
 ## Sessão 4 · Kubernetes Admin I
 
-Este exercício tem **duas partes**, com níveis de risco diferentes. A Parte 1 é para todos. A Parte 2 só se aplica ao ambiente descartável do laboratório, com snapshot de recuperação disponível.
+Este exercício tem duas partes. A Parte 1 é de planeamento e pode ser realizada sem alterar o cluster. A Parte 2 é opcional e só deve ser executada num ambiente de laboratório descartável, com snapshot de recuperação disponível.
 
 ---
 
-# Parte 1 — Planeamento (obrigatória, sem risco)
-
-Podes fazer esta parte em qualquer altura, sozinho, sem supervisão do formador — não altera nada no cluster.
+# Parte 1 — Planeamento
 
 ## A. Estado atual
 
@@ -43,7 +41,7 @@ planear a intervenção
         ↓
 Control Plane primeiro
         ↓
-seguir procedimento da versão
+seguir o procedimento da versão
         ↓
 isolar/drainar quando aplicável
         ↓
@@ -63,39 +61,35 @@ Workers, um de cada vez
 
 ---
 
-# Parte 2 — Aplicação real (opcional, requer ambiente descartável)
+# Parte 2 — Aplicação real opcional
 
-**Só avances para aqui se:**
+Só avances se:
 
-- [ ] o teu cluster corre num ambiente que podes destruir sem consequências;
-- [ ] tens um snapshot de recuperação disponível e testado;
-- [ ] já completaste a Parte 1 e compreendeste o output do teu `kubeadm upgrade plan`.
+- o cluster for descartável;
+- existir um snapshot de recuperação testado;
+- tiveres concluído a Parte 1;
+- compreenderes o output do `kubeadm upgrade plan`.
 
-Se alguma destas condições não se verificar, **fica pela Parte 1**.
+> Não fixamos neste exercício uma versão de destino. Usa sempre uma versão suportada e indicada pelo plano/documentação correspondente ao cluster real.
 
-> **Nota sobre versões:** não fixamos aqui uma versão de destino. Usa sempre a que o teu `kubeadm upgrade plan` te indicou como disponível.
-
-### Duas versões diferentes, não confundir
+## 1. Distinguir versão Kubernetes e versão do pacote
 
 ```text
-K8S_TARGET   → versão passada ao kubeadm, formato semver com "v": ex. v1.37.4
-PKG_VERSION  → versão do pacote APT, com sufixo de build: ex. 1.37.4-1.1
+K8S_TARGET   → versão usada pelo kubeadm, por exemplo v1.37.x
+PKG_VERSION  → versão do pacote APT correspondente
 ```
 
-Antes de avançar, define as duas a partir do que confirmaste na Parte 1:
+Antes de avançar:
 
 ```bash
 sudo apt-cache madison kubeadm
-
-K8S_TARGET=v1.37.x
-PKG_VERSION=1.37.x-1.1
 ```
 
-Substitui os valores pelos números reais apresentados no teu ambiente.
+Regista os valores reais e não executes placeholders literalmente.
 
-## 1. Atualizar o Control Plane
+## 2. Control Plane
 
-Em `k8s-cp-01`:
+Em `k8s-cp-01`, atualizar primeiro `kubeadm` de acordo com a documentação da versão escolhida:
 
 ```bash
 sudo apt-mark unhold kubeadm
@@ -106,7 +100,7 @@ sudo apt-mark hold kubeadm
 sudo kubeadm upgrade apply "${K8S_TARGET}"
 ```
 
-Drenar o nó antes de atualizar o `kubelet`:
+Antes de atualizar o kubelet, prepara o nó de acordo com o procedimento oficial e com os workloads presentes. Num laboratório em que se decide drenar:
 
 ```bash
 kubectl drain k8s-cp-01 --ignore-daemonsets
@@ -119,7 +113,6 @@ sudo apt-mark unhold kubelet kubectl
 sudo apt-get update
 sudo apt-get install -y kubelet="${PKG_VERSION}" kubectl="${PKG_VERSION}"
 sudo apt-mark hold kubelet kubectl
-
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 ```
@@ -128,31 +121,22 @@ Devolver o nó ao serviço:
 
 ```bash
 kubectl uncordon k8s-cp-01
-```
-
-Validar antes de continuar:
-
-```bash
 kubectl get nodes
-kubectl get pods -n kube-system
 ```
 
-## 2. Atualizar o Worker — com isolamento
+## 3. Worker
 
-Em `k8s-wk-01`, atualizar primeiro o `kubeadm` e executar a fase de upgrade do nó:
+Em `k8s-wk-01`:
 
 ```bash
 sudo apt-mark unhold kubeadm
 sudo apt-get update
 sudo apt-get install -y kubeadm="${PKG_VERSION}"
 sudo apt-mark hold kubeadm
-
 sudo kubeadm upgrade node
 ```
 
-> `kubeadm upgrade node` não recebe a versão como argumento; usa a versão do binário `kubeadm` já instalado no passo anterior.
-
-Antes de atualizar o `kubelet`, isolar e drenar o Worker a partir do Control Plane:
+A partir do Control Plane, isolar e drenar o Worker:
 
 ```bash
 kubectl cordon k8s-wk-01
@@ -160,27 +144,26 @@ kubectl get nodes
 kubectl drain k8s-wk-01 --ignore-daemonsets
 ```
 
-> **Não uses `--force` aqui por omissão.** Se o `drain` recusar por encontrar um Pod sem controlador, para e investiga a causa antes de decidir como proceder.
+> Não uses `--force` por omissão num upgrade. Se o `drain` recusar por causa de um Pod sem controller, investiga e toma uma decisão consciente.
 
-Em `k8s-wk-01`, atualizar então `kubelet` e `kubectl`:
+No Worker:
 
 ```bash
 sudo apt-mark unhold kubelet kubectl
 sudo apt-get install -y kubelet="${PKG_VERSION}" kubectl="${PKG_VERSION}"
 sudo apt-mark hold kubelet kubectl
-
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 ```
 
-Devolver o Worker ao serviço, a partir do Control Plane:
+No Control Plane:
 
 ```bash
 kubectl uncordon k8s-wk-01
 kubectl get nodes
 ```
 
-## 3. Validação final
+## 4. Validação final
 
 ```bash
 kubectl get nodes -o wide
@@ -189,25 +172,20 @@ kubectl get pods -A
 kubectl cluster-info
 ```
 
-Confirma:
+Confirmar:
 
-- [ ] ambos os nós na versão de destino;
-- [ ] ambos os nós `Ready`;
-- [ ] nenhum Pod de sistema em `CrashLoopBackOff` ou `Error`.
+```text
+[ ] ambos os nós Ready
+[ ] versões coerentes com o destino escolhido
+[ ] nenhum Pod de sistema em Error/CrashLoopBackOff
+```
 
-## 4. Reflexão final
+## 5. Reflexão
 
-1. Porque atualizamos o Control Plane antes do Worker?
-2. O que teria acontecido se tivesses corrido `kubeadm upgrade apply` sem ler primeiro `kubeadm upgrade plan`?
-3. Porque isolamos e drenamos um Node antes de atualizar o `kubelet`?
-4. Num cluster com vários Workers, porque os devemos atualizar um de cada vez?
+1. Porque atualizamos primeiro o Control Plane?
+2. Porque se valida cada nó antes de continuar?
+3. Porque um `drain` falhado deve ser investigado antes de usar `--force`?
+4. Como mudaria o procedimento num cluster com vários Workers?
+5. Que mecanismos adicionais seriam exigidos num Control Plane em alta disponibilidade?
 
----
-
-## Fora do âmbito
-
-- rollback de um upgrade falhado;
-- upgrade de Control Plane em alta disponibilidade;
-- backup/restore de `etcd` antes do upgrade.
-
-Estes temas são aprofundados na Sessão 7.
+O objetivo principal deste exercício é compreender a disciplina operacional de um upgrade. Rollback avançado, HA e recuperação de `etcd` são aprofundados noutras sessões.
