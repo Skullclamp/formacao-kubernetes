@@ -1,11 +1,12 @@
 # Laboratório Integrado — Sessão 3
 ## Docker II: da VM Ubuntu Server limpa ao deployment, falha e rollback
 
-**Duração de referência:** 4 horas  
+**Sessão:** 3  
+**Duração da sessão:** 4 horas / 240 minutos  
 **Nível:** intermédio  
-**Cenário:** Symfony Demo v3.1.0 + PHP 8.4 + Apache + PostgreSQL 16
+**Cenário:** Symfony Demo v3.1.0 + Symfony 8.1 + PHP 8.4 + Apache + PostgreSQL 16
 
-Este laboratório acompanha um único percurso técnico. Em cada etapa procure compreender o conceito, executar o comando, interpretar as flags e validar o resultado.
+Este laboratório acompanha uma única história técnica. O objetivo não é copiar comandos: é compreender o conceito, executar, observar evidência e só depois automatizar.
 
 ```text
 FAZER manualmente
@@ -17,21 +18,78 @@ EXPLICAR
 AUTOMATIZAR
 ```
 
+> **Organização do tempo:** as secções 1 a 3 constituem a preparação técnica da VM e devem, sempre que possível, ser realizadas antes do bloco principal da sessão. Mantêm-se neste documento para que o formando consiga repetir todo o processo a partir de uma VM limpa. O núcleo pedagógico Docker II começa na secção 4.
+
+---
+
+# 0. Percurso do laboratório
+
+```text
+Ubuntu Server limpo
+      ↓
+Docker Engine + containerd + Buildx + Compose
+      ↓
+Trivy + Git
+      ↓
+Symfony Demo
+      ↓
+Dockerfile inicial
+      ↓
+Build / Layers / Cache
+      ↓
+Multi-stage
+      ↓
+Hardening / Secrets
+      ↓
+HEALTHCHECK / Recursos / Logging
+      ↓
+Scan
+      ↓
+Tag / Digest / Registry
+      ↓
+Compose single-host
+      ↓
+Deploy 1.0.0
+      ↓
+Ver aplicação no PC
+      ↓
+Dados + Backup
+      ↓
+Update 1.1.0
+      ↓
+Falha 1.2.0-rc1
+      ↓
+Diagnóstico
+      ↓
+Rollback 1.1.0
+```
+
 ---
 
 # 1. Preparar a VM Ubuntu Server
 
-## 1.1. Atualizar o sistema
+## 1.1. Atualizar o catálogo de pacotes
 
 ```bash
 sudo apt update
-sudo apt upgrade -y
 ```
 
 - `sudo` — executa com privilégios administrativos;
-- `apt update` — atualiza o catálogo de pacotes;
-- `apt upgrade` — atualiza pacotes já instalados;
-- `-y` — confirma automaticamente as perguntas do `apt`.
+- `apt` — gestor de pacotes do Ubuntu;
+- `update` — atualiza o catálogo dos repositórios configurados.
+
+> `apt update` não atualiza os programas instalados; atualiza apenas a informação disponível para o APT.
+
+A atualização global dos pacotes pode ser realizada na preparação da VM:
+
+```bash
+sudo apt upgrade -y
+```
+
+- `upgrade` — atualiza pacotes já instalados;
+- `-y` — responde automaticamente `yes` às confirmações.
+
+> **Nota de tempo:** `apt upgrade` não é um requisito específico da instalação Docker e pode demorar. Se a VM foi preparada imediatamente antes da sessão, esta operação deve preferencialmente ser concluída fora dos 240 minutos de formação.
 
 Instalar ferramentas base:
 
@@ -39,41 +97,70 @@ Instalar ferramentas base:
 sudo apt install -y ca-certificates curl git
 ```
 
-- `ca-certificates` — permite validar certificados TLS;
+- `ca-certificates` — permite validar certificados TLS/HTTPS;
 - `curl` — cliente HTTP/HTTPS;
-- `git` — obtém os recursos da formação.
+- `git` — obtém e atualiza os materiais da formação.
 
-## 1.2. Remover possíveis conflitos
+---
+
+## 1.2. Remover pacotes que podem entrar em conflito
+
+Seguir a abordagem indicada pela documentação Docker para Ubuntu:
 
 ```bash
-sudo apt remove -y \
+sudo apt remove $(dpkg --get-selections \
   docker.io docker-compose docker-compose-v2 docker-doc \
-  docker-buildx podman-docker containerd runc
+  podman-docker containerd runc 2>/dev/null | cut -f1)
 ```
 
-Numa VM limpa é normal que vários destes pacotes não existam.
+### O que acontece
+
+- `dpkg --get-selections` — consulta pacotes conhecidos pelo sistema;
+- `2>/dev/null` — descarta mensagens de erro não relevantes desta consulta;
+- `|` — envia a saída para o comando seguinte;
+- `cut -f1` — mantém apenas o nome de cada pacote;
+- `apt remove` — remove os pacotes encontrados.
+
+É normal o APT indicar que não existem pacotes conflituantes numa VM limpa.
+
+---
 
 ## 1.3. Adicionar a chave oficial Docker
 
+Criar a diretoria para chaves APT:
+
 ```bash
 sudo install -m 0755 -d /etc/apt/keyrings
+```
+
+- `install -d` — cria uma diretoria;
+- `-m 0755` — define as permissões da diretoria.
+
+Obter a chave:
+
+```bash
 sudo curl -fsSL \
   https://download.docker.com/linux/ubuntu/gpg \
   -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
 ```
-
-Flags principais de `curl`:
 
 | Flag | Função |
 |---|---|
-| `-f` | termina com erro em respostas HTTP 4xx/5xx |
+| `-f` | termina com erro perante HTTP 4xx/5xx |
 | `-s` | modo silencioso |
 | `-S` | mostra erros apesar de `-s` |
 | `-L` | segue redirecionamentos |
 | `-o` | grava a resposta no ficheiro indicado |
 
-## 1.4. Adicionar o repositório Docker
+Tornar a chave legível pelo APT:
+
+```bash
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+```
+
+---
+
+## 1.4. Adicionar o repositório oficial Docker
 
 ```bash
 sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
@@ -89,15 +176,21 @@ sudo apt update
 ```
 
 - `tee` — grava a entrada recebida num ficheiro;
-- `<<EOF ... EOF` — here-document;
-- `$(...)` — executa um comando e substitui pelo respetivo resultado.
+- `<<EOF ... EOF` — *here-document*, permite fornecer várias linhas;
+- `$(...)` — executa um comando e substitui pelo resultado;
+- `dpkg --print-architecture` — devolve a arquitetura do sistema.
 
-## 1.5. Instalar Docker
+---
+
+## 1.5. Instalar Docker Engine
 
 ```bash
 sudo apt install -y \
-  docker-ce docker-ce-cli containerd.io \
-  docker-buildx-plugin docker-compose-plugin
+  docker-ce \
+  docker-ce-cli \
+  containerd.io \
+  docker-buildx-plugin \
+  docker-compose-plugin
 ```
 
 Arquitetura simplificada:
@@ -114,7 +207,16 @@ runc
 Kernel Linux
 ```
 
-## 1.6. Validar
+- **Docker CLI** — o comando `docker` usado pelo operador;
+- **Docker Engine** — gere imagens, containers, redes e volumes;
+- **containerd** — gere o ciclo de vida dos containers;
+- **runc** — runtime OCI de baixo nível;
+- **Buildx/BuildKit** — funcionalidades modernas de build;
+- **Docker Compose** — descreve aplicações multi-container.
+
+---
+
+## 1.6. Validar a instalação
 
 ```bash
 sudo systemctl status docker --no-pager
@@ -124,31 +226,46 @@ sudo docker compose version
 sudo docker buildx version
 ```
 
-- `--no-pager` — mostra a saída diretamente;
-- `--rm` — remove o container quando termina.
+- `--no-pager` — mostra a saída diretamente no terminal;
+- `--rm` — remove o container quando o processo termina.
 
-Para usar Docker sem `sudo` no laboratório:
+Se o serviço não estiver ativo:
+
+```bash
+sudo systemctl start docker
+sudo systemctl enable docker
+```
+
+---
+
+## 1.7. Usar Docker sem `sudo` na VM de laboratório
 
 ```bash
 sudo usermod -aG docker "$USER"
 exit
 ```
 
-Volte a ligar por SSH e valide:
+- `-a` — adiciona sem remover os grupos atuais;
+- `-G docker` — adiciona ao grupo suplementar `docker`.
+
+Volte a ligar por PuTTY/SSH e confirme:
 
 ```bash
 groups
 docker run --rm hello-world
 ```
 
-> O grupo `docker` concede privilégios muito elevados sobre o host. É usado aqui apenas numa VM de laboratório.
+> **Segurança:** o grupo `docker` concede privilégios muito elevados sobre o host. É aceitável aqui como conveniência de uma VM isolada de laboratório, não como regra universal de hardening.
 
 ---
 
 # 2. Instalar Trivy
 
+Trivy será usado para analisar vulnerabilidades conhecidas na imagem.
+
 ```bash
 sudo apt-get install -y wget gnupg
+
 wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
   | gpg --dearmor \
   | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
@@ -161,20 +278,25 @@ sudo apt-get install -y trivy
 trivy --version
 ```
 
-- `|` — envia a saída do comando anterior para o seguinte;
-- `gpg --dearmor` — converte a chave para o formato usado pelo APT;
-- `> /dev/null` — descarta a saída normal.
+- `wget -qO -` — obtém conteúdo e envia-o para stdout;
+- `|` — encadeia a saída de um comando com a entrada do seguinte;
+- `gpg --dearmor` — converte a chave para o formato utilizado pelo APT;
+- `> /dev/null` — descarta a cópia da saída produzida por `tee`.
+
+> A primeira análise Trivy pode demorar mais devido à obtenção/atualização das bases de vulnerabilidades.
 
 ---
 
-# 3. Obter e preparar a aplicação
+# 3. Obter os recursos e preparar a aplicação
+
+Primeira utilização:
 
 ```bash
 git clone https://github.com/Skullclamp/formacao-kubernetes.git
 cd formacao-kubernetes/sessao-03
 ```
 
-Se o repositório já existir:
+Se já existir uma cópia:
 
 ```bash
 cd ~/formacao-kubernetes
@@ -182,7 +304,15 @@ git pull
 cd sessao-03
 ```
 
-> Não é necessário usar `sudo git pull` se o repositório pertence ao utilizador da sessão.
+> Não use `sudo git pull` numa cópia que pertence ao próprio utilizador; isso pode criar ficheiros com ownership incorreto.
+
+Confirmar a diretoria:
+
+```bash
+pwd
+test -f formando/docker/Dockerfile && echo "OK: Dockerfile disponível"
+test -x comum/prepare-source.sh && echo "OK: prepare-source disponível"
+```
 
 Preparar a Symfony Demo:
 
@@ -190,18 +320,20 @@ Preparar a Symfony Demo:
 ./comum/prepare-source.sh
 ```
 
-Validar:
-
-```bash
-test -f app/composer.json && echo "OK: source preparado"
-```
-
-Os endpoints pedagógicos são:
+O script obtém a versão `v3.1.0` da Symfony Demo e aplica os endpoints pedagógicos:
 
 ```text
 /info   → versão e ambiente
 /health → saúde básica
 /ready  → prontidão incluindo PostgreSQL
+```
+
+> **Atenção:** `prepare-source.sh` recria a diretoria `app/`. Não faça alterações que pretenda conservar dentro de `app/` antes de o voltar a executar.
+
+Validar:
+
+```bash
+test -f app/composer.json && echo "OK: source preparado"
 ```
 
 ---
@@ -213,6 +345,8 @@ Abrir o Dockerfile inicial:
 ```bash
 less formando/docker/Dockerfile.inicial
 ```
+
+> A imagem base `php:8.4-apache-bookworm` já contém PHP e Apache. O bloco `apt-get install` do Dockerfile instala ferramentas/bibliotecas adicionais e as dependências necessárias para compilar extensões PHP; não está a instalar o Apache de raiz.
 
 Construir:
 
@@ -228,16 +362,59 @@ docker build \
 | `docker build` | constrói uma imagem |
 | `-f` | indica o Dockerfile |
 | `-t` | atribui nome e tag |
-| `.` | define a diretoria atual como build context |
+| `.` | usa a diretoria atual como build context |
+
+### Build context e `.dockerignore`
+
+O contexto é o conjunto de ficheiros disponibilizado ao builder. Como o contexto é `sessao-03/`, o ficheiro efetivamente usado neste build é:
+
+```text
+sessao-03/.dockerignore
+```
 
 Consultar:
+
+```bash
+cat .dockerignore
+```
+
+O objetivo é excluir `.git`, caches, ficheiros locais e outros dados desnecessários do contexto de build.
+
+Consultar imagem e layers:
 
 ```bash
 docker image ls symfony-demo
 docker history symfony-demo:naive
 ```
 
-O build context é o conjunto de ficheiros disponibilizado ao builder. O `.dockerignore` evita enviar conteúdo desnecessário ou sensível.
+### Testar a imagem inicial isoladamente
+
+Executar numa porta temporária do host:
+
+```bash
+docker run --rm -d \
+  --name symfony-naive \
+  -p 8081:80 \
+  symfony-demo:naive
+```
+
+- `-d` — executa em background;
+- `--name` — atribui um nome ao container;
+- `-p 8081:80` — publica a porta `80` do container na `8081` da VM.
+
+Validar apenas a saúde básica, que não exige PostgreSQL:
+
+```bash
+curl -i http://localhost:8081/health
+```
+
+Parar o teste:
+
+```bash
+docker stop symfony-naive
+```
+
+Como o container foi criado com `--rm`, será removido após parar.
 
 ---
 
@@ -254,10 +431,10 @@ docker build \
   .
 ```
 
-- `--build-arg` — fornece um valor a uma instrução `ARG` do Dockerfile;
+- `--build-arg` — fornece um valor a uma instrução `ARG`;
 - `ARG` é adequado a parametrização de build, **não a secrets**.
 
-Novo build:
+Construir uma segunda versão:
 
 ```bash
 docker build \
@@ -268,7 +445,7 @@ docker build \
   .
 ```
 
-Procure `CACHED` na saída.
+Procure `CACHED` na saída. A ordenação do Dockerfile permite reutilizar layers quando os ficheiros de dependências não mudam.
 
 ```text
 stage build
@@ -277,6 +454,20 @@ COPY --from=build
   ↓
 stage runtime
   ↓ apenas o necessário para executar
+```
+
+Comparar tamanhos e histórico:
+
+```bash
+docker image ls symfony-demo
+docker history symfony-demo:1.1.0
+```
+
+Ver metadata criada no build:
+
+```bash
+docker image inspect symfony-demo:1.1.0 \
+  --format 'Version={{index .Config.Labels "org.opencontainers.image.version"}} Source={{index .Config.Labels "org.opencontainers.image.source"}}'
 ```
 
 Só depois observe a automação:
@@ -289,9 +480,22 @@ sed -n '1,220p' formando/scripts/build.sh
 
 # 6. Hardening e secrets
 
-## 6.1. Primeiro: o que NÃO fazer
+## 6.1. Limites do hardening deste laboratório
 
-Construir o exemplo didático incorreto:
+O Dockerfile otimizado reduz componentes no runtime através de multi-stage e limita os diretórios de escrita. Contudo, **não deve ser apresentado como uma imagem completamente non-root**.
+
+Verificar:
+
+```bash
+docker image inspect symfony-demo:1.1.0 \
+  --format 'User={{json .Config.User}}'
+```
+
+Um valor vazio significa que não existe uma instrução `USER` explícita na imagem final. A imagem oficial Apache arranca com os privilégios necessários ao seu modelo de execução e os workers Apache usam o utilizador configurado pelo Apache. A conversão deste cenário para um runtime integralmente non-root exige alterações adicionais e fica fora do laboratório principal.
+
+---
+
+## 6.2. Demonstrar o que NÃO fazer com secrets
 
 ```bash
 docker build \
@@ -301,12 +505,20 @@ docker build \
   formando/exemplos/secrets
 ```
 
-Inspecionar:
+Em vez de depender apenas de `docker history`, observe diretamente a configuração final da imagem:
+
+```bash
+docker image inspect secret-demo:bad \
+  --format '{{json .Config.Env}}'
+```
+
+Também pode consultar:
 
 ```bash
 docker history --no-trunc secret-demo:bad
-docker image inspect secret-demo:bad
 ```
+
+> O detalhe apresentado pelo histórico pode variar com o builder. A evidência importante neste exemplo é que o valor passado para `ENV` fica na configuração final da imagem.
 
 Conclusão:
 
@@ -316,15 +528,23 @@ ARG / ENV no Dockerfile
 forma segura de transportar secrets
 ```
 
-## 6.2. Build secret a partir de variável de ambiente
+---
 
-Para o laboratório usamos uma variável de ambiente no **host** como origem do secret. Assim não criamos um ficheiro `.txt` com a credencial na pasta do projeto.
+## 6.3. BuildKit secret com origem no ambiente do host
 
-Definir um valor fictício:
+Para não escrever o valor do laboratório no histórico do shell, ler de forma silenciosa:
 
 ```bash
-export API_TOKEN='segredo-falso-lab'
+read -rsp 'API_TOKEN fictício: ' API_TOKEN
+echo
+export API_TOKEN
 ```
+
+- `read` — lê input do utilizador;
+- `-r` — não interpreta barras invertidas;
+- `-s` — não mostra os caracteres introduzidos;
+- `-p` — apresenta a mensagem de prompt;
+- `export` — disponibiliza a variável aos processos filhos.
 
 Construir:
 
@@ -336,37 +556,45 @@ docker build \
   formando/exemplos/secrets
 ```
 
-Explicação:
-
 - `--secret` — fornece um secret ao BuildKit;
-- `id=API_TOKEN` — identificador usado no Dockerfile;
-- `env=API_TOKEN` — obtém o valor da variável de ambiente do host;
-- no Dockerfile, `RUN --mount=type=secret,id=API_TOKEN,env=API_TOKEN` disponibiliza esse valor **apenas durante essa instrução `RUN`**;
-- o valor não é persistido na imagem final.
+- `id=API_TOKEN` — identificador do secret;
+- `env=API_TOKEN` — usa a variável de ambiente do host como origem;
+- no Dockerfile, o secret é disponibilizado apenas na instrução `RUN` que o declara.
 
-Confirmar que a imagem funciona sem expor o secret:
+Validar que não foi persistido como variável da imagem:
+
+```bash
+docker image inspect secret-demo:buildkit \
+  --format '{{json .Config.Env}}'
+```
+
+Executar o exemplo:
 
 ```bash
 docker run --rm secret-demo:buildkit
 ```
 
-Remover a variável do shell quando terminar:
+Limpar a variável:
 
 ```bash
 unset API_TOKEN
 ```
 
-> O Docker também suporta um ficheiro como origem de um build secret (`src=...`). Isso é suportado oficialmente e é útil, por exemplo, para credenciais já existentes em ficheiros. Contudo, não significa que se deva guardar passwords ou tokens em ficheiros versionados no projeto.
+> BuildKit também suporta ficheiros como origem de secrets (`src=...`). Isso é apropriado quando a credencial já existe legitimamente como ficheiro, por exemplo uma configuração de cliente ou certificado. O que não deve ser feito é criar e versionar ficheiros de texto com passwords/tokens dentro do projeto.
 
-## 6.3. Compose secret a partir de variável de ambiente
+---
 
-Definir um valor fictício no host:
+## 6.4. Compose secret com origem no ambiente do host
+
+Introduzir um valor fictício sem o escrever no histórico:
 
 ```bash
-export DEMO_SECRET='valor-apenas-para-demonstracao'
+read -rsp 'DEMO_SECRET fictício: ' DEMO_SECRET
+echo
+export DEMO_SECRET
 ```
 
-O ficheiro `compose.secret-demo.yaml` declara:
+O exemplo Compose declara a origem:
 
 ```yaml
 secrets:
@@ -374,7 +602,7 @@ secrets:
     environment: DEMO_SECRET
 ```
 
-E concede o secret apenas ao serviço que necessita dele:
+E concede o secret ao serviço:
 
 ```yaml
 services:
@@ -388,33 +616,27 @@ Executar:
 ```bash
 docker compose \
   -f formando/exemplos/secrets/compose.secret-demo.yaml \
-  up --abort-on-container-exit
+  run --rm demo
 ```
 
-Dentro do container o Compose disponibiliza o secret em:
+- `run` — cria um container one-off para o serviço indicado;
+- `--rm` — remove-o quando termina.
+
+No container, o secret é entregue em:
 
 ```text
 /run/secrets/demo_secret
 ```
 
-O facto de o secret aparecer como ficheiro **dentro do container** é o comportamento normal do Compose para a sintaxe curta de `secrets`. A origem, neste laboratório, é uma variável de ambiente do host; não um `.txt` guardado no projeto.
+A origem deste exemplo é uma variável no host; o conteúdo não é passado através do atributo `environment:` do serviço.
 
 Limpar:
 
 ```bash
-docker compose \
-  -f formando/exemplos/secrets/compose.secret-demo.yaml \
-  down
 unset DEMO_SECRET
 ```
 
-Mensagem a reter:
-
-```text
-Dockerfile ARG/ENV ≠ secret manager
-.env de projeto ≠ secret manager
-secret source no host → acesso explícito → /run/secrets/<nome> no container
-```
+> Uma variável de ambiente no host também não é um secret manager. Aqui serve apenas como origem temporária para demonstrar o mecanismo Compose sem guardar o valor no repositório. Em produção, a origem normalmente seria integrada com mecanismos próprios de gestão de secrets.
 
 ---
 
@@ -427,13 +649,28 @@ docker image inspect symfony-demo:1.1.0 \
   --format '{{json .Config.Healthcheck}}'
 ```
 
-Preparar o Compose:
+Preparar o ficheiro de configuração do laboratório:
 
 ```bash
-cp formando/compose/.env.prod.example formando/compose/.env.prod
+cp formando/compose/.env.prod.example \
+   formando/compose/.env.prod
 ```
 
-Validar a configuração:
+> `.env.prod` está ignorado pelo Git e contém **apenas valores fictícios do laboratório**. O facto de os usarmos aqui não transforma `.env` num secret manager e não deve ser reproduzido como modelo de gestão de credenciais reais.
+
+Pode alterar a porta publicada se `8080` estiver ocupada:
+
+```text
+APP_PORT=8080
+```
+
+por exemplo:
+
+```text
+APP_PORT=8081
+```
+
+Validar a configuração final:
 
 ```bash
 docker compose \
@@ -443,7 +680,9 @@ docker compose \
   config
 ```
 
-O override de produção inclui:
+> `docker compose config` apresenta a configuração resolvida. Com credenciais reais, evite copiar ou partilhar a saída sem rever informação sensível.
+
+O override de produção do laboratório inclui:
 
 ```yaml
 restart: unless-stopped
@@ -453,11 +692,18 @@ logging:
   driver: local
 ```
 
+- `restart: unless-stopped` — tenta voltar a iniciar o container, exceto depois de uma paragem manual explícita;
+- `mem_limit` — limita memória;
+- `cpus` — limita CPU;
+- `logging.driver: local` — utiliza o driver local do Docker.
+
 > Docker `HEALTHCHECK` não é convertido automaticamente em probes Kubernetes.
 
 ---
 
 # 8. Scan com Trivy
+
+Scan informativo:
 
 ```bash
 trivy image \
@@ -467,17 +713,22 @@ trivy image \
   symfony-demo:1.1.0
 ```
 
+- `image` — analisa uma imagem;
 - `--scanners vuln` — procura vulnerabilidades;
-- `--severity HIGH,CRITICAL` — filtra severidades;
+- `--severity HIGH,CRITICAL` — filtra as severidades apresentadas;
 - `--ignore-unfixed` — omite vulnerabilidades sem correção conhecida.
 
-Os resultados variam ao longo do tempo; não existe uma contagem fixa esperada.
+Os resultados dependem da data das bases de vulnerabilidades e da imagem analisada. Não existe uma contagem fixa esperada.
+
+> Um scan não prova que uma imagem é segura. É uma das evidências do processo de segurança, juntamente com origem da imagem, minimização, configuração, patching e gestão de secrets.
 
 ---
 
 # 9. Tag, digest e registry
 
-Um **registry** armazena e distribui imagens.
+## 9.1. O que é um registry?
+
+Um container registry armazena e distribui imagens.
 
 ```text
 ghcr.io/skullclamp/symfony-demo:1.0.0
@@ -485,7 +736,7 @@ ghcr.io/skullclamp/symfony-demo:1.0.0
 registry namespace repositório   tag
 ```
 
-Criar uma tag adicional:
+Criar uma segunda tag local:
 
 ```bash
 docker tag symfony-demo:1.1.0 symfony-demo:stable
@@ -500,21 +751,65 @@ docker image inspect symfony-demo:stable --format '{{.Id}}'
 
 ```text
 Tag    → referência legível e potencialmente mutável
-Digest → identidade do conteúdo publicado
+Digest → identidade imutável daquele conteúdo publicado
 ```
 
-Obter uma imagem pública:
+---
+
+## 9.2. Consumir uma imagem pública do GHCR
 
 ```bash
 docker pull ghcr.io/skullclamp/symfony-demo:1.0.0
 ```
 
-Para um namespace pessoal, quando aplicável:
+As imagens públicas da formação podem ser obtidas anonimamente.
+
+---
+
+## 9.3. Publicar opcionalmente no namespace do formando
+
+Esta etapa é útil para praticar autenticação/tag/push, mas pode ser omitida se o tempo da sessão for insuficiente.
+
+Definir variáveis próprias, sem reutilizar `IMAGE_REPO` da stack de produção:
 
 ```bash
-export IMAGE_REPO=ghcr.io/UTILIZADOR_GITHUB/symfony-demo
-docker tag symfony-demo:1.0.0 "$IMAGE_REPO:1.0.0"
-docker push "$IMAGE_REPO:1.0.0"
+export GITHUB_USER='UTILIZADOR_GITHUB'
+export MY_IMAGE_REPO="ghcr.io/${GITHUB_USER}/symfony-demo"
+```
+
+> Usamos `MY_IMAGE_REPO` deliberadamente. O ciclo de deploy posterior utiliza `IMAGE_REPO` do ficheiro `.env.prod` e as imagens públicas da formação. Assim, um push pessoal incompleto não interfere com `1.1.0` ou `1.2.0-rc1`.
+
+Para autenticar no GHCR, é necessário um Personal Access Token (classic) com permissões adequadas de packages. Para não escrever o token no histórico:
+
+```bash
+read -rsp 'GHCR token: ' CR_PAT
+echo
+printf '%s' "$CR_PAT" \
+  | docker login ghcr.io -u "$GITHUB_USER" --password-stdin
+unset CR_PAT
+```
+
+- `--password-stdin` — recebe a credencial pela entrada standard em vez de a colocar como argumento da linha de comandos.
+
+Criar a referência remota e publicar:
+
+```bash
+docker tag symfony-demo:1.0.0 "$MY_IMAGE_REPO:1.0.0"
+docker push "$MY_IMAGE_REPO:1.0.0"
+```
+
+Consultar digest após publicação:
+
+```bash
+docker image inspect "$MY_IMAGE_REPO:1.0.0" \
+  --format '{{range .RepoDigests}}{{println .}}{{end}}'
+```
+
+No final:
+
+```bash
+docker logout ghcr.io
+unset GITHUB_USER MY_IMAGE_REPO
 ```
 
 Princípio:
@@ -522,26 +817,54 @@ Princípio:
 ```text
 BUILD ONCE
    ↓
-Imagem / Digest
+Imagem identificada
    ↓
-DEV → TEST → PROD
+Scan
+   ↓
+Registry
+   ↓
+promover o mesmo artefacto
 ```
 
 ---
 
-# 10. Deployment single-host
+# 10. Primeiro deployment manual da stack
 
-Primeiro arranque manual:
+Para manter a regra **manual → observar → automatizar**, vamos executar manualmente as fases essenciais do primeiro deployment.
+
+Definir uma forma curta de invocar o Compose não é necessário; execute o comando completo para perceber quais os ficheiros envolvidos.
+
+Validar:
 
 ```bash
 docker compose \
   --env-file formando/compose/.env.prod \
   -f formando/compose/compose.yaml \
   -f formando/compose/compose.prod.yaml \
-  up -d
+  config >/dev/null
 ```
 
-Consultar:
+Obter as imagens:
+
+```bash
+docker compose \
+  --env-file formando/compose/.env.prod \
+  -f formando/compose/compose.yaml \
+  -f formando/compose/compose.prod.yaml \
+  pull db app
+```
+
+Iniciar apenas PostgreSQL:
+
+```bash
+docker compose \
+  --env-file formando/compose/.env.prod \
+  -f formando/compose/compose.yaml \
+  -f formando/compose/compose.prod.yaml \
+  up -d db
+```
+
+Consultar estado:
 
 ```bash
 docker compose \
@@ -551,13 +874,65 @@ docker compose \
   ps
 ```
 
-Validar endpoints:
+Aguarde até `db` ficar `healthy`.
+
+### Inicializar o schema apenas numa base de dados vazia
+
+Verificar se a tabela principal da aplicação já existe:
 
 ```bash
+docker compose \
+  --env-file formando/compose/.env.prod \
+  -f formando/compose/compose.yaml \
+  -f formando/compose/compose.prod.yaml \
+  exec -T db \
+  psql -U symfony -d symfony -tAc \
+  "SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='symfony_demo_post';"
+```
+
+Se não devolver `1`, e apenas porque se trata de uma base vazia de laboratório:
+
+```bash
+docker compose \
+  --env-file formando/compose/.env.prod \
+  -f formando/compose/compose.yaml \
+  -f formando/compose/compose.prod.yaml \
+  run --rm app \
+  php bin/console doctrine:schema:create --no-interaction
+```
+
+> **Produção real:** alterações de schema devem ser tratadas através de migrações versionadas, compatíveis e controladas. `doctrine:schema:create` é usado aqui apenas para inicializar uma base de dados vazia do laboratório.
+
+Iniciar a aplicação:
+
+```bash
+docker compose \
+  --env-file formando/compose/.env.prod \
+  -f formando/compose/compose.yaml \
+  -f formando/compose/compose.prod.yaml \
+  up -d app
+```
+
+Agora observe o wrapper que evita repetir todas estas flags nos comandos seguintes:
+
+```bash
+sed -n '1,220p' formando/scripts/compose-prod.sh
+```
+
+---
+
+# 11. Validar e ver a aplicação no PC do formando
+
+Na VM:
+
+```bash
+./formando/scripts/compose-prod.sh ps
 curl -i http://localhost:8080/health
 curl -i http://localhost:8080/ready
 curl -i http://localhost:8080/info
 ```
+
+Se alterou `APP_PORT`, substitua `8080` pela porta escolhida.
 
 Obter o container da aplicação:
 
@@ -569,32 +944,32 @@ Consultar health e recursos:
 
 ```bash
 docker inspect "$CID" --format '{{json .State.Health}}'
+docker inspect "$CID" \
+  --format 'Memory={{.HostConfig.Memory}} NanoCpus={{.HostConfig.NanoCpus}} Restart={{.HostConfig.RestartPolicy.Name}}'
 docker stats --no-stream "$CID"
 ```
 
----
+### Acesso pelo browser do PC
 
-# 11. Ver a aplicação no PC do formando
-
-Como o formando já se liga por PuTTY à VM, existe conectividade PC → VM. Obter o IP:
+Obter o IP da VM:
 
 ```bash
 hostname -I
 ```
 
-Confirmar a publicação da porta:
+Confirmar publicação:
 
 ```bash
-docker ps
+docker ps --filter "id=$CID" --format 'table {{.Names}}\t{{.Ports}}'
 ```
 
-Deverá aparecer algo semelhante a:
+Deverá existir uma publicação equivalente a:
 
 ```text
 0.0.0.0:8080->80/tcp
 ```
 
-No navegador do PC do formando:
+No PC do formando:
 
 ```text
 http://IP_DA_VM:8080
@@ -603,23 +978,15 @@ http://IP_DA_VM:8080/health
 http://IP_DA_VM:8080/ready
 ```
 
-Se a VM usar UFW e estiver ativo:
+> Como o formando já acede à VM por PuTTY/SSH, existe conectividade PC → VM. Contudo, a porta publicada também tem de ser permitida pela rede e pelas políticas do ambiente.
 
-```bash
-sudo ufw status
-```
-
-Quando necessário e autorizado no laboratório:
-
-```bash
-sudo ufw allow 8080/tcp
-```
+> **Nota de firewall Docker:** não assuma que `ufw allow 8080/tcp` controla uma porta publicada pelo Docker. A documentação Docker alerta que portas publicadas podem contornar regras UFW/firewalld devido à forma como o Docker gere regras de packet filtering. Se o acesso externo falhar, valide primeiro `docker ps`, o IP/rota da VM e as regras de rede/firewall do ambiente.
 
 ---
 
 # 12. Persistência e backup
 
-Criar marcador:
+Criar um marcador:
 
 ```bash
 ./formando/scripts/compose-prod.sh exec -T db \
@@ -627,7 +994,7 @@ Criar marcador:
   -c "CREATE TABLE IF NOT EXISTS lab_marker(id serial primary key, note text);"
 ```
 
-Inserir registo:
+Inserir um registo:
 
 ```bash
 ./formando/scripts/compose-prod.sh exec -T db \
@@ -635,42 +1002,7 @@ Inserir registo:
   -c "INSERT INTO lab_marker(note) VALUES ('antes-update');"
 ```
 
-Backup lógico:
-
-```bash
-./formando/scripts/compose-prod.sh exec -T db \
-  pg_dump -U symfony -d symfony > backup.sql
-```
-
-```text
-Persistência ≠ Backup
-```
-
----
-
-# 13. Deploy, update, falha e rollback
-
-Abrir primeiro o script:
-
-```bash
-sed -n '1,260p' formando/scripts/deploy-prod.sh
-```
-
-Deploy inicial:
-
-```bash
-./formando/scripts/deploy-prod.sh 1.0.0
-./formando/scripts/validate.sh
-```
-
-Atualizar:
-
-```bash
-./formando/scripts/deploy-prod.sh 1.1.0
-curl -fsS http://localhost:8080/info
-```
-
-Confirmar dados:
+Confirmar:
 
 ```bash
 ./formando/scripts/compose-prod.sh exec -T db \
@@ -678,7 +1010,94 @@ Confirmar dados:
   -c "SELECT * FROM lab_marker;"
 ```
 
-Introduzir a versão com falha controlada:
+- `exec` — executa um comando num serviço já iniciado;
+- `-T` — desativa pseudo-TTY;
+- `psql -U` — define o utilizador PostgreSQL;
+- `-d` — define a base de dados;
+- `-c` — executa o SQL indicado.
+
+Backup lógico manual:
+
+```bash
+./formando/scripts/compose-prod.sh exec -T db \
+  pg_dump -U symfony -d symfony \
+  > backup.sql
+```
+
+Validar:
+
+```bash
+ls -lh backup.sql
+test -s backup.sql && echo "OK: backup não vazio"
+```
+
+```text
+Persistência ≠ Backup
+```
+
+Só depois observe a automação:
+
+```bash
+sed -n '1,220p' formando/scripts/backup-postgres.sh
+```
+
+---
+
+# 13. Automatizar deployment, update, falha e rollback
+
+Agora já foram executadas manualmente as fases fundamentais. Pode analisar e usar a automação.
+
+Abrir o script:
+
+```bash
+sed -n '1,300p' formando/scripts/deploy-prod.sh
+```
+
+Identifique os blocos comentados: configuração, validação da porta, pull, PostgreSQL, health, schema, aplicação e validação.
+
+Executar novamente a versão inicial através da automação:
+
+```bash
+./formando/scripts/deploy-prod.sh 1.0.0
+```
+
+Validar:
+
+```bash
+./formando/scripts/validate.sh
+```
+
+---
+
+## 13.1. Update para 1.1.0
+
+```bash
+./formando/scripts/deploy-prod.sh 1.1.0
+```
+
+Validar a versão:
+
+```bash
+curl -fsS http://localhost:8080/info
+```
+
+- `-f` — trata HTTP 4xx/5xx como erro;
+- `-s` — modo silencioso;
+- `-S` — mostra erro mesmo com `-s`.
+
+Confirmar os dados:
+
+```bash
+./formando/scripts/compose-prod.sh exec -T db \
+  psql -U symfony -d symfony \
+  -c "SELECT * FROM lab_marker;"
+```
+
+A substituição do container da aplicação não deve eliminar o conteúdo do volume PostgreSQL.
+
+---
+
+## 13.2. Introduzir a falha controlada 1.2.0-rc1
 
 ```bash
 set +e
@@ -688,7 +1107,11 @@ set -e
 echo "EXIT_CODE=$RC"
 ```
 
-Diagnosticar:
+A imagem `1.2.0-rc1` está preparada deliberadamente com um caminho incorreto no Docker `HEALTHCHECK`.
+
+---
+
+## 13.3. Diagnosticar antes do rollback
 
 ```bash
 ./formando/scripts/compose-prod.sh ps
@@ -699,37 +1122,97 @@ curl -i http://localhost:8080/health
 curl -i http://localhost:8080/healthz
 ```
 
-A causa esperada é:
+Evidência esperada:
 
 ```text
-/health válido
-/healthz inválido
+/health  → válido
+/healthz → 404
       ↓
 HEALTHCHECK da 1.2.0-rc1 usa /healthz
       ↓
-unhealthy
+container unhealthy
 ```
 
-Só depois fazer rollback:
+Não faça rollback antes de conseguir explicar a causa.
+
+---
+
+## 13.4. Rollback para 1.1.0
+
+Abrir o script:
+
+```bash
+sed -n '1,220p' formando/scripts/rollback.sh
+```
+
+Executar:
 
 ```bash
 ./formando/scripts/rollback.sh 1.1.0
 ./formando/scripts/validate.sh
 ```
 
-Confirmar novamente os dados.
+Confirmar novamente os dados:
+
+```bash
+./formando/scripts/compose-prod.sh exec -T db \
+  psql -U symfony -d symfony \
+  -c "SELECT * FROM lab_marker;"
+```
+
+Resultado:
+
+```text
+1.0.0
+   ↓ deployment
+1.1.0
+   ↓ update válido
+1.2.0-rc1
+   ↓ unhealthy
+Diagnóstico
+   ↓
+Rollback 1.1.0
+   ↓
+healthy + dados preservados
+```
 
 ---
 
-# 14. Mensagens a reter
+# 14. Limites do cenário
+
+Este é um deployment **single-host**:
+
+```text
+Host Docker
+   ↓
+Docker Compose
+   ↓
+app + db
+```
+
+Se o host falhar, os serviços ficam indisponíveis.
+
+```text
+restart policy ≠ Alta Disponibilidade
+Compose single-host ≠ Kubernetes
+```
+
+A sessão seguinte introduz precisamente a necessidade de orquestração distribuída.
+
+---
+
+# 15. Mensagens a reter
 
 ```text
 Imagem ≠ Container
+Build context ≠ diretoria do Dockerfile
 ARG/ENV ≠ Secret Manager
 .env de projeto ≠ Secret Manager
+BuildKit secret é temporário durante o build
 Docker HEALTHCHECK ≠ Kubernetes Probe
 Tag ≠ Digest
 Persistência ≠ Backup
 Build Once → Promote the Same Artifact
 Compose Single-host ≠ Alta Disponibilidade
+Diagnosticar → só depois corrigir/rollback
 ```
