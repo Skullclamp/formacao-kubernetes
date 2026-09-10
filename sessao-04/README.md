@@ -1,113 +1,104 @@
 # Sessão 4 — Kubernetes Admin I
 ## Instalação e Administração do Cluster
 
+**Duração:** 4 horas  
+**Nível:** intermédio  
+**Módulo:** M7  
 **Foco pedagógico:** **CONSTRUIR O CLUSTER**
 
-Nesta sessão construímos um cluster Kubernetes on-premises com `kubeadm`, configuramos o runtime, instalamos a rede de Pods com Calico/Tigera Operator, adicionamos um Worker e praticamos operações básicas de administração e manutenção.
+Nesta sessão, cada formando constrói manualmente um cluster Kubernetes on-premises com duas VMs. O objetivo não é executar scripts de instalação: é compreender cada pré-condição, executar cada comando, observar o estado produzido e interpretar a evidência.
 
-## Ambiente de referência
+## Topologia de referência
 
 ```text
-Control Plane:   k8s-cp-01
-Worker:          k8s-wk-01
-SO:              Ubuntu 26.04 LTS
-Kubernetes:      1.37
-Runtime:         containerd
-CNI:             Calico via Tigera Operator
-Pod CIDR:        192.168.0.0/16
-Service CIDR:    10.96.0.0/12
+                 k8s-cp-01                    k8s-wk-01
+              Control Plane                    Worker
+                  │                              │
+                  └──────── cluster ─────────────┘
+
+Ubuntu 26.04 LTS · Kubernetes 1.37 · containerd · Calico/Tigera Operator
+Pod CIDR: 192.168.0.0/16 · Service CIDR: 10.96.0.0/12
 ```
 
-> Os recursos dependentes de versão devem ser novamente validados antes de cada edição da formação, em particular a combinação Kubernetes/Calico.
+Cada formando utiliza **duas VMs**: uma para o Control Plane e outra para o Worker. Com até cinco formandos, a infraestrutura de sala pode exigir até dez VMs.
 
-## Percurso da sessão
+## Regra da sessão
+
+```text
+COMPREENDER
+    ↓
+EXECUTAR MANUALMENTE
+    ↓
+OBSERVAR
+    ↓
+REGISTAR EVIDÊNCIA
+    ↓
+EXPLICAR
+    ↓
+AVANÇAR
+```
+
+Os scripts usados pelo formador para ensaio e validação técnica **não fazem parte deste repositório de apoio ao formando**.
+
+## Percurso
 
 ```text
 pré-requisitos Linux
         ↓
-containerd / CRI
+containerd + CRI
         ↓
-kubelet / kubeadm / kubectl
+kubelet + kubeadm + kubectl
         ↓
-kubeadm init
+kubeadm init (APENAS k8s-cp-01)
         ↓
 kubeconfig
         ↓
-Calico / CNI
+Control Plane NotReady antes do CNI
         ↓
-kubeadm join
+Calico / Tigera Operator
         ↓
-validação
+Control Plane Ready
+        ↓
+kubeadm join (APENAS k8s-wk-01)
+        ↓
+Worker Ready
+        ↓
+convergência Calico + CoreDNS
         ↓
 cordon / drain / uncordon
         ↓
-kubeadm upgrade plan
+validação final
 ```
 
-## Por onde começar
+## Materiais
 
-1. Leia o [`manual_formando.md`](manual_formando.md).
-2. Valide o posto com [`checklist.md`](checklist.md).
-3. Siga o [`labs/laboratorio_integrado_sessao_4.md`](labs/laboratorio_integrado_sessao_4.md).
-4. Registe os checkpoints na [`folha_evidencias.md`](folha_evidencias.md).
-5. Utilize o [`cheat_sheet.md`](cheat_sheet.md) apenas como referência rápida.
-6. Em caso de erro, consulte [`troubleshooting.md`](troubleshooting.md) antes de repetir comandos.
+- [`manual_formando.md`](manual_formando.md) — explicação progressiva dos conceitos e procedimentos;
+- [`labs/laboratorio_integrado_sessao_4.md`](labs/laboratorio_integrado_sessao_4.md) — laboratório manual completo;
+- [`checklist.md`](checklist.md) — preparação manual das duas VMs;
+- [`checklist_operacional.md`](checklist_operacional.md) — checkpoints CP1–CP8;
+- [`folha_evidencias.md`](folha_evidencias.md) — evidências a recolher durante o laboratório;
+- [`cheat_sheet.md`](cheat_sheet.md) — referência rápida de comandos;
+- [`troubleshooting.md`](troubleshooting.md) — diagnóstico orientado por evidências;
+- [`manifests/`](manifests/) — manifest usado na manutenção do Worker;
+- [`exercicios/`](exercicios/) — atividade, quiz e aprofundamento de upgrades;
+- [`referencias.md`](referencias.md) — fontes bibliográficas e documentação oficial.
 
-## Estrutura
+## Regras críticas
+
+1. `kubeadm init` executa-se **apenas no `k8s-cp-01`**.
+2. `kubeadm join` executa-se **apenas no `k8s-wk-01`**.
+3. Não executar literalmente placeholders como `<TOKEN>`, `<HASH>`, `VALOR_REAL` ou `...`.
+4. Não remover a taint `control-plane:NoSchedule` neste laboratório.
+5. Depois do `join`, dar tempo ao Calico/Tigera e CoreDNS para convergirem antes de diagnosticar uma falha.
+6. Antes do bootstrap, confirmar que não existe MicroK8s, k3s, Minikube ou outro cluster Kubernetes residual.
+7. Não usar `--ignore-preflight-errors` para esconder um problema que ainda não foi compreendido.
+
+## Resultado esperado
 
 ```text
-sessao-04/
-├── README.md
-├── manual_formando.md
-├── checklist.md
-├── folha_evidencias.md
-├── cheat_sheet.md
-├── troubleshooting.md
-├── labs/
-│   ├── README.md
-│   └── laboratorio_integrado_sessao_4.md
-├── scripts/
-│   ├── README.md
-│   ├── preflight_check.sh
-│   ├── verify_cluster.sh
-│   └── fetch_calico_operator.sh
-├── manifests/
-│   ├── README.md
-│   └── pod_cordon_test.yaml
-└── exercicios/
-    ├── README.md
-    ├── atividade_ordem_instalacao.md
-    ├── quiz_formativo.md
-    └── upgrade_complementar.md
+NAME         STATUS   ROLES
+k8s-cp-01    Ready    control-plane
+k8s-wk-01    Ready    <none>
 ```
 
-## Regra pedagógica
-
-Os scripts são **auxiliares de validação e automação**. Não substituem a execução e interpretação manual dos passos principais.
-
-```text
-executar
-   ↓
-observar
-   ↓
-recolher evidência
-   ↓
-interpretar
-   ↓
-só depois corrigir/automatizar
-```
-
-## Segurança
-
-Nunca faça commit de:
-
-- `/etc/kubernetes/admin.conf`;
-- ficheiros `kubeconfig` reais;
-- tokens de `kubeadm join`;
-- chaves privadas;
-- passwords ou `.env` reais;
-- outputs que contenham credenciais.
-
-## Continuidade
-
-No final da Sessão 4 teremos um cluster de dois nós funcional, com CNI ativo e acesso administrativo configurado. A Sessão 5 passa a trabalhar **Workloads, Networking, Storage e Recuperação**.
+No final, o formando deve conseguir explicar não apenas **que comandos executou**, mas **porque foram necessários e que evidência confirma que funcionaram**.
