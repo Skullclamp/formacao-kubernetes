@@ -1,8 +1,20 @@
+# Imagem base: PHP 8.4 com Apache sobre Debian Bookworm.
 FROM php:8.4-apache-bookworm
 
+# Configuração base do ambiente:
+# - permite ao Composer correr como root durante o build;
+# - define o ambiente da aplicação como desenvolvimento nesta versão inicial.
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
     APP_ENV=dev
 
+# Instala ferramentas e bibliotecas necessárias e ativa extensões PHP/Apache:
+# - apt-get update atualiza o índice de pacotes;
+# - --no-install-recommends evita dependências opcionais;
+# - docker-php-ext-install compila/ativa extensões PHP;
+# - -j"$(nproc)" usa os CPUs disponíveis para acelerar a compilação;
+# - a2enmod rewrite ativa mod_rewrite, necessário ao routing da aplicação;
+# - configura ServerName para evitar avisos do Apache;
+# - remove /var/lib/apt/lists para não deixar cache apt na imagem.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        curl git unzip libicu-dev libpq-dev libsqlite3-dev \
@@ -12,19 +24,37 @@ RUN apt-get update \
     && a2enconf servername \
     && rm -rf /var/lib/apt/lists/*
 
+# Copia apenas o binário Composer a partir da imagem oficial composer:2.
+# Evita instalar o Composer manualmente e reutiliza um artefacto conhecido.
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
+# Define a diretoria de trabalho da aplicação e copia o código Symfony.
 WORKDIR /var/www/html
 COPY app/ ./
+
+# Substitui o VirtualHost Apache pela configuração preparada para Symfony,
+# cujo DocumentRoot aponta para /var/www/html/public.
 COPY formando/docker/000-default.conf /etc/apache2/sites-available/000-default.conf
 
+# Instala dependências PHP da aplicação e prepara as diretorias graváveis.
+# chown entrega var/cache e var/log ao utilizador do processo web www-data.
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader \
     && mkdir -p var/cache var/log \
     && chown -R www-data:www-data var
 
+# Documenta que a aplicação espera receber tráfego HTTP na porta 80.
+# EXPOSE não publica a porta no host; essa publicação é feita com -p ou Compose.
 EXPOSE 80
 
+# Verifica periodicamente a saúde da aplicação através de /health:
+# - interval=10s: frequência entre testes;
+# - timeout=3s: tempo máximo por teste;
+# - start-period=20s: tolerância durante o arranque;
+# - retries=5: falhas consecutivas até marcar unhealthy;
+# - curl -f falha em HTTP 4xx/5xx, -s é silencioso e -S mantém erros visíveis.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
     CMD curl -fsS http://localhost/health >/dev/null || exit 1
 
+# Processo principal do container. O script da imagem oficial mantém o Apache
+# em foreground para que o ciclo de vida do container acompanhe o servidor web.
 CMD ["apache2-foreground"]
