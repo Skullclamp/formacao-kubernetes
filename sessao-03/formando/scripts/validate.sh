@@ -9,8 +9,29 @@ ENV_FILE="${ROOT_DIR}/formando/compose/.env.prod"
 BASE_FILE="${ROOT_DIR}/formando/compose/compose.yaml"
 PROD_FILE="${ROOT_DIR}/formando/compose/compose.prod.yaml"
 
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "ERRO: .env.prod não existe." >&2
+  exit 1
+fi
+
 # Guarda o comando Compose completo num array para o reutilizar sem repetir opções.
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$BASE_FILE" -f "$PROD_FILE")
+
+# A versão esperada pode ser fornecida explicitamente. Se não for, usa a versão
+# definida em .env.prod. Isto mantém compatibilidade com a utilização anterior.
+EXPECTED_VERSION="${1:-$(awk -F= '$1=="APP_VERSION"{print $2}' "$ENV_FILE" | tail -1)}"
+if [[ -z "$EXPECTED_VERSION" ]]; then
+  echo "ERRO: não foi possível determinar APP_VERSION esperada." >&2
+  exit 1
+fi
+
+# Repositório esperado para permitir também validar a imagem efetivamente usada.
+IMAGE_REPO="$(awk -F= '$1=="IMAGE_REPO"{print $2}' "$ENV_FILE" | tail -1)"
+if [[ -z "$IMAGE_REPO" ]]; then
+  echo "ERRO: IMAGE_REPO não está definido em .env.prod." >&2
+  exit 1
+fi
+EXPECTED_IMAGE="${IMAGE_REPO}:${EXPECTED_VERSION}"
 
 # Determina a porta HTTP da aplicação:
 # 1) usa APP_PORT já exportada no shell, se existir;
@@ -23,18 +44,42 @@ fi
 APP_PORT="${APP_PORT:-8080}"
 BASE_URL="http://localhost:${APP_PORT}"
 
-# Valida os três endpoints pedagógicos da aplicação.
-# curl -f falha em HTTP 4xx/5xx; -s reduz ruído; -S continua a mostrar erros.
-for path in health ready info; do
+# Valida /health e /ready. curl -f falha em HTTP 4xx/5xx; -s reduz ruído;
+# -S continua a mostrar erros.
+for path in health ready; do
   echo "==> GET /${path}"
   curl -fsS "${BASE_URL}/${path}"
   echo
 done
 
+# /info é capturado para podermos verificar também a versão devolvida pela aplicação.
+echo "==> GET /info"
+INFO_JSON="$(curl -fsS "${BASE_URL}/info")"
+echo "$INFO_JSON"
+
+if [[ "$INFO_JSON" != *"\"version\":\"${EXPECTED_VERSION}\""* ]]; then
+  echo "ERRO: /info não reporta a versão esperada ${EXPECTED_VERSION}." >&2
+  exit 1
+fi
+
+echo "Versão da aplicação confirmada: ${EXPECTED_VERSION}"
+
 # Obtém apenas o ID do container do serviço app.
 CID="$(${COMPOSE[@]} ps -q app)"
 if [[ -z "$CID" ]]; then
   echo "ERRO: container app não encontrado." >&2
+  exit 1
+fi
+
+# Valida também a imagem configurada no container, para detetar divergências entre
+# .env.prod, /info e o artefacto realmente em execução.
+RUNNING_IMAGE="$(docker inspect "$CID" --format '{{.Config.Image}}')"
+echo "Imagem em execução: ${RUNNING_IMAGE}"
+
+if [[ "$RUNNING_IMAGE" != "$EXPECTED_IMAGE" ]]; then
+  echo "ERRO: imagem em execução diferente da esperada." >&2
+  echo "Esperada: ${EXPECTED_IMAGE}" >&2
+  echo "Atual:    ${RUNNING_IMAGE}" >&2
   exit 1
 fi
 
