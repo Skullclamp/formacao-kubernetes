@@ -1,56 +1,78 @@
 # Referências — Sessão 4
 
-## Bibliografia do projeto
+## Documentação oficial usada para a baseline técnica
 
-- Nigel Poulton — *The Kubernetes Book*;
-- Marko Lukša — *Kubernetes in Action*;
-- Kelsey Hightower, Brendan Burns, Joe Beda — *Kubernetes: Up and Running*;
-- Nigel Poulton — *Docker Deep Dive*.
+### Kubernetes
 
-Estas obras suportam os conceitos de arquitetura, Pods, Control Plane/Workers, runtime, controllers e operação. Os comandos e detalhes dependentes de versão são validados na documentação oficial.
+- **Kubernetes Releases / Patch Releases** — confirmar as minors suportadas e os patches disponíveis antes de cada edição.
+- **Installing kubeadm** — instalação através de `pkgs.k8s.io` e repositórios separados por minor.
+- **Upgrading kubeadm clusters from 1.35.x to 1.36.x** — sequência oficial do upgrade adotado nesta sessão.
+- **Upgrading Linux nodes** — atualização de `kubeadm`, `kubelet` e `kubectl` por nó.
+- **Version Skew Policy** — versões temporariamente diferentes durante um upgrade controlado.
+- **kubeadm token** / **kubeadm token create** — criação de bootstrap tokens e geração do comando `join`.
 
-## Documentação oficial Kubernetes
-
-- Installing kubeadm: https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
-- Creating a cluster with kubeadm: https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
-- Container runtimes: https://kubernetes.io/docs/setup/production-environment/container-runtimes/
-- kubeadm join: https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-join/
-- Upgrading kubeadm clusters: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
-- Upgrading Linux nodes: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/upgrading-linux-nodes/
-- Version Skew Policy: https://kubernetes.io/releases/version-skew-policy/
-- Safely Drain a Node: https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/
-- kubeconfig: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
-- Kubernetes 1.36 release: https://kubernetes.io/releases/1.36/
-- Patch releases: https://kubernetes.io/releases/patch-releases/
-
-## Calico
-
-- Self-managed on-premises / Tigera Operator: https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/onpremises
-- System requirements / versões Kubernetes testadas: https://docs.tigera.io/calico/latest/getting-started/kubernetes/requirements
-- Upgrade Calico on Kubernetes: https://docs.tigera.io/calico/latest/operations/upgrading/kubernetes-upgrade
-
-## containerd
-
-- CRI / documentação: https://github.com/containerd/containerd/tree/main/docs/cri
-
-## Baseline desta edição — setembro de 2026
+Baseline de referência desta edição:
 
 ```text
-Kubernetes inicial: 1.36.4
-Kubernetes destino: 1.37.0
-Calico de referência: 3.32.2
+Kubernetes 1.35.8 → 1.36.4
 ```
 
-A série Calico 3.32 é oficialmente testada com Kubernetes 1.34–1.36. A utilização depois do upgrade para Kubernetes 1.37 é uma combinação que deve ser **pré-validada em laboratório** e não deve ser apresentada como oficialmente testada pelo fornecedor enquanto a matriz Calico não incluir 1.37.
+Não se saltam versões minor durante o upgrade.
 
-## Regra de atualização
+### containerd
 
-Antes de cada edição da formação, confirmar:
+- **containerd RELEASES.md / Kubernetes support matrix** — matriz de versões recomendadas por minor Kubernetes.
 
-1. patches atuais das séries Kubernetes 1.36 e 1.37;
-2. repositórios `pkgs.k8s.io` de ambas as minors;
-3. versão `containerd` da imagem Ubuntu;
-4. estrutura efetiva de `SystemdCgroup`;
-5. release Calico escolhida e respetiva matriz de compatibilidade;
-6. percurso completo de upgrade Control Plane → Worker;
-7. estado de CoreDNS e do CNI após o upgrade.
+A série adotada é:
+
+```text
+containerd 2.2.x
+```
+
+É uma série recomendada em comum para Kubernetes 1.35 e 1.36.
+
+### Calico / Tigera Operator
+
+- **Calico System requirements** — matriz de Kubernetes testada pelo projeto.
+- **Calico Component versions** — relação entre a release Calico e o Tigera Operator.
+
+Baseline desta edição:
+
+```text
+Calico 3.32.2
+Tigera Operator 1.42.6
+```
+
+Calico 3.32 é oficialmente testado com Kubernetes 1.34, 1.35 e 1.36.
+
+### Traefik
+
+- **Traefik Kubernetes requirements** — política de compatibilidade com versões Kubernetes.
+
+Traefik **não é instalado na Sessão 4**. A referência é mantida porque será utilizado posteriormente na formação para Ingress/Gateway. A política atual cobre pelo menos as três versões minor Kubernetes mais recentes, incluindo 1.35 e 1.36 nesta edição.
+
+---
+
+## Bibliografia de apoio conceptual
+
+As obras disponibilizadas no projeto são utilizadas para conceitos relativamente estáveis, e não como fonte única para comandos/versionamento de 2026:
+
+- *The Kubernetes Book* — arquitetura, objetos, modelo declarativo e controllers;
+- *Kubernetes: Up and Running* — arquitetura, API e operação do cluster;
+- *Kubernetes in Action* — Pods, Nodes, controllers, Services e troubleshooting;
+- *Docker Deep Dive* — containers, runtimes e fundamentos complementares;
+- *Ultimate Docker Container Book* — conceitos de containers e imagens.
+
+## Princípio de utilização das fontes
+
+```text
+CONCEITO ESTÁVEL
+      ↓
+livros + documentação oficial
+
+COMANDO / VERSÃO / COMPATIBILIDADE
+      ↓
+documentação oficial atual + ensaio técnico
+```
+
+Antes de uma nova turma, voltar a confirmar patches Kubernetes, versão containerd, matriz Calico e requisitos do Traefik.
