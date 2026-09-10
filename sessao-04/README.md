@@ -72,6 +72,7 @@ validação final
 
 ## Materiais
 
+- [`plano_sessao_4.md`](plano_sessao_4.md) — objetivos, conteúdos, metodologia e distribuição temporal;
 - [`manual_formando.md`](manual_formando.md) — explicação progressiva dos conceitos e procedimentos;
 - [`labs/laboratorio_integrado_sessao_4.md`](labs/laboratorio_integrado_sessao_4.md) — laboratório manual completo;
 - [`checklist.md`](checklist.md) — preparação manual das duas VMs;
