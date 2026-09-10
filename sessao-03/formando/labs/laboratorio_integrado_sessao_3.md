@@ -37,7 +37,7 @@ Dockerfile inicial
       ↓
 Build / Layers / Cache
       ↓
-Multi-stage
+Multi-stage + assets de produção
       ↓
 Hardening / Secrets
       ↓
@@ -133,15 +133,13 @@ Criar a diretoria para chaves APT:
 sudo install -m 0755 -d /etc/apt/keyrings
 ```
 
-- `install -d` — cria uma diretoria;
-- `-m 0755` — define as permissões da diretoria.
-
 Obter a chave:
 
 ```bash
 sudo curl -fsSL \
   https://download.docker.com/linux/ubuntu/gpg \
   -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
 ```
 
 | Flag | Função |
@@ -151,12 +149,6 @@ sudo curl -fsSL \
 | `-S` | mostra erros apesar de `-s` |
 | `-L` | segue redirecionamentos |
 | `-o` | grava a resposta no ficheiro indicado |
-
-Tornar a chave legível pelo APT:
-
-```bash
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-```
 
 ---
 
@@ -226,9 +218,6 @@ sudo docker compose version
 sudo docker buildx version
 ```
 
-- `--no-pager` — mostra a saída diretamente no terminal;
-- `--rm` — remove o container quando o processo termina.
-
 Se o serviço não estiver ativo:
 
 ```bash
@@ -244,9 +233,6 @@ sudo systemctl enable docker
 sudo usermod -aG docker "$USER"
 exit
 ```
-
-- `-a` — adiciona sem remover os grupos atuais;
-- `-G docker` — adiciona ao grupo suplementar `docker`.
 
 Volte a ligar por PuTTY/SSH e confirme:
 
@@ -277,11 +263,6 @@ sudo apt-get update
 sudo apt-get install -y trivy
 trivy --version
 ```
-
-- `wget -qO -` — obtém conteúdo e envia-o para stdout;
-- `|` — encadeia a saída de um comando com a entrada do seguinte;
-- `gpg --dearmor` — converte a chave para o formato utilizado pelo APT;
-- `> /dev/null` — descarta a cópia da saída produzida por `tee`.
 
 > A primeira análise Trivy pode demorar mais devido à obtenção/atualização das bases de vulnerabilidades.
 
@@ -348,13 +329,11 @@ less formando/docker/Dockerfile.inicial
 
 > A imagem base `php:8.4-apache-bookworm` já contém PHP e Apache. O bloco `apt-get install` do Dockerfile instala ferramentas/bibliotecas adicionais e as dependências necessárias para compilar extensões PHP; não está a instalar o Apache de raiz.
 
-### Porque também temos de preparar os assets?
+## 4.1. Porque também temos de preparar os assets?
 
-A Symfony Demo atual utiliza **AssetMapper**, **ImportMap** e **Sass**. Uma aplicação web não é composta apenas pelo código PHP: o browser também necessita de CSS, JavaScript, fontes e outros recursos frontend.
+A Symfony Demo utiliza **AssetMapper**, **ImportMap** e **Sass**. Uma aplicação web não é composta apenas pelo código PHP: o browser também necessita de CSS, JavaScript, fontes e outros recursos frontend.
 
-Em desenvolvimento, o Symfony pode servir assets dinamicamente. Para uma imagem usada como artefacto de deployment, queremos que os assets versionados sejam compilados para `public/assets/` e servidos diretamente pelo servidor web.
-
-A sequência relevante é:
+Para um artefacto de deployment, queremos que os assets versionados estejam preparados em `public/assets/` e possam ser servidos diretamente pelo Apache.
 
 ```text
 Código Symfony
@@ -372,7 +351,7 @@ public/assets/
 Apache serve CSS/JS ao browser
 ```
 
-No `Dockerfile.inicial` o bloco de instalação executa os auto-scripts do Composer e, de forma explícita, compila Sass antes de executar `asset-map:compile`. A imagem inicial continua a ser deliberadamente simples e single-stage; o objetivo aqui é ficar funcional, não ainda otimizada.
+No `Dockerfile.inicial`, a imagem continua deliberadamente simples e single-stage; o objetivo é ficar funcional, não ainda otimizada.
 
 Construir:
 
@@ -392,7 +371,7 @@ docker build \
 
 ### Build context e `.dockerignore`
 
-O contexto é o conjunto de ficheiros disponibilizado ao builder. Como o contexto é `sessao-03/`, o ficheiro efetivamente usado neste build é:
+Como o contexto é `sessao-03/`, o ficheiro efetivamente usado neste build é:
 
 ```text
 sessao-03/.dockerignore
@@ -404,8 +383,6 @@ Consultar:
 cat .dockerignore
 ```
 
-O objetivo é excluir `.git`, caches, ficheiros locais e outros dados desnecessários do contexto de build.
-
 Consultar imagem e layers:
 
 ```bash
@@ -413,18 +390,16 @@ docker image ls symfony-demo
 docker history symfony-demo:naive
 ```
 
-### Confirmar que os assets foram compilados
-
-Antes de executar a imagem, pode confirmar diretamente no artefacto que `public/assets/` existe:
+## 4.2. Confirmar que os assets foram compilados
 
 ```bash
 docker run --rm symfony-demo:naive \
   sh -lc 'test -f /var/www/html/public/assets/manifest.json && echo "OK: assets compilados"'
 ```
 
-O `manifest.json` é produzido pela compilação do AssetMapper e relaciona os nomes lógicos dos assets com os ficheiros versionados.
+O `manifest.json` é uma evidência simples de que o AssetMapper produziu o conjunto de assets para runtime.
 
-### Testar a imagem inicial isoladamente
+## 4.3. Testar a imagem inicial isoladamente
 
 Para manter o container disponível durante os testes no browser, nesta fase **não usamos `--rm`**:
 
@@ -437,29 +412,24 @@ docker run -d \
 
 - `-d` — executa em background;
 - `--name` — atribui um nome ao container;
-- `-p 8081:80` — publica a porta `80` do container na porta `8081` da VM;
-- como não foi indicado um endereço específico antes de `8081`, o Docker publica normalmente a porta nas interfaces do host, permitindo acesso externo se a rede e a firewall o autorizarem.
+- `-p 8081:80` — publica a porta `80` do container na porta `8081` da VM.
 
-Validar primeiro dentro da VM, sem depender da rede externa:
+Validar primeiro dentro da VM:
 
 ```bash
 curl -i http://localhost:8081/health
 ```
 
-Neste teste isolado não existe PostgreSQL. Por isso, `/health` é o endpoint mais adequado: permite confirmar que Apache e a aplicação arrancaram. O endpoint `/ready` poderá indicar indisponibilidade porque valida também a dependência da base de dados.
+Neste teste isolado não existe PostgreSQL. Por isso, `/health` é o endpoint mais adequado. O endpoint `/ready` poderá indicar indisponibilidade porque valida também a dependência da base de dados.
 
-Confirmar também que os ficheiros frontend estão presentes dentro do container:
+Confirmar também os assets no container:
 
 ```bash
 docker exec symfony-naive \
   find /var/www/html/public/assets -maxdepth 2 -type f | head -20
 ```
 
-Deverá observar ficheiros CSS/JS versionados e os ficheiros de metadata do AssetMapper.
-
-#### Ver a aplicação no navegador do PC do formando
-
-Este é um bom momento para demonstrar o significado real de `-p 8081:80`: a porta da aplicação deixou de estar acessível apenas dentro do container e foi publicada na VM.
+### Ver a aplicação no navegador do PC do formando
 
 Obter o endereço IP da VM:
 
@@ -467,9 +437,9 @@ Obter o endereço IP da VM:
 hostname -I
 ```
 
-Se forem apresentados vários endereços, utilize o mesmo IP que o formando usa no PuTTY/SSH, desde que corresponda à interface de rede acessível a partir do PC.
+Se forem apresentados vários endereços, utilize o mesmo IP que o formando usa no PuTTY/SSH, desde que corresponda à interface acessível a partir do PC.
 
-Confirmar a publicação da porta:
+Confirmar a publicação:
 
 ```bash
 docker ps --filter "name=symfony-naive" \
@@ -482,27 +452,16 @@ Deverá observar algo equivalente a:
 symfony-naive   Up ...   0.0.0.0:8081->80/tcp
 ```
 
-No navegador do **PC do formando**, abrir:
+No PC:
 
 ```text
 http://IP_DA_VM:8081/
-```
-
-Por exemplo, se o IP utilizado no PuTTY for `192.168.1.50`:
-
-```text
-http://192.168.1.50:8081/
-```
-
-Pode também validar diretamente o endpoint pedagógico:
-
-```text
 http://IP_DA_VM:8081/health
 ```
 
-A página principal deve surgir com a apresentação gráfica completa. Se o HTML aparecer mas sem estilos, confirme primeiro se existem ficheiros em `/var/www/html/public/assets` e consulte os pedidos HTTP no browser/logs antes de atribuir o problema à rede.
+A página principal deve surgir com a apresentação gráfica completa.
 
-O resultado desta experiência deve ser interpretado assim:
+> **Diagnóstico aprendido no teste real:** se o HTML abrir mas a página aparecer sem estilos, não conclua imediatamente que existe um problema de rede. Primeiro confirme se `public/assets/` existe e se contém CSS/JS. Uma aplicação pode responder `200` em `/health` e, ainda assim, estar incompleta do ponto de vista do browser por falta de assets no artefacto.
 
 ```text
 Browser no PC
@@ -516,22 +475,22 @@ IP da VM
 Apache + Symfony + assets compilados
 ```
 
-> O acesso por PuTTY confirma que existe conectividade entre o PC e a VM, mas não garante por si só que a porta `8081` esteja permitida. Se `curl http://localhost:8081/health` funcionar na VM mas o browser não conseguir aceder, o problema está provavelmente na conectividade/regras entre o PC e essa porta da VM, e não no build da imagem.
+> O acesso por PuTTY confirma conectividade PC → VM, mas não garante por si só que a porta `8081` esteja permitida pela rede/firewall.
 
-Depois da validação no browser, parar e remover o teste:
+Depois da validação:
 
 ```bash
 docker stop symfony-naive
 docker rm symfony-naive
 ```
 
-Esta separação permite observar a diferença entre parar um container e removê-lo explicitamente.
+Esta separação permite observar a diferença entre parar e remover um container.
 
 ---
 
-# 5. Cache e multi-stage
+# 5. Cache, multi-stage e assets de produção
 
-Construir a imagem otimizada:
+Construir a imagem otimizada `1.0.0`:
 
 ```bash
 docker build \
@@ -545,7 +504,7 @@ docker build \
 - `--build-arg` — fornece um valor a uma instrução `ARG`;
 - `ARG` é adequado a parametrização de build, **não a secrets**.
 
-Construir uma segunda versão:
+Construir `1.1.0`:
 
 ```bash
 docker build \
@@ -558,13 +517,54 @@ docker build \
 
 Procure `CACHED` na saída. A ordenação do Dockerfile permite reutilizar layers quando os ficheiros de dependências não mudam.
 
+O Dockerfile multi-stage não tem apenas de instalar dependências PHP. O stage de build também prepara os assets antes de copiar a aplicação para o runtime:
+
 ```text
-stage build
-  ↓ ferramentas + Composer + dependências
+STAGE build
+  ↓ Composer + dependências
+  ↓ sass:build
+  ↓ asset-map:compile
+  ↓ public/assets/
+  ↓
 COPY --from=build
   ↓
-stage runtime
-  ↓ apenas o necessário para executar
+STAGE runtime
+  ↓ aplicação + assets já preparados
+```
+
+Consultar no Dockerfile:
+
+```bash
+grep -nE 'sass:build|asset-map:compile|manifest.json' \
+  formando/docker/Dockerfile
+```
+
+O build deve falhar se `public/assets/manifest.json` não for criado. Isto evita publicar uma imagem que esteja saudável ao nível de `/health`, mas incompleta no browser.
+
+## 5.1. Validar os assets das imagens otimizadas
+
+```bash
+for VERSION in 1.0.0 1.1.0; do
+  echo "=== $VERSION ==="
+  docker run --rm "symfony-demo:$VERSION" \
+    sh -lc 'test -f /var/www/html/public/assets/manifest.json && echo "OK: assets compilados"'
+done
+```
+
+Resultado esperado:
+
+```text
+=== 1.0.0 ===
+OK: assets compilados
+=== 1.1.0 ===
+OK: assets compilados
+```
+
+Pode observar alguns ficheiros:
+
+```bash
+docker run --rm symfony-demo:1.1.0 \
+  sh -lc 'find /var/www/html/public/assets -maxdepth 2 -type f | head -20'
 ```
 
 Comparar tamanhos e histórico:
@@ -574,7 +574,7 @@ docker image ls symfony-demo
 docker history symfony-demo:1.1.0
 ```
 
-Ver metadata criada no build:
+Ver metadata:
 
 ```bash
 docker image inspect symfony-demo:1.1.0 \
@@ -614,13 +614,11 @@ Neste laboratório aplicamos apenas uma parte dessas medidas:
 - aplicar limites de recursos;
 - analisar vulnerabilidades conhecidas com Trivy.
 
-O objetivo é perceber que hardening é uma prática contínua e não uma garantia de que a imagem ficou "segura".
+Hardening é uma prática contínua e não uma garantia de que a imagem ficou “segura”.
 
 ## 6.2. O que é um secret?
 
 Um **secret** é informação sensível que não deve ser exposta no código, imagem, logs, histórico de comandos ou configuração partilhada sem necessidade.
-
-Exemplos:
 
 ```text
 Configuração normal
@@ -632,8 +630,6 @@ DB_PASSWORD=...
 API_TOKEN=...
 PRIVATE_KEY=...
 ```
-
-É útil distinguir dois momentos:
 
 ```text
 Build secret
@@ -651,16 +647,14 @@ deve ser entregue apenas ao serviço que dele precisa
 
 ## 6.3. Limites do hardening deste laboratório
 
-O Dockerfile otimizado reduz componentes no runtime através de multi-stage e limita os diretórios de escrita. Contudo, **não deve ser apresentado como uma imagem completamente non-root**.
-
-Verificar:
+O Dockerfile otimizado reduz componentes no runtime através de multi-stage e limita diretórios de escrita. Contudo, **não deve ser apresentado como uma imagem completamente non-root**.
 
 ```bash
 docker image inspect symfony-demo:1.1.0 \
   --format 'User={{json .Config.User}}'
 ```
 
-Um valor vazio significa que não existe uma instrução `USER` explícita na imagem final. A imagem oficial Apache arranca com os privilégios necessários ao seu modelo de execução e os workers Apache usam o utilizador configurado pelo Apache. A conversão deste cenário para um runtime integralmente non-root exige alterações adicionais e fica fora do laboratório principal.
+Um valor vazio significa que não existe uma instrução `USER` explícita na imagem final. A conversão deste cenário para um runtime integralmente non-root exige alterações adicionais e fica fora do laboratório principal.
 
 ---
 
@@ -674,7 +668,7 @@ docker build \
   formando/exemplos/secrets
 ```
 
-Em vez de depender apenas de `docker history`, observe diretamente a configuração final da imagem:
+Observar a configuração final:
 
 ```bash
 docker image inspect secret-demo:bad \
@@ -687,10 +681,6 @@ Também pode consultar:
 docker history --no-trunc secret-demo:bad
 ```
 
-> O detalhe apresentado pelo histórico pode variar com o builder. A evidência importante neste exemplo é que o valor passado para `ENV` fica na configuração final da imagem.
-
-Conclusão:
-
 ```text
 ARG / ENV no Dockerfile
         ≠
@@ -701,19 +691,11 @@ forma segura de transportar secrets
 
 ## 6.5. BuildKit secret com origem no ambiente do host
 
-Para não escrever o valor do laboratório no histórico do shell, ler de forma silenciosa:
-
 ```bash
 read -rsp 'API_TOKEN fictício: ' API_TOKEN
 echo
 export API_TOKEN
 ```
-
-- `read` — lê input do utilizador;
-- `-r` — não interpreta barras invertidas;
-- `-s` — não mostra os caracteres introduzidos;
-- `-p` — apresenta a mensagem de prompt;
-- `export` — disponibiliza a variável aos processos filhos.
 
 Construir:
 
@@ -725,11 +707,6 @@ docker build \
   formando/exemplos/secrets
 ```
 
-- `--secret` — fornece um secret ao BuildKit;
-- `id=API_TOKEN` — identificador do secret;
-- `env=API_TOKEN` — usa a variável de ambiente do host como origem;
-- no Dockerfile, o secret é disponibilizado apenas na instrução `RUN` que o declara.
-
 Validar que não foi persistido como variável da imagem:
 
 ```bash
@@ -737,25 +714,18 @@ docker image inspect secret-demo:buildkit \
   --format '{{json .Config.Env}}'
 ```
 
-Executar o exemplo:
+Executar e limpar:
 
 ```bash
 docker run --rm secret-demo:buildkit
-```
-
-Limpar a variável:
-
-```bash
 unset API_TOKEN
 ```
 
-> BuildKit também suporta ficheiros como origem de secrets (`src=...`). Isso é apropriado quando a credencial já existe legitimamente como ficheiro, por exemplo uma configuração de cliente ou certificado. O que não deve ser feito é criar e versionar ficheiros de texto com passwords/tokens dentro do projeto.
+> BuildKit também suporta ficheiros como origem de secrets (`src=...`). O que não deve ser feito é criar e versionar ficheiros de texto com passwords/tokens dentro do projeto.
 
 ---
 
 ## 6.6. Compose secret com origem no ambiente do host
-
-Introduzir um valor fictício sem o escrever no histórico:
 
 ```bash
 read -rsp 'DEMO_SECRET fictício: ' DEMO_SECRET
@@ -763,7 +733,7 @@ echo
 export DEMO_SECRET
 ```
 
-O exemplo Compose declara a origem:
+O exemplo Compose declara:
 
 ```yaml
 secrets:
@@ -788,16 +758,11 @@ docker compose \
   run --rm demo
 ```
 
-- `run` — cria um container one-off para o serviço indicado;
-- `--rm` — remove-o quando termina.
-
 No container, o secret é entregue em:
 
 ```text
 /run/secrets/demo_secret
 ```
-
-A origem deste exemplo é uma variável no host; o conteúdo não é passado através do atributo `environment:` do serviço.
 
 Limpar:
 
@@ -805,7 +770,7 @@ Limpar:
 unset DEMO_SECRET
 ```
 
-> Uma variável de ambiente no host também não é um secret manager. Aqui serve apenas como origem temporária para demonstrar o mecanismo Compose sem guardar o valor no repositório. Em produção, a origem normalmente seria integrada com mecanismos próprios de gestão de secrets.
+> Uma variável de ambiente no host também não é um secret manager. Aqui serve apenas como origem temporária para demonstrar o mecanismo.
 
 ---
 
@@ -818,25 +783,19 @@ docker image inspect symfony-demo:1.1.0 \
   --format '{{json .Config.Healthcheck}}'
 ```
 
-Preparar o ficheiro de configuração do laboratório:
+Preparar o ficheiro de configuração:
 
 ```bash
 cp formando/compose/.env.prod.example \
    formando/compose/.env.prod
 ```
 
-> `.env.prod` está ignorado pelo Git e contém **apenas valores fictícios do laboratório**. O facto de os usarmos aqui não transforma `.env` num secret manager e não deve ser reproduzido como modelo de gestão de credenciais reais.
+> `.env.prod` está ignorado pelo Git e contém apenas valores fictícios do laboratório. `.env` não é um secret manager.
 
 Pode alterar a porta publicada se `8080` estiver ocupada:
 
 ```text
 APP_PORT=8080
-```
-
-por exemplo:
-
-```text
-APP_PORT=8081
 ```
 
 Validar a configuração final:
@@ -849,8 +808,6 @@ docker compose \
   config
 ```
 
-> `docker compose config` apresenta a configuração resolvida. Com credenciais reais, evite copiar ou partilhar a saída sem rever informação sensível.
-
 O override de produção do laboratório inclui:
 
 ```yaml
@@ -861,18 +818,11 @@ logging:
   driver: local
 ```
 
-- `restart: unless-stopped` — tenta voltar a iniciar o container, exceto depois de uma paragem manual explícita;
-- `mem_limit` — limita memória;
-- `cpus` — limita CPU;
-- `logging.driver: local` — utiliza o driver local do Docker.
-
 > Docker `HEALTHCHECK` não é convertido automaticamente em probes Kubernetes.
 
 ---
 
 # 8. Scan com Trivy
-
-Scan informativo:
 
 ```bash
 trivy image \
@@ -882,14 +832,9 @@ trivy image \
   symfony-demo:1.1.0
 ```
 
-- `image` — analisa uma imagem;
-- `--scanners vuln` — procura vulnerabilidades;
-- `--severity HIGH,CRITICAL` — filtra as severidades apresentadas;
-- `--ignore-unfixed` — omite vulnerabilidades sem correção conhecida.
-
 Os resultados dependem da data das bases de vulnerabilidades e da imagem analisada. Não existe uma contagem fixa esperada.
 
-> Um scan não prova que uma imagem é segura. É uma das evidências do processo de segurança, juntamente com origem da imagem, minimização, configuração, patching e gestão de secrets.
+> Um scan não prova que uma imagem é segura. É uma das evidências do processo de segurança.
 
 ---
 
@@ -925,30 +870,37 @@ Digest → identidade imutável daquele conteúdo publicado
 
 ---
 
-## 9.2. Consumir uma imagem pública do GHCR
+## 9.2. Consumir imagens públicas do GHCR
 
 ```bash
 docker pull ghcr.io/skullclamp/symfony-demo:1.0.0
+docker pull ghcr.io/skullclamp/symfony-demo:1.1.0
+docker pull ghcr.io/skullclamp/symfony-demo:1.2.0-rc1
 ```
 
 As imagens públicas da formação podem ser obtidas anonimamente.
+
+Confirmar que o artefacto público inclui assets:
+
+```bash
+docker run --rm ghcr.io/skullclamp/symfony-demo:1.0.0 \
+  sh -lc 'test -f /var/www/html/public/assets/manifest.json && echo "OK: assets presentes no artefacto do registry"'
+```
 
 ---
 
 ## 9.3. Publicar opcionalmente no namespace do formando
 
-Esta etapa é útil para praticar autenticação/tag/push, mas pode ser omitida se o tempo da sessão for insuficiente.
-
-Definir variáveis próprias, sem reutilizar `IMAGE_REPO` da stack de produção:
+Esta etapa é útil para praticar autenticação/tag/push, mas pode ser omitida se o tempo for insuficiente.
 
 ```bash
 export GITHUB_USER='UTILIZADOR_GITHUB'
 export MY_IMAGE_REPO="ghcr.io/${GITHUB_USER}/symfony-demo"
 ```
 
-> Usamos `MY_IMAGE_REPO` deliberadamente. O ciclo de deploy posterior utiliza `IMAGE_REPO` do ficheiro `.env.prod` e as imagens públicas da formação. Assim, um push pessoal incompleto não interfere com `1.1.0` ou `1.2.0-rc1`.
+> Usamos `MY_IMAGE_REPO` deliberadamente para não interferir com `IMAGE_REPO` da stack de produção.
 
-Para autenticar no GHCR, é necessário um Personal Access Token (classic) com permissões adequadas de packages. Para não escrever o token no histórico:
+Autenticar sem colocar o token na linha de comandos:
 
 ```bash
 read -rsp 'GHCR token: ' CR_PAT
@@ -958,16 +910,14 @@ printf '%s' "$CR_PAT" \
 unset CR_PAT
 ```
 
-- `--password-stdin` — recebe a credencial pela entrada standard em vez de a colocar como argumento da linha de comandos.
-
-Criar a referência remota e publicar:
+Publicar:
 
 ```bash
 docker tag symfony-demo:1.0.0 "$MY_IMAGE_REPO:1.0.0"
 docker push "$MY_IMAGE_REPO:1.0.0"
 ```
 
-Consultar digest após publicação:
+Consultar digest:
 
 ```bash
 docker image inspect "$MY_IMAGE_REPO:1.0.0" \
@@ -981,12 +931,12 @@ docker logout ghcr.io
 unset GITHUB_USER MY_IMAGE_REPO
 ```
 
-Princípio:
-
 ```text
 BUILD ONCE
    ↓
 Imagem identificada
+   ↓
+Validar assets + health
    ↓
 Scan
    ↓
@@ -995,15 +945,146 @@ Registry
 promover o mesmo artefacto
 ```
 
+## 9.4. Validação técnica das três imagens do cenário
+
+> **Nota:** esta validação completa é especialmente útil ao formador na preparação do laboratório. Os formandos podem executá-la se houver tempo. O objetivo é impedir que uma falha acidental do artefacto seja confundida com a falha controlada da `1.2.0-rc1`.
+
+Construir através da automação já observada:
+
+```bash
+./formando/scripts/build.sh 1.0.0
+./formando/scripts/build.sh 1.1.0
+./formando/scripts/build.sh 1.2.0-rc1 /healthz
+```
+
+Validar assets nas três imagens:
+
+```bash
+for VERSION in 1.0.0 1.1.0 1.2.0-rc1; do
+  echo "=== $VERSION ==="
+  docker run --rm "symfony-demo:$VERSION" \
+    sh -lc 'test -f /var/www/html/public/assets/manifest.json && echo "OK: assets compilados"'
+done
+```
+
+Confirmar a variável usada pelo healthcheck:
+
+```bash
+for VERSION in 1.0.0 1.1.0 1.2.0-rc1; do
+  echo "=== $VERSION ==="
+  docker image inspect "symfony-demo:$VERSION" \
+    --format '{{range .Config.Env}}{{println .}}{{end}}' \
+    | grep HEALTH_PATH
+done
+```
+
+Esperado:
+
+```text
+1.0.0       → HEALTH_PATH=/health
+1.1.0       → HEALTH_PATH=/health
+1.2.0-rc1   → HEALTH_PATH=/healthz
+```
+
+Se pretender observar isoladamente os três estados, utilize portas temporárias livres:
+
+```bash
+docker rm -f test-100 test-110 test-120 2>/dev/null || true
+
+docker run -d --name test-100 -p 8083:80 symfony-demo:1.0.0
+docker run -d --name test-110 -p 8084:80 symfony-demo:1.1.0
+docker run -d --name test-120 -p 8085:80 symfony-demo:1.2.0-rc1
+```
+
+Após o tempo necessário para os healthchecks:
+
+```bash
+docker ps --filter "name=test-" \
+  --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+```
+
+Esperado:
+
+```text
+test-100   symfony-demo:1.0.0       healthy
+test-110   symfony-demo:1.1.0       healthy
+test-120   symfony-demo:1.2.0-rc1   unhealthy
+```
+
+Confirmar a causa da RC:
+
+```bash
+curl -i http://localhost:8085/health
+curl -i http://localhost:8085/healthz
+
+docker inspect test-120 \
+  --format '{{json .State.Health}}'
+```
+
+Evidência esperada:
+
+```text
+/health  → 200 OK
+/healthz → 404 Not Found
+Docker HEALTHCHECK → ExitCode 1 → unhealthy
+```
+
+Isto demonstra uma distinção importante:
+
+```text
+Aplicação responde corretamente em /health
+                  ≠
+HEALTHCHECK corretamente configurado
+```
+
+A `1.2.0-rc1` continua capaz de responder à aplicação; é a configuração do healthcheck que está deliberadamente errada.
+
+Limpar os containers temporários:
+
+```bash
+docker rm -f test-100 test-110 test-120
+```
+
+### Digests dos artefactos oficiais validados em 2026-09-10
+
+| Tag | Digest publicado e validado |
+|---|---|
+| `1.0.0` | `sha256:4dd023c33ce80368410a322a507461aabe19425e9e61ed13b404ef1083071924` |
+| `1.1.0` | `sha256:e45279848fa5adc50beaa0dbfdc632beeaea6d6a1e9a651ae38fc5c30f7778f5` |
+| `1.2.0-rc1` | `sha256:41b684658cca6907fd3111cf2b4cd85eaf3426fded719f02265d8d531cb24bef` |
+
+> Estes valores identificam os artefactos publicados e testados nesta preparação. Uma tag pode ser movida/republicada e, nesse caso, passar a apontar para outro digest. O digest identifica imutavelmente aquele conteúdo concreto.
+
 ---
 
 # 10. Primeiro deployment manual da stack
 
-Para manter a regra **manual → observar → automatizar**, vamos executar manualmente as fases essenciais do primeiro deployment.
+Para manter a regra **manual → observar → automatizar**, execute manualmente as fases essenciais do primeiro deployment.
 
-Definir uma forma curta de invocar o Compose não é necessário; execute o comando completo para perceber quais os ficheiros envolvidos.
+## 10.1. Garantir que o ponto inicial é 1.0.0
 
-Validar:
+Se a VM já tiver sido usada em testes anteriores, confirme:
+
+```bash
+grep '^APP_VERSION=' formando/compose/.env.prod
+```
+
+Para o início deste exercício deverá ser:
+
+```text
+APP_VERSION=1.0.0
+```
+
+Se necessário:
+
+```bash
+sed -i 's/^APP_VERSION=.*/APP_VERSION=1.0.0/' \
+  formando/compose/.env.prod
+```
+
+> Esta reposição é importante numa VM reutilizada: o laboratório deve começar em `1.0.0` para que a progressão `1.0.0 → 1.1.0 → 1.2.0-rc1 → rollback 1.1.0` seja observável.
+
+Validar configuração:
 
 ```bash
 docker compose \
@@ -1023,7 +1104,7 @@ docker compose \
   pull db app
 ```
 
-Iniciar apenas PostgreSQL:
+Iniciar PostgreSQL:
 
 ```bash
 docker compose \
@@ -1045,9 +1126,9 @@ docker compose \
 
 Aguarde até `db` ficar `healthy`.
 
-### Inicializar o schema apenas numa base de dados vazia
+## 10.2. Inicializar o schema apenas numa base de dados vazia
 
-Verificar se a tabela principal da aplicação já existe:
+Verificar se a tabela principal já existe:
 
 ```bash
 docker compose \
@@ -1059,7 +1140,7 @@ docker compose \
   "SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='symfony_demo_post';"
 ```
 
-Se não devolver `1`, e apenas porque se trata de uma base vazia de laboratório:
+Se não devolver `1`, e apenas por se tratar de uma base vazia de laboratório:
 
 ```bash
 docker compose \
@@ -1070,7 +1151,7 @@ docker compose \
   php bin/console doctrine:schema:create --no-interaction
 ```
 
-> **Produção real:** alterações de schema devem ser tratadas através de migrações versionadas, compatíveis e controladas. `doctrine:schema:create` é usado aqui apenas para inicializar uma base de dados vazia do laboratório.
+> **Produção real:** alterações de schema devem ser tratadas através de migrações versionadas, compatíveis e controladas. `doctrine:schema:create` é usado apenas para inicializar uma base vazia do laboratório.
 
 Iniciar a aplicação:
 
@@ -1082,7 +1163,7 @@ docker compose \
   up -d app
 ```
 
-Agora observe o wrapper que evita repetir todas estas flags nos comandos seguintes:
+Agora observe o wrapper:
 
 ```bash
 sed -n '1,220p' formando/scripts/compose-prod.sh
@@ -1103,6 +1184,14 @@ curl -i http://localhost:8080/info
 
 Se alterou `APP_PORT`, substitua `8080` pela porta escolhida.
 
+No ponto inicial, a evidência esperada é equivalente a:
+
+```text
+/health → 200 {"status":"ok"}
+/ready  → 200 {"status":"ready","database":"ok"}
+/info   → 200 ... "version":"1.0.0" ... "environment":"prod"
+```
+
 Obter o container da aplicação:
 
 ```bash
@@ -1118,9 +1207,14 @@ docker inspect "$CID" \
 docker stats --no-stream "$CID"
 ```
 
-### Acesso pelo browser do PC
+Confirmar ainda que os assets existem no próprio container recebido do registry:
 
-Obter o IP da VM:
+```bash
+docker exec "$CID" \
+  sh -lc 'test -f /var/www/html/public/assets/manifest.json && echo "OK: assets no container em execução"'
+```
+
+## 11.1. Acesso pelo browser do PC
 
 ```bash
 hostname -I
@@ -1129,7 +1223,8 @@ hostname -I
 Confirmar publicação:
 
 ```bash
-docker ps --filter "id=$CID" --format 'table {{.Names}}\t{{.Ports}}'
+docker ps --filter "id=$CID" \
+  --format 'table {{.Names}}\t{{.Ports}}'
 ```
 
 Deverá existir uma publicação equivalente a:
@@ -1138,7 +1233,7 @@ Deverá existir uma publicação equivalente a:
 0.0.0.0:8080->80/tcp
 ```
 
-No PC do formando:
+No PC:
 
 ```text
 http://IP_DA_VM:8080
@@ -1147,9 +1242,11 @@ http://IP_DA_VM:8080/health
 http://IP_DA_VM:8080/ready
 ```
 
+A página principal deve aparecer com CSS/JS carregados. Se o HTML surgir sem estilos, execute primeiro a validação de `public/assets/manifest.json` e consulte os logs/pedidos dos assets. Não confunda uma falha de preparação do artefacto com uma falha de conectividade.
+
 > Como o formando já acede à VM por PuTTY/SSH, existe conectividade PC → VM. Contudo, a porta publicada também tem de ser permitida pela rede e pelas políticas do ambiente.
 
-> **Nota de firewall Docker:** não assuma que `ufw allow 8080/tcp` controla uma porta publicada pelo Docker. A documentação Docker alerta que portas publicadas podem contornar regras UFW/firewalld devido à forma como o Docker gere regras de packet filtering. Se o acesso externo falhar, valide primeiro `docker ps`, o IP/rota da VM e as regras de rede/firewall do ambiente.
+> **Nota de firewall Docker:** não assuma que `ufw allow 8080/tcp` controla uma porta publicada pelo Docker. Valide primeiro `docker ps`, o IP/rota da VM e as regras de rede/firewall do ambiente.
 
 ---
 
@@ -1178,12 +1275,6 @@ Confirmar:
   psql -U symfony -d symfony \
   -c "SELECT * FROM lab_marker;"
 ```
-
-- `exec` — executa um comando num serviço já iniciado;
-- `-T` — desativa pseudo-TTY;
-- `psql -U` — define o utilizador PostgreSQL;
-- `-d` — define a base de dados;
-- `-c` — executa o SQL indicado.
 
 Backup lógico manual:
 
@@ -1216,23 +1307,14 @@ sed -n '1,220p' formando/scripts/backup-postgres.sh
 
 Agora já foram executadas manualmente as fases fundamentais. Pode analisar e usar a automação.
 
-Abrir o script:
-
 ```bash
 sed -n '1,300p' formando/scripts/deploy-prod.sh
 ```
-
-Identifique os blocos comentados: configuração, validação da porta, pull, PostgreSQL, health, schema, aplicação e validação.
 
 Executar novamente a versão inicial através da automação:
 
 ```bash
 ./formando/scripts/deploy-prod.sh 1.0.0
-```
-
-Validar:
-
-```bash
 ./formando/scripts/validate.sh
 ```
 
@@ -1244,17 +1326,24 @@ Validar:
 ./formando/scripts/deploy-prod.sh 1.1.0
 ```
 
-Validar a versão:
+Validar:
 
 ```bash
 curl -fsS http://localhost:8080/info
+./formando/scripts/compose-prod.sh ps
 ```
 
-- `-f` — trata HTTP 4xx/5xx como erro;
-- `-s` — modo silencioso;
-- `-S` — mostra erro mesmo com `-s`.
+O `/info` deverá identificar `1.1.0`, e o serviço deverá ficar `healthy`.
 
-Confirmar os dados:
+Confirmar que o artefacto atualizado continua a conter assets:
+
+```bash
+CID=$(./formando/scripts/compose-prod.sh ps -q app)
+docker exec "$CID" \
+  sh -lc 'test -f /var/www/html/public/assets/manifest.json && echo "OK: assets preservados no update"'
+```
+
+Confirmar dados:
 
 ```bash
 ./formando/scripts/compose-prod.sh exec -T db \
@@ -1263,6 +1352,8 @@ Confirmar os dados:
 ```
 
 A substituição do container da aplicação não deve eliminar o conteúdo do volume PostgreSQL.
+
+No browser, atualize `http://IP_DA_VM:8080/`. A aplicação deve continuar graficamente completa.
 
 ---
 
@@ -1276,7 +1367,13 @@ set -e
 echo "EXIT_CODE=$RC"
 ```
 
-A imagem `1.2.0-rc1` está preparada deliberadamente com um caminho incorreto no Docker `HEALTHCHECK`.
+A `1.2.0-rc1` foi preparada deliberadamente com:
+
+```text
+HEALTH_PATH=/healthz
+```
+
+A aplicação continua a disponibilizar `/health`; a falha está no caminho escolhido pelo Docker `HEALTHCHECK`.
 
 ---
 
@@ -1291,18 +1388,38 @@ curl -i http://localhost:8080/health
 curl -i http://localhost:8080/healthz
 ```
 
+Confirmar também a configuração:
+
+```bash
+docker inspect "$CID" \
+  --format '{{range .Config.Env}}{{println .}}{{end}}' \
+  | grep HEALTH_PATH
+```
+
 Evidência esperada:
 
 ```text
-/health  → válido
-/healthz → 404
-      ↓
-HEALTHCHECK da 1.2.0-rc1 usa /healthz
-      ↓
-container unhealthy
+HEALTH_PATH=/healthz
+/health  → 200 OK
+/healthz → 404 Not Found
+healthcheck → ExitCode 1
+container → unhealthy
 ```
 
-Não faça rollback antes de conseguir explicar a causa.
+Um exemplo típico no histórico de health é:
+
+```text
+curl: (22) The requested URL returned error: 404
+```
+
+A conclusão correta é:
+
+```text
+A aplicação não deixou de responder.
+O healthcheck é que está configurado para um endpoint inexistente.
+```
+
+Não faça rollback antes de conseguir explicar esta evidência.
 
 ---
 
@@ -1321,28 +1438,34 @@ Executar:
 ./formando/scripts/validate.sh
 ```
 
-Confirmar novamente os dados:
+Confirmar versão, saúde e dados:
 
 ```bash
+curl -fsS http://localhost:8080/info
+./formando/scripts/compose-prod.sh ps
 ./formando/scripts/compose-prod.sh exec -T db \
   psql -U symfony -d symfony \
   -c "SELECT * FROM lab_marker;"
 ```
 
+No browser, `http://IP_DA_VM:8080/` deve voltar a apresentar a aplicação completa a partir da `1.1.0`.
+
 Resultado:
 
 ```text
 1.0.0
-   ↓ deployment
+   ↓ deployment válido
 1.1.0
    ↓ update válido
 1.2.0-rc1
+   ↓ aplicação responde em /health
+   ↓ HEALTHCHECK usa /healthz → 404
    ↓ unhealthy
 Diagnóstico
    ↓
 Rollback 1.1.0
    ↓
-healthy + dados preservados
+healthy + assets OK + dados preservados
 ```
 
 ---
@@ -1375,13 +1498,17 @@ A sessão seguinte introduz precisamente a necessidade de orquestração distrib
 ```text
 Imagem ≠ Container
 Build context ≠ diretoria do Dockerfile
+Aplicação HTTP healthy ≠ artefacto web completo
+HTML sem CSS/JS → verificar public/assets antes de culpar a rede
+Multi-stage deve transportar também os assets preparados para o runtime
 ARG/ENV ≠ Secret Manager
 .env de projeto ≠ Secret Manager
 BuildKit secret é temporário durante o build
 Docker HEALTHCHECK ≠ Kubernetes Probe
+Aplicação a responder ≠ HEALTHCHECK corretamente configurado
 Tag ≠ Digest
 Persistência ≠ Backup
-Build Once → Promote the Same Artifact
+Build Once → Validate → Promote the Same Artifact
 Compose Single-host ≠ Alta Disponibilidade
 Diagnosticar → só depois corrigir/rollback
 ```
