@@ -1,24 +1,44 @@
 services:
   app:
+    # Imagem da aplicação. IMAGE_REPO e APP_VERSION podem ser definidos no .env.
+    # Os valores após :- são defaults usados se a variável não existir.
     image: ${IMAGE_REPO:-ghcr.io/skullclamp/symfony-demo}:${APP_VERSION:-1.0.0}
+
+    # Publica a porta 80 do container na porta do host definida por APP_PORT.
+    # Exemplo por omissão: VM:8080 -> container:80.
     ports:
       - "${APP_PORT:-8080}:80"
+
+    # Configuração fornecida à aplicação em runtime.
+    # APP_SECRET tem aqui apenas um valor didático; .env não é um secret manager.
+    # DATABASE_URL usa o nome lógico db porque ambos os serviços partilham a rede Compose.
     environment:
       APP_ENV: ${APP_ENV:-prod}
       APP_SECRET: ${APP_SECRET:-lab-only-session3-change-me}
       DATABASE_URL: ${DATABASE_URL:-postgresql://symfony:lab-symfony@db:5432/symfony?serverVersion=16&charset=utf8}
+
+    # A aplicação só é iniciada depois de o healthcheck do PostgreSQL indicar healthy.
+    # Isto controla ordem/prontidão neste cenário, mas não substitui lógica de retry da aplicação.
     depends_on:
       db:
         condition: service_healthy
 
   db:
+    # PostgreSQL 16 é a base de dados de referência da formação.
     image: postgres:16
+
+    # Variáveis usadas pela imagem oficial PostgreSQL na inicialização da base de dados.
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-symfony}
       POSTGRES_USER: ${POSTGRES_USER:-symfony}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lab-symfony}
+
+    # Named volume: desacopla os dados do ciclo de vida do container da base de dados.
     volumes:
       - db-data:/var/lib/postgresql/data
+
+    # Verifica se PostgreSQL já aceita ligações para a base de dados configurada.
+    # CMD-SHELL permite expansão das variáveis dentro do comando.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-symfony} -d ${POSTGRES_DB:-symfony}"]
       interval: 5s
@@ -26,5 +46,6 @@ services:
       retries: 10
       start_period: 10s
 
+# Declara o named volume gerido pelo Docker para os dados PostgreSQL.
 volumes:
   db-data:
