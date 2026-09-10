@@ -20,6 +20,8 @@ AUTOMATIZAR
 
 > **Organização do tempo:** as secções 1 a 3 constituem a preparação técnica da VM e devem, sempre que possível, ser realizadas antes do bloco principal da sessão. Mantêm-se neste documento para que o formando consiga repetir todo o processo a partir de uma VM limpa. O núcleo pedagógico Docker II começa na secção 4.
 
+> **Como interpretar os outputs deste laboratório:** os blocos identificados como **Output esperado (exemplo)** mostram apenas a evidência essencial observada durante a validação técnica do laboratório. IDs de containers, timestamps, tempos de execução, hashes locais e contagens de vulnerabilidades podem variar. O importante é reconhecer os estados e valores indicados como significativos.
+
 ---
 
 # 0. Percurso do laboratório
@@ -397,6 +399,12 @@ docker run --rm symfony-demo:naive \
   sh -lc 'test -f /var/www/html/public/assets/manifest.json && echo "OK: assets compilados"'
 ```
 
+**Output esperado (exemplo):**
+
+```text
+OK: assets compilados
+```
+
 O `manifest.json` é uma evidência simples de que o AssetMapper produziu o conjunto de assets para runtime.
 
 ## 4.3. Testar a imagem inicial isoladamente
@@ -418,6 +426,14 @@ Validar primeiro dentro da VM:
 
 ```bash
 curl -i http://localhost:8081/health
+```
+
+**Output esperado (excerto):**
+
+```text
+HTTP/1.1 200 OK
+...
+{"status":"ok"}
 ```
 
 Neste teste isolado não existe PostgreSQL. Por isso, `/health` é o endpoint mais adequado. O endpoint `/ready` poderá indicar indisponibilidade porque valida também a dependência da base de dados.
@@ -574,6 +590,8 @@ docker image ls symfony-demo
 docker history symfony-demo:1.1.0
 ```
 
+Na validação técnica, a imagem `naive` ocupou cerca de `1.16 GB` de disk usage e a imagem multi-stage cerca de `916 MB`. Estes números são apenas ilustrativos e podem mudar com a imagem base e as versões das dependências.
+
 Ver metadata:
 
 ```bash
@@ -675,6 +693,16 @@ docker image inspect secret-demo:bad \
   --format '{{json .Config.Env}}'
 ```
 
+**Output esperado (exemplo):**
+
+```text
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data ...
+
+["PATH=...","API_TOKEN=segredo-falso-lab"]
+```
+
+O ponto importante não é a redação exata do warning: é confirmar que o valor sensível ficou persistido em `Config.Env`.
+
 Também pode consultar:
 
 ```bash
@@ -721,6 +749,17 @@ docker run --rm secret-demo:buildkit
 unset API_TOKEN
 ```
 
+**Output esperado (exemplo):**
+
+```text
+Config.Env:
+["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"]
+
+Secret disponível apenas durante esta instrução RUN
+```
+
+Repare que `API_TOKEN` não aparece em `Config.Env`.
+
 > BuildKit também suporta ficheiros como origem de secrets (`src=...`). O que não deve ser feito é criar e versionar ficheiros de texto com passwords/tokens dentro do projeto.
 
 ---
@@ -763,6 +802,16 @@ No container, o secret é entregue em:
 ```text
 /run/secrets/demo_secret
 ```
+
+**Output esperado (exemplo):**
+
+```text
+total 4
+-r--r--r-- ... demo_secret
+21 /run/secrets/demo_secret
+```
+
+O tamanho pode variar com o valor introduzido. O que deve ser confirmado é a existência do ficheiro montado e não a impressão do seu conteúdo.
 
 Limpar:
 
@@ -833,6 +882,20 @@ trivy image \
 ```
 
 Os resultados dependem da data das bases de vulnerabilidades e da imagem analisada. Não existe uma contagem fixa esperada.
+
+**Output esperado (exemplo observado na validação de 2026-09-10):**
+
+```text
+Report Summary
+
+symfony-demo:1.1.0 (debian 12.15)        66 vulnerabilidades
+composer-vendor                           8 vulnerabilidades
+
+Debian:   HIGH: 66, CRITICAL: 0
+Composer: HIGH: 8,  CRITICAL: 0
+```
+
+> Estes números **não são um critério de sucesso** e irão mudar. O objetivo é conseguir identificar o alvo analisado, a severidade, a versão instalada e, quando indicada, a versão que contém a correção.
 
 > Um scan não prova que uma imagem é segura. É uma das evidências do processo de segurança.
 
@@ -1126,6 +1189,13 @@ docker compose \
 
 Aguarde até `db` ficar `healthy`.
 
+**Output esperado (exemplo):**
+
+```text
+NAME           IMAGE         SERVICE   STATUS
+compose-db-1   postgres:16   db        Up ... (healthy)
+```
+
 ## 10.2. Inicializar o schema apenas numa base de dados vazia
 
 Verificar se a tabela principal já existe:
@@ -1192,6 +1262,27 @@ No ponto inicial, a evidência esperada é equivalente a:
 /info   → 200 ... "version":"1.0.0" ... "environment":"prod"
 ```
 
+Para uma validação mais rigorosa pode usar:
+
+```bash
+./formando/scripts/validate.sh 1.0.0
+```
+
+**Output esperado (exemplo):**
+
+```text
+==> GET /health
+{"status":"ok"}
+==> GET /ready
+{"status":"ready","database":"ok"}
+==> GET /info
+{"application":"symfony-demo","version":"1.0.0","environment":"prod",...}
+Versão da aplicação confirmada: 1.0.0
+Imagem em execução: ghcr.io/skullclamp/symfony-demo:1.0.0
+health=healthy
+Image=ghcr.io/skullclamp/symfony-demo:1.0.0 Memory=536870912 NanoCpus=1000000000 Restart=unless-stopped
+```
+
 Obter o container da aplicação:
 
 ```bash
@@ -1212,6 +1303,12 @@ Confirmar ainda que os assets existem no próprio container recebido do registry
 ```bash
 docker exec "$CID" \
   sh -lc 'test -f /var/www/html/public/assets/manifest.json && echo "OK: assets no container em execução"'
+```
+
+**Output esperado:**
+
+```text
+OK: assets no container em execução
 ```
 
 ## 11.1. Acesso pelo browser do PC
@@ -1276,6 +1373,14 @@ Confirmar:
   -c "SELECT * FROM lab_marker;"
 ```
 
+**Output esperado (exemplo):**
+
+```text
+ id |     note
+----+--------------
+  1 | antes-update
+```
+
 Backup lógico manual:
 
 ```bash
@@ -1290,6 +1395,15 @@ Validar:
 ls -lh backup.sql
 test -s backup.sql && echo "OK: backup não vazio"
 ```
+
+**Output esperado:**
+
+```text
+... backup.sql
+OK: backup não vazio
+```
+
+O tamanho exato do ficheiro depende do conteúdo atual da base de dados.
 
 ```text
 Persistência ≠ Backup
@@ -1315,7 +1429,7 @@ Executar novamente a versão inicial através da automação:
 
 ```bash
 ./formando/scripts/deploy-prod.sh 1.0.0
-./formando/scripts/validate.sh
+./formando/scripts/validate.sh 1.0.0
 ```
 
 ---
@@ -1326,14 +1440,26 @@ Executar novamente a versão inicial através da automação:
 ./formando/scripts/deploy-prod.sh 1.1.0
 ```
 
-Validar:
+Validar explicitamente a versão pretendida:
 
 ```bash
+./formando/scripts/validate.sh 1.1.0
 curl -fsS http://localhost:8080/info
 ./formando/scripts/compose-prod.sh ps
 ```
 
-O `/info` deverá identificar `1.1.0`, e o serviço deverá ficar `healthy`.
+**Output esperado (exemplo):**
+
+```text
+==> GET /info
+{"application":"symfony-demo","version":"1.1.0","environment":"prod",...}
+Versão da aplicação confirmada: 1.1.0
+Imagem em execução: ghcr.io/skullclamp/symfony-demo:1.1.0
+health=healthy
+Image=ghcr.io/skullclamp/symfony-demo:1.1.0 Memory=536870912 NanoCpus=1000000000 Restart=unless-stopped
+```
+
+O objetivo é confirmar simultaneamente **versão lógica da aplicação**, **imagem do container** e **estado do healthcheck**. Um endpoint `200` isolado não prova que o update foi realmente aplicado.
 
 Confirmar que o artefacto atualizado continua a conter assets:
 
@@ -1375,6 +1501,25 @@ HEALTH_PATH=/healthz
 
 A aplicação continua a disponibilizar `/health`; a falha está no caminho escolhido pelo Docker `HEALTHCHECK`.
 
+**Output esperado (excerto):**
+
+```text
+==> Aplicação 1.2.0-rc1
+...
+==> GET /info
+{"application":"symfony-demo","version":"1.2.0-rc1","environment":"prod",...}
+Versão da aplicação confirmada: 1.2.0-rc1
+Imagem em execução: ghcr.io/skullclamp/symfony-demo:1.2.0-rc1
+==> A aguardar Docker HEALTHCHECK
+health=starting
+...
+health=unhealthy
+ERRO: aplicação sem estado healthy.
+EXIT_CODE=1
+```
+
+> Aqui `EXIT_CODE=1` é **esperado**, mas só é considerado a falha correta depois de confirmar a causa na secção seguinte. Um comando falhar por outro motivo — por exemplo conflito de porta ou erro de pull — não valida o cenário pedagógico.
+
 ---
 
 ## 13.3. Diagnosticar antes do rollback
@@ -1396,7 +1541,25 @@ docker inspect "$CID" \
   | grep HEALTH_PATH
 ```
 
-Evidência esperada:
+**Output esperado (exemplo validado):**
+
+```text
+Imagem:        ghcr.io/skullclamp/symfony-demo:1.2.0-rc1
+/info:         ... "version":"1.2.0-rc1" ...
+/health:       200
+/healthz:      404
+Docker health: unhealthy
+```
+
+No detalhe do healthcheck deverá observar algo equivalente a:
+
+```text
+"Status":"unhealthy"
+"ExitCode":1
+curl: (22) The requested URL returned error: 404
+```
+
+A evidência completa deve permitir concluir:
 
 ```text
 HEALTH_PATH=/healthz
@@ -1404,12 +1567,6 @@ HEALTH_PATH=/healthz
 /healthz → 404 Not Found
 healthcheck → ExitCode 1
 container → unhealthy
-```
-
-Um exemplo típico no histórico de health é:
-
-```text
-curl: (22) The requested URL returned error: 404
 ```
 
 A conclusão correta é:
@@ -1435,7 +1592,7 @@ Executar:
 
 ```bash
 ./formando/scripts/rollback.sh 1.1.0
-./formando/scripts/validate.sh
+./formando/scripts/validate.sh 1.1.0
 ```
 
 Confirmar versão, saúde e dados:
@@ -1447,6 +1604,20 @@ curl -fsS http://localhost:8080/info
   psql -U symfony -d symfony \
   -c "SELECT * FROM lab_marker;"
 ```
+
+**Output esperado (exemplo):**
+
+```text
+Rollback para versão conhecida como boa: 1.1.0
+...
+==> GET /info
+{"application":"symfony-demo","version":"1.1.0","environment":"prod",...}
+Versão da aplicação confirmada: 1.1.0
+Imagem em execução: ghcr.io/skullclamp/symfony-demo:1.1.0
+health=healthy
+```
+
+A consulta a `lab_marker` deve continuar a devolver o registo criado antes do update. Isto demonstra que o rollback da aplicação não elimina os dados persistentes no volume PostgreSQL.
 
 No browser, `http://IP_DA_VM:8080/` deve voltar a apresentar a aplicação completa a partir da `1.1.0`.
 
