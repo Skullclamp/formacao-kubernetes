@@ -4,6 +4,12 @@
 # Componentes opcionais de observabilidade/API (APIServer, Goldmane e Whisker)
 # ficam fora deste manifesto para reduzir ruído e consumo de recursos no cluster
 # pedagógico de apenas dois nós.
+#
+# Baseline validada:
+# - Kubernetes 1.35.8 -> 1.36.4
+# - Calico 3.32.2
+# - rede física dos hosts: 192.168.50.0/24
+# - Pod CIDR: 10.244.0.0/16 (sem sobreposição com a rede física)
 
 apiVersion: operator.tigera.io/v1
 kind: Installation
@@ -14,7 +20,7 @@ spec:
     ipPools:
       - name: default-ipv4-ippool
         blockSize: 26
-        cidr: 192.168.0.0/16
+        cidr: 10.244.0.0/16
         encapsulation: VXLANCrossSubnet
         natOutgoing: Enabled
         nodeSelector: all()
