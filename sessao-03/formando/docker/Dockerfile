@@ -6,8 +6,13 @@
 # na imagem final de runtime.
 FROM php:8.4-apache-bookworm AS build
 
-# Permite ao Composer correr como root durante o build da imagem.
-ENV COMPOSER_ALLOW_SUPERUSER=1
+# Permite ao Composer correr como root durante o build e força o ambiente
+# Symfony de produção durante a instalação das dependências. Isto é importante
+# porque usamos --no-dev: os bundles exclusivos de dev/test não são instalados
+# e, por isso, os auto-scripts do Composer devem correr com APP_ENV=prod.
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    APP_ENV=prod \
+    APP_DEBUG=0
 
 # Instala ferramentas de build e bibliotecas de desenvolvimento:
 # - curl/git/unzip suportam download e preparação de dependências;
@@ -27,10 +32,13 @@ COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 # Define a raiz da aplicação.
 WORKDIR /var/www/html
 
-# Copia primeiro apenas os ficheiros de dependências.
-# Esta ordem permite reutilizar a cache do composer install quando o código
-# muda mas composer.json/composer.lock permanecem iguais.
-COPY app/composer.json app/composer.lock ./
+# Copia primeiro apenas os ficheiros que descrevem as dependências e as recipes
+# Symfony. Esta ordem permite reutilizar a cache do composer install quando o
+# código muda mas composer.json/composer.lock/symfony.lock permanecem iguais.
+COPY app/composer.json app/composer.lock app/symfony.lock ./
+
+# Primeira passagem: instala dependências de produção sem executar scripts.
+# Nesta fase ainda não foi copiado o restante código da aplicação.
 RUN composer install \
     --no-dev \
     --no-scripts \
@@ -39,7 +47,7 @@ RUN composer install \
     --optimize-autoloader
 
 # Só depois copia o restante código da aplicação e executa novamente Composer,
-# agora com os scripts da aplicação disponíveis.
+# agora com os auto-scripts da aplicação disponíveis e APP_ENV=prod.
 COPY app/ ./
 RUN composer install \
     --no-dev \
@@ -88,6 +96,7 @@ ARG HEALTH_PATH=/health
 
 # Variáveis persistidas na configuração final da imagem.
 ENV APP_ENV=prod \
+    APP_DEBUG=0 \
     APP_VERSION=${APP_VERSION} \
     HEALTH_PATH=${HEALTH_PATH}
 
