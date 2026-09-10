@@ -6,28 +6,32 @@
 **Módulo:** M7  
 **Foco pedagógico:** **CONSTRUIR E EVOLUIR O CLUSTER**
 
-Nesta sessão, cada formando constrói manualmente um cluster Kubernetes on-premises com duas VMs, começa na série **1.36.x** e termina com um **upgrade real para 1.37.x**.
+Nesta sessão, cada formando constrói manualmente um cluster Kubernetes on-premises com duas VMs, começa em **Kubernetes 1.35.x** e termina com um **upgrade real para 1.36.x**.
 
-O objetivo não é executar scripts de instalação. É compreender cada pré-condição, executar cada comando, observar o estado produzido, registar evidência e explicar o resultado.
-
-## Topologia de referência
+## Baseline da edição
 
 ```text
-                 k8s-cp-01                    k8s-wk-01
-              Control Plane                    Worker
-                  │                              │
-                  └──────── cluster ─────────────┘
-
-Ubuntu 26.04 LTS · containerd · Calico/Tigera Operator
-Kubernetes inicial: 1.36.x
-Kubernetes final:   1.37.x
-Baseline ensaiada:  1.36.4 → 1.37.0
-Pod CIDR: 192.168.0.0/16 · Service CIDR: 10.96.0.0/12
+Control Plane:       k8s-cp-01
+Worker:              k8s-wk-01
+Ubuntu:              26.04 LTS
+Kubernetes inicial:  1.35.8
+Kubernetes final:    1.36.4
+containerd:          2.2.x
+Calico:              3.32.2
+Tigera Operator:     1.42.6
+Pod CIDR:            192.168.0.0/16
+Service CIDR:        10.96.0.0/12
 ```
 
-Cada formando utiliza **duas VMs**: uma para o Control Plane e outra para o Worker. Com até cinco formandos, a infraestrutura de sala pode exigir até dez VMs.
+Os patches devem ser reconfirmados antes de cada nova edição da formação. O objetivo é manter o percurso `1.35.x → 1.36.x` e não depender de um patch antigo.
 
-## Regra da sessão
+## Porque 1.35 → 1.36?
+
+Esta combinação foi escolhida porque permite ensinar um upgrade minor real usando versões atualmente suportadas e, ao mesmo tempo, manter o CNI dentro da matriz oficial de testes do Calico 3.32. Consulta [`compatibilidade.md`](compatibilidade.md).
+
+Traefik não é instalado na Sessão 4. É usado posteriormente para Ingress/Gateway; a sua política atual cobre pelo menos as três versões minor mais recentes de Kubernetes, incluindo 1.35 e 1.36 à data desta edição.
+
+## Regra pedagógica
 
 ```text
 COMPREENDER
@@ -43,102 +47,72 @@ EXPLICAR
 AVANÇAR
 ```
 
-Os scripts usados pelo formador para ensaio e validação técnica **não fazem parte deste repositório de apoio ao formando**.
+Não existe um script de instalação para o formando.
 
 ## Percurso
 
 ```text
 pré-requisitos Linux
         ↓
-containerd + CRI
+containerd 2.2.x + CRI
         ↓
-Kubernetes 1.36.x
+Kubernetes 1.35.x — versão explicitamente fixada
         ↓
-kubeadm init (APENAS k8s-cp-01)
+kubeadm init — APENAS k8s-cp-01
         ↓
 kubeconfig
         ↓
-Control Plane NotReady antes do CNI
+Calico 3.32.2 / Tigera Operator 1.42.6
         ↓
-Calico / Tigera Operator
+kubeadm token create — APENAS k8s-cp-01
         ↓
-kubeadm join (APENAS k8s-wk-01)
+kubeadm join — APENAS k8s-wk-01
         ↓
-convergência Calico + CoreDNS
-        ↓
-cluster 1.36.x validado
+cluster 1.35.x validado
         ↓
 cordon / drain / uncordon
         ↓
-upgrade Control Plane para 1.37.x
+snapshot pre-upgrade-1.35
         ↓
-upgrade Worker para 1.37.x
+upgrade Control Plane para 1.36.x
         ↓
-cluster 1.37.x validado novamente
+upgrade Worker para 1.36.x
+        ↓
+cluster 1.36.x validado novamente
 ```
-
-## Porque instalar 1.36 e atualizar para 1.37?
-
-A Sessão 4 passa a mostrar o ciclo de vida real de um cluster:
-
-```text
-instalar → validar → operar → manter → atualizar → validar novamente
-```
-
-O upgrade deixa assim de ser apenas uma discussão teórica. O formando observa também o **version skew temporário** existente durante uma atualização controlada.
 
 ## Materiais
 
-- [`plano_sessao_4.md`](plano_sessao_4.md) — plano pedagógico público; o guia operacional do formador permanece privado;
-- [`manual_formando.md`](manual_formando.md) — explicação progressiva do percurso;
+- [`plano_sessao_4.md`](plano_sessao_4.md) — plano pedagógico;
+- [`manual_formando.md`](manual_formando.md) — explicação progressiva;
 - [`labs/laboratorio_integrado_sessao_4.md`](labs/laboratorio_integrado_sessao_4.md) — laboratório manual completo;
+- [`compatibilidade.md`](compatibilidade.md) — matriz de versões adotada;
 - [`checklist.md`](checklist.md) — preparação das VMs;
-- [`checklist_operacional.md`](checklist_operacional.md) — checkpoints manuais do laboratório;
+- [`checklist_operacional.md`](checklist_operacional.md) — checkpoints manuais;
 - [`folha_evidencias.md`](folha_evidencias.md) — evidências a recolher;
 - [`cheat_sheet.md`](cheat_sheet.md) — referência rápida;
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico orientado por evidências;
-- [`manifests/`](manifests/) — Pod usado na demonstração de `cordon`/`drain`;
+- [`manifests/`](manifests/) — Pod de teste para `cordon`/`drain`;
 - [`exercicios/`](exercicios/) — atividades, quiz e consolidação do upgrade;
-- [`referencias.md`](referencias.md) — bibliografia e documentação oficial.
+- [`referencias.md`](referencias.md) — documentação e bibliografia.
 
 ## Regras críticas
 
-1. `kubeadm init` executa-se **apenas no `k8s-cp-01`**.
-2. `kubeadm join` executa-se **apenas no `k8s-wk-01`**.
-3. Não executar literalmente placeholders como `<TOKEN>`, `<HASH>`, `<PKG_1_37>` ou `...`.
-4. A instalação inicial usa o repositório `pkgs.k8s.io` da série **1.36**; o upgrade exige mudar para a série **1.37**.
-5. O Control Plane é atualizado antes do Worker.
-6. Num upgrade minor do `kubelet`, o nó é drenado antes da atualização do `kubelet`.
-7. Não usar `--force` num `drain` de upgrade como resposta automática.
-8. Depois do upgrade, validar Nodes, CoreDNS e CNI novamente.
-9. Não remover a taint `control-plane:NoSchedule` neste laboratório.
-10. Antes do bootstrap, confirmar que não existe MicroK8s, k3s, Minikube ou outro Kubernetes residual.
-
-## Nota importante sobre Calico
-
-Calico 3.32 é oficialmente testado com Kubernetes 1.34–1.36. A combinação usada depois do upgrade para 1.37 deve ser **pré-validada pelo formador** ou substituída por uma release Calico que passe a declarar Kubernetes 1.37 como versão testada.
-
-É importante distinguir:
-
-```text
-funcionou no nosso laboratório
-            ≠
-combinação oficialmente testada pelo fornecedor
-```
+1. Antes de `init`, `token create` ou `join`, executar `hostname` e confirmar em que VM estamos.
+2. `kubeadm init` e `kubeadm token create --print-join-command` executam-se **apenas no `k8s-cp-01`**.
+3. `kubeadm join` executa-se **apenas no `k8s-wk-01`**.
+4. Não copiar `/etc/kubernetes/admin.conf` para o Worker apenas para executar comandos administrativos.
+5. Antes da instalação, verificar repositórios Kubernetes residuais e versões já instaladas.
+6. A instalação inicial fixa explicitamente a versão 1.35.x; não usar instalação APT sem versão neste laboratório.
+7. Se a VM já tiver Kubernetes 1.37 de um ensaio anterior, repor uma VM/snapshot limpo em vez de ensinar um downgrade improvisado.
+8. O upgrade é `1.35.x → 1.36.x`; não se saltam versões minor.
+9. Antes do upgrade, validar o cluster e criar o snapshot `pre-upgrade-1.35` das duas VMs.
+10. Depois do upgrade, voltar a validar Nodes, CoreDNS e Calico.
 
 ## Resultado esperado
 
 ```text
 NAME         STATUS   ROLES           VERSION
-k8s-cp-01    Ready    control-plane   v1.37.x
-k8s-wk-01    Ready    <none>          v1.37.x
+k8s-cp-01    Ready    control-plane   v1.36.x
+k8s-wk-01    Ready    <none>          v1.36.x
 ```
-
-## Percursos e contingência
-
-- **Percurso essencial:** preparar as VMs, construir e validar o cluster Kubernetes 1.36.x.
-- **Percurso avançado:** manutenção e upgrade controlado para 1.37.x.
-- Se o cluster não estiver saudável até ao ponto de corte definido pelo formador, deve ser usado um snapshot previamente ensaiado.
-- Snapshots, scripts de recuperação e detalhes da infraestrutura não são publicados neste repositório.
-
-No final, o formando deve conseguir explicar não apenas **que comandos executou**, mas **por que motivo foram necessários, como o cluster mudou de 1.36 para 1.37 e que evidência confirma que continua saudável**.
