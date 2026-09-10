@@ -2,106 +2,38 @@
 
 **Formando:** __________________________
 
-> Registar comandos e resultados observados manualmente. Não usar scripts como evidência principal.
+Regista comandos e resultados observados manualmente.
 
-## CP1 — Pré-requisitos
-
-```text
-Hostname CP:
-Hostname Worker:
-RAM CP:
-RAM Worker:
-Swap:
-Resolução de nomes:
-cgroup:
-```
-
-**Interpretação:**
-
----
-
-## CP2 — containerd / CRI
+## 1. Estado inicial
 
 ```text
-containerd --version:
-CRI ativo:
-SystemdCgroup:
-socket CRI:
+k8s-cp-01 Kubernetes: __________________
+k8s-wk-01 Kubernetes: __________________
+containerd: _____________________________
+SystemdCgroup: __________________________
 ```
 
-**Que evidência confirma que o kubelet poderá comunicar com o runtime?**
+Esperado: Kubernetes 1.36.x nos dois nós antes do bootstrap.
 
----
-
-## CP3 — Ferramentas Kubernetes
+## 2. Depois de kubeadm init, antes do CNI
 
 ```text
-kubeadm:
-kubelet:
-kubectl:
-apt hold:
+Control Plane: __________________________
+CoreDNS: ________________________________
 ```
 
-As versões são coerentes? __________
+Porque este estado é esperado? __________________________________________
 
----
-
-## CP4 — Após `kubeadm init`, antes do CNI
-
-```bash
-kubectl get nodes
-kubectl get pods -n kube-system
-```
-
-Estado do Control Plane: __________________
-
-Estado do CoreDNS: ________________________
-
-Porque é esperado nesta fase?
-
----
-
-## CP5 — CNI aplicado, antes/depois da integração do Worker
-
-```bash
-kubectl get pods -n tigera-operator -o wide
-kubectl get pods -n calico-system -o wide
-kubectl get tigerastatus
-kubectl get nodes
-```
-
-Regista:
+## 3. Cluster 1.36.x saudável
 
 ```text
-Control Plane Ready?:
-Pods Pending?:
-Motivo observado nos Events, se aplicável:
+Control Plane Ready: ____________________
+Worker Ready: ___________________________
+CoreDNS: ________________________________
+Calico/Tigera: __________________________
 ```
 
-> Se só existir o Control Plane e tiver `NoSchedule`, alguns Deployments podem aguardar a entrada do Worker.
-
----
-
-## CP6 — Após `kubeadm join`
-
-```bash
-kubectl get nodes -o wide
-kubectl get pods -n calico-system -o wide
-kubectl get pods -n kube-system -o wide
-kubectl get tigerastatus
-```
-
-```text
-Worker Ready?:
-CoreDNS Running?:
-Calico convergiu?:
-```
-
-Que evidência confirma que a rede de Pods está operacional?
-
----
-
-## CP7 — `cordon` / `drain`
+## 4. Manutenção
 
 Resultado do `drain` sem `--force`:
 
@@ -109,35 +41,48 @@ Resultado do `drain` sem `--force`:
 
 ```
 
-Porque recusou?
+Porque recusou? __________________________________________________________
 
-Resultado com `--force`:
+Estado depois do `uncordon`: ____________________________________________
 
-```text
-
-```
-
-Porque o Pod não reapareceu?
-
-Estado depois de `uncordon`:
+## 5. Upgrade do Control Plane
 
 ```text
-
+kubeadm antes: __________________________
+destino de kubeadm upgrade plan: ________
+kubeadm depois: _________________________
+kubelet depois: _________________________
 ```
 
----
+## 6. Version skew
 
-## CP8 — Síntese
+Depois do upgrade do Control Plane e antes de terminar o Worker:
 
 ```text
-Control Plane:
-Worker:
-CRI:
-CNI:
-CoreDNS:
-cordon:
-drain:
-uncordon:
+k8s-cp-01: ______________________________
+k8s-wk-01: ______________________________
 ```
 
-**Uma decisão operacional importante que retiraste deste laboratório:**
+Explica por que esta diferença temporária pode existir durante o processo:
+
+__________________________________________________________________________
+
+## 7. Upgrade do Worker
+
+```text
+kubeadm upgrade node: ___________________
+kubelet depois: _________________________
+```
+
+## 8. Estado final
+
+```text
+k8s-cp-01: ______________________________
+k8s-wk-01: ______________________________
+CoreDNS: ________________________________
+Calico/Tigera: __________________________
+```
+
+Conclusão técnica da sessão:
+
+__________________________________________________________________________
