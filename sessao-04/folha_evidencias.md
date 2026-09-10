@@ -2,21 +2,36 @@
 
 **Formando:** __________________________
 
+> Registar comandos e resultados observados manualmente. Não usar scripts como evidência principal.
+
 ## CP1 — Pré-requisitos
 
-**Evidência:**
 ```text
-
+Hostname CP:
+Hostname Worker:
+RAM CP:
+RAM Worker:
+Swap:
+Resolução de nomes:
+cgroup:
 ```
+
 **Interpretação:**
+
+---
 
 ## CP2 — containerd / CRI
 
 ```text
 containerd --version:
+CRI ativo:
 SystemdCgroup:
 socket CRI:
 ```
+
+**Que evidência confirma que o kubelet poderá comunicar com o runtime?**
+
+---
 
 ## CP3 — Ferramentas Kubernetes
 
@@ -24,9 +39,12 @@ socket CRI:
 kubeadm:
 kubelet:
 kubectl:
+apt hold:
 ```
 
 As versões são coerentes? __________
+
+---
 
 ## CP4 — Após `kubeadm init`, antes do CNI
 
@@ -35,31 +53,58 @@ kubectl get nodes
 kubectl get pods -n kube-system
 ```
 
-Estado: __________
+Estado do Control Plane: __________________
 
-Porque é esperado?
+Estado do CoreDNS: ________________________
 
-## CP5 — Após Calico
+Porque é esperado nesta fase?
+
+---
+
+## CP5 — CNI aplicado, antes/depois da integração do Worker
 
 ```bash
+kubectl get pods -n tigera-operator -o wide
+kubectl get pods -n calico-system -o wide
 kubectl get tigerastatus
-kubectl get pods -n tigera-operator
-kubectl get pods -n calico-system
 kubectl get nodes
 ```
 
-Que evidência confirma a rede operacional?
+Regista:
 
-## CP6 — Após Worker join
+```text
+Control Plane Ready?:
+Pods Pending?:
+Motivo observado nos Events, se aplicável:
+```
+
+> Se só existir o Control Plane e tiver `NoSchedule`, alguns Deployments podem aguardar a entrada do Worker.
+
+---
+
+## CP6 — Após `kubeadm join`
 
 ```bash
 kubectl get nodes -o wide
-kubectl get pods -A -o wide
+kubectl get pods -n calico-system -o wide
+kubectl get pods -n kube-system -o wide
+kubectl get tigerastatus
 ```
+
+```text
+Worker Ready?:
+CoreDNS Running?:
+Calico convergiu?:
+```
+
+Que evidência confirma que a rede de Pods está operacional?
+
+---
 
 ## CP7 — `cordon` / `drain`
 
 Resultado do `drain` sem `--force`:
+
 ```text
 
 ```
@@ -67,18 +112,32 @@ Resultado do `drain` sem `--force`:
 Porque recusou?
 
 Resultado com `--force`:
+
 ```text
 
 ```
 
 Porque o Pod não reapareceu?
 
+Estado depois de `uncordon`:
+
+```text
+
+```
+
+---
+
 ## CP8 — Síntese
 
 ```text
-Control Plane: ______________________________________________________
-CRI: ________________________________________________________________
-cordon: _____________________________________________________________
-drain: ______________________________________________________________
-uncordon: ___________________________________________________________
+Control Plane:
+Worker:
+CRI:
+CNI:
+CoreDNS:
+cordon:
+drain:
+uncordon:
 ```
+
+**Uma decisão operacional importante que retiraste deste laboratório:**
