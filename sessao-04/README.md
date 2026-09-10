@@ -1,12 +1,14 @@
 # Sessão 4 — Kubernetes Admin I
-## Instalação e Administração do Cluster
+## Instalação, Administração e Upgrade do Cluster
 
 **Duração:** 4 horas  
 **Nível:** intermédio  
 **Módulo:** M7  
-**Foco pedagógico:** **CONSTRUIR O CLUSTER**
+**Foco pedagógico:** **CONSTRUIR E EVOLUIR O CLUSTER**
 
-Nesta sessão, cada formando constrói manualmente um cluster Kubernetes on-premises com duas VMs. O objetivo não é executar scripts de instalação: é compreender cada pré-condição, executar cada comando, observar o estado produzido e interpretar a evidência.
+Nesta sessão, cada formando constrói manualmente um cluster Kubernetes on-premises com duas VMs, começa na série **1.36.x** e termina com um **upgrade real para 1.37.x**.
+
+O objetivo não é executar scripts de instalação. É compreender cada pré-condição, executar cada comando, observar o estado produzido, registar evidência e explicar o resultado.
 
 ## Topologia de referência
 
@@ -16,7 +18,10 @@ Nesta sessão, cada formando constrói manualmente um cluster Kubernetes on-prem
                   │                              │
                   └──────── cluster ─────────────┘
 
-Ubuntu 26.04 LTS · Kubernetes 1.37 · containerd · Calico/Tigera Operator
+Ubuntu 26.04 LTS · containerd · Calico/Tigera Operator
+Kubernetes inicial: 1.36.x
+Kubernetes final:   1.37.x
+Baseline ensaiada:  1.36.4 → 1.37.0
 Pod CIDR: 192.168.0.0/16 · Service CIDR: 10.96.0.0/12
 ```
 
@@ -47,7 +52,7 @@ pré-requisitos Linux
         ↓
 containerd + CRI
         ↓
-kubelet + kubeadm + kubectl
+Kubernetes 1.36.x
         ↓
 kubeadm init (APENAS k8s-cp-01)
         ↓
@@ -57,49 +62,76 @@ Control Plane NotReady antes do CNI
         ↓
 Calico / Tigera Operator
         ↓
-Control Plane Ready
-        ↓
 kubeadm join (APENAS k8s-wk-01)
-        ↓
-Worker Ready
         ↓
 convergência Calico + CoreDNS
         ↓
+cluster 1.36.x validado
+        ↓
 cordon / drain / uncordon
         ↓
-validação final
+upgrade Control Plane para 1.37.x
+        ↓
+upgrade Worker para 1.37.x
+        ↓
+cluster 1.37.x validado novamente
 ```
+
+## Porque instalar 1.36 e atualizar para 1.37?
+
+A Sessão 4 passa a mostrar o ciclo de vida real de um cluster:
+
+```text
+instalar → validar → operar → manter → atualizar → validar novamente
+```
+
+O upgrade deixa assim de ser apenas uma discussão teórica. O formando observa também o **version skew temporário** existente durante uma atualização controlada.
 
 ## Materiais
 
 - [`plano_sessao_4.md`](plano_sessao_4.md) — objetivos, conteúdos, metodologia e distribuição temporal;
-- [`manual_formando.md`](manual_formando.md) — explicação progressiva dos conceitos e procedimentos;
+- [`manual_formando.md`](manual_formando.md) — explicação progressiva do percurso;
 - [`labs/laboratorio_integrado_sessao_4.md`](labs/laboratorio_integrado_sessao_4.md) — laboratório manual completo;
-- [`checklist.md`](checklist.md) — preparação manual das duas VMs;
-- [`checklist_operacional.md`](checklist_operacional.md) — checkpoints CP1–CP8;
-- [`folha_evidencias.md`](folha_evidencias.md) — evidências a recolher durante o laboratório;
-- [`cheat_sheet.md`](cheat_sheet.md) — referência rápida de comandos;
+- [`checklist.md`](checklist.md) — preparação das VMs;
+- [`checklist_operacional.md`](checklist_operacional.md) — checkpoints manuais do laboratório;
+- [`folha_evidencias.md`](folha_evidencias.md) — evidências a recolher;
+- [`cheat_sheet.md`](cheat_sheet.md) — referência rápida;
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico orientado por evidências;
-- [`manifests/`](manifests/) — manifest usado na manutenção do Worker;
-- [`exercicios/`](exercicios/) — atividade, quiz e aprofundamento de upgrades;
-- [`referencias.md`](referencias.md) — fontes bibliográficas e documentação oficial.
+- [`manifests/`](manifests/) — Pod usado na demonstração de `cordon`/`drain`;
+- [`exercicios/`](exercicios/) — atividades, quiz e consolidação do upgrade;
+- [`referencias.md`](referencias.md) — bibliografia e documentação oficial.
 
 ## Regras críticas
 
 1. `kubeadm init` executa-se **apenas no `k8s-cp-01`**.
 2. `kubeadm join` executa-se **apenas no `k8s-wk-01`**.
-3. Não executar literalmente placeholders como `<TOKEN>`, `<HASH>`, `VALOR_REAL` ou `...`.
-4. Não remover a taint `control-plane:NoSchedule` neste laboratório.
-5. Depois do `join`, dar tempo ao Calico/Tigera e CoreDNS para convergirem antes de diagnosticar uma falha.
-6. Antes do bootstrap, confirmar que não existe MicroK8s, k3s, Minikube ou outro cluster Kubernetes residual.
-7. Não usar `--ignore-preflight-errors` para esconder um problema que ainda não foi compreendido.
+3. Não executar literalmente placeholders como `<TOKEN>`, `<HASH>`, `<PKG_1_37>` ou `...`.
+4. A instalação inicial usa o repositório `pkgs.k8s.io` da série **1.36**; o upgrade exige mudar para a série **1.37**.
+5. O Control Plane é atualizado antes do Worker.
+6. Num upgrade minor do `kubelet`, o nó é drenado antes da atualização do `kubelet`.
+7. Não usar `--force` num `drain` de upgrade como resposta automática.
+8. Depois do upgrade, validar Nodes, CoreDNS e CNI novamente.
+9. Não remover a taint `control-plane:NoSchedule` neste laboratório.
+10. Antes do bootstrap, confirmar que não existe MicroK8s, k3s, Minikube ou outro Kubernetes residual.
+
+## Nota importante sobre Calico
+
+Calico 3.32 é oficialmente testado com Kubernetes 1.34–1.36. A combinação usada depois do upgrade para 1.37 deve ser **pré-validada pelo formador** ou substituída por uma release Calico que passe a declarar Kubernetes 1.37 como versão testada.
+
+É importante distinguir:
+
+```text
+funcionou no nosso laboratório
+            ≠
+combinação oficialmente testada pelo fornecedor
+```
 
 ## Resultado esperado
 
 ```text
-NAME         STATUS   ROLES
-k8s-cp-01    Ready    control-plane
-k8s-wk-01    Ready    <none>
+NAME         STATUS   ROLES           VERSION
+k8s-cp-01    Ready    control-plane   v1.37.x
+k8s-wk-01    Ready    <none>          v1.37.x
 ```
 
-No final, o formando deve conseguir explicar não apenas **que comandos executou**, mas **porque foram necessários e que evidência confirma que funcionaram**.
+No final, o formando deve conseguir explicar não apenas **que comandos executou**, mas **por que motivo foram necessários, como o cluster mudou de 1.36 para 1.37 e que evidência confirma que continua saudável**.
