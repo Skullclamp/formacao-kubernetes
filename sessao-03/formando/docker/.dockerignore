@@ -1,6 +1,13 @@
+# Metadados Git: não são necessários dentro da imagem.
 app/.git/
+
+# Dependências PHP: são reconstruídas pelo Composer durante o build.
 app/vendor/
+
+# Cache e logs Symfony: são artefactos de runtime e não devem entrar no build.
 app/var/cache/
 app/var/log/
+
+# Ficheiros locais de ambiente: podem conter configuração específica ou sensível.
 app/.env.local
 app/.env.*.local
