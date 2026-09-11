@@ -511,6 +511,32 @@ sudo kubeadm token list --kubeconfig=/etc/kubernetes/admin.conf
 
 **Executar comandos `kubectl` em:** `k8s-cp-01`.
 
+## O que estamos a fazer neste bloco?
+
+Vamos simular uma operação normal de manutenção de um Node. Antes de reiniciar, atualizar ou retirar temporariamente um Worker de serviço, queremos impedir novos agendamentos e retirar de forma controlada os workloads que podem sair desse Node.
+
+O ciclo é:
+
+```text
+Node em serviço
+     ↓
+cordon
+     ↓
+Node continua ativo, mas deixa de receber novos Pods
+     ↓
+drain
+     ↓
+workloads apropriados são evacuados/removidos de forma controlada
+     ↓
+manutenção
+     ↓
+uncordon
+     ↓
+Node volta a aceitar scheduling
+```
+
+Neste exercício usamos deliberadamente um **Pod criado diretamente**, sem Deployment ou ReplicaSet. Isso permite observar a proteção do `drain`: Kubernetes não quer remover silenciosamente um Pod sem controller capaz de o recriar.
+
 Garantir novamente que o repositório está atualizado e que o manifesto existe:
 
 ```bash
@@ -524,7 +550,7 @@ test -f "$MANIFEST_DIR/pod_cordon_test.yaml" \
   && echo 'OK: manifesto do Pod de teste disponível'
 ```
 
-Criar o Pod de teste:
+## 7.1. Criar o Pod de teste
 
 ```bash
 kubectl apply -f "$MANIFEST_DIR/pod_cordon_test.yaml"
@@ -532,16 +558,36 @@ kubectl wait --for=condition=Ready pod/cordon-test --timeout=120s
 kubectl get pod cordon-test -o wide
 ```
 
-Confirmar que está no Worker.
+**O que estamos a fazer:** criamos um Pod direto com `nodeSelector` para o colocar no `k8s-wk-01`. Este Pod serve apenas para observar o efeito das operações de manutenção.
 
-Cordon:
+**O que observar:** na coluna `NODE`, o Pod deve aparecer em `k8s-wk-01`.
+
+## 7.2. `cordon` — impedir novos agendamentos
 
 ```bash
 kubectl cordon k8s-wk-01
 kubectl get nodes
 ```
 
-Primeiro drain seletivo, sem `--force`:
+`cordon` marca o Worker como **não elegível para novos agendamentos normais**. Não desliga o Node, não para o kubelet e não remove os Pods que já lá estão.
+
+Esperado:
+
+```text
+node/k8s-wk-01 cordoned
+```
+
+Em `kubectl get nodes`, o Worker deve surgir como:
+
+```text
+Ready,SchedulingDisabled
+```
+
+**Interpretação:** `Ready` significa que o Node continua saudável; `SchedulingDisabled` significa que deixámos de aceitar novos Pods através do scheduling normal.
+
+## 7.3. `drain` — evacuar workloads antes da manutenção
+
+Primeiro fazemos um drain seletivo, sem `--force`:
 
 ```bash
 kubectl drain k8s-wk-01 \
@@ -549,9 +595,18 @@ kubectl drain k8s-wk-01 \
   --pod-selector=app=cordon-test
 ```
 
-**Esperado:** recusa de remoção do Pod direto sem controller.
+`drain` prepara o Node para manutenção. Além de manter o Node sem novos agendamentos, tenta remover/evacuar de forma controlada os Pods abrangidos pela operação. Quando os Pods são geridos por controllers, esses controllers podem recriá-los noutro Node elegível, se existirem condições para isso.
 
-Agora, apenas para este exercício controlado:
+Neste comando:
+
+- `--ignore-daemonsets` reconhece que Pods de DaemonSets não são evacuados pelo `drain` desta forma;
+- `--pod-selector=app=cordon-test` limita o exercício ao Pod de teste e evita interferir com outros workloads.
+
+**Esperado:** o primeiro `drain` deve recusar a remoção do Pod porque este foi criado diretamente e não tem controller responsável por o recriar.
+
+Essa recusa é intencional e pedagógica: estamos a observar uma proteção contra perda acidental de um workload não gerido.
+
+Agora, apenas para este exercício controlado, autorizamos conscientemente a remoção:
 
 ```bash
 kubectl drain k8s-wk-01 \
@@ -560,21 +615,62 @@ kubectl drain k8s-wk-01 \
   --force
 ```
 
-Depois:
+`--force` permite remover este Pod sem controller. **Não é uma opção para acrescentar automaticamente quando um `drain` falha.** Primeiro deve ser compreendida a razão da recusa.
+
+Confirmar o efeito:
 
 ```bash
 kubectl get pod cordon-test
+kubectl get nodes
+```
+
+Esperado:
+
+```text
+Pod cordon-test já não existe
+k8s-wk-01 continua Ready,SchedulingDisabled
+```
+
+Como o Pod era direto e não tinha Deployment/ReplicaSet, **não é recriado automaticamente**.
+
+## 7.4. `uncordon` — reabrir o Node ao scheduler
+
+Depois da manutenção, ou depois de concluirmos o exercício, voltamos a permitir novos agendamentos:
+
+```bash
 kubectl uncordon k8s-wk-01
 kubectl get nodes
 ```
 
-### CHECKPOINT CP7
+Esperado:
 
 ```text
-cordon observado
-recusa sem --force compreendida
-Pod de teste removido de forma controlada
-Worker novamente Ready e schedulable
+node/k8s-wk-01 uncordoned
+k8s-wk-01   Ready
+```
+
+`uncordon` **não recria Pods que tenham sido eliminados**. Apenas volta a tornar o Node elegível para scheduling.
+
+### CHECKPOINT CP7
+
+O formando deve conseguir explicar, e não apenas executar:
+
+```text
+cordon   = impedir novos agendamentos no Node
+
+drain    = preparar o Node para manutenção e evacuar/remover workloads apropriados
+
+uncordon = voltar a permitir scheduling no Node
+```
+
+E deve ter observado:
+
+```text
+Pod de teste inicialmente no Worker
+Worker Ready,SchedulingDisabled após cordon
+recusa do drain sem --force compreendida
+Pod direto removido apenas após decisão explícita
+Worker novamente Ready e schedulable após uncordon
 ```
 
 ---
@@ -679,6 +775,8 @@ kubectl get pods -A -o wide
 
 ## 9.2. Kubelet e kubectl do Control Plane
 
+Antes de alterar o kubelet do Control Plane, colocamos o Node em manutenção. `drain` impede novos agendamentos e evacua os workloads apropriados; os static Pods do Control Plane não são tratados como workloads normais a deslocar.
+
 ```bash
 kubectl drain k8s-cp-01 --ignore-daemonsets
 ```
@@ -702,7 +800,7 @@ sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 ```
 
-Aguardar o Node regressar a `Ready,SchedulingDisabled` e depois:
+Aguardar o Node regressar a `Ready,SchedulingDisabled`. Só depois o reabrimos ao scheduler:
 
 ```bash
 kubectl uncordon k8s-cp-01
@@ -776,6 +874,8 @@ kubectl get pod -n tigera-operator -o wide
 
 **Executar em:** `k8s-cp-01`.
 
+Agora preparamos o Worker para alterar o kubelet. O `drain` deixa o Node sem novos agendamentos e tenta evacuar os workloads normais antes da manutenção.
+
 ```bash
 kubectl drain k8s-wk-01 --ignore-daemonsets
 ```
@@ -834,7 +934,7 @@ k8s-cp-01   Ready                      v1.36.4
 k8s-wk-01   Ready,SchedulingDisabled   v1.36.4
 ```
 
-Reabrir o Worker:
+Quando o Worker estiver novamente `Ready`, voltamos a permitir scheduling:
 
 ```bash
 kubectl uncordon k8s-wk-01
