@@ -12,36 +12,38 @@
 | **Módulo** | M7 |
 | **Foco pedagógico** | Construir, observar, manter e atualizar um cluster Kubernetes |
 | **Topologia** | 1 Control Plane + 1 Worker |
-| **Ambiente** | Ubuntu 26.04.1 LTS on-premises |
+| **Ambiente validado** | Ubuntu 26.04.1 LTS on-premises |
 | **Laboratório** | `formando/labs/laboratorio_integrado_sessao_4.md` |
 
 ---
 
 # 1. Como utilizar este manual
 
-Este manual foi concebido para funcionar como **guia de acompanhamento, estudo autónomo e consulta futura**. Não é uma simples lista de comandos e não substitui o laboratório.
+Este manual foi concebido para funcionar como **guia de acompanhamento, estudo autónomo e consulta futura**. Não é uma cópia da apresentação e não é apenas uma sequência de comandos.
 
-O manual explica os conceitos e o raciocínio. O laboratório integrado mostra a sequência operacional completa que foi validada na prática.
-
-A sequência de aprendizagem é:
+Tal como no Manual da Sessão 3, cada operação importante é apresentada segundo uma lógica pedagógica:
 
 ```text
 CONCEITO
    ↓
 PORQUE É NECESSÁRIO
    ↓
-EXEMPLO
-   ↓
 COMANDO / MANIFESTO
+   ↓
+FLAGS / ARGUMENTOS / CAMPOS
+   ↓
+OUTPUT ESPERADO
    ↓
 O QUE OBSERVAR
    ↓
-INTERPRETAR O RESULTADO
+ERRO FREQUENTE
    ↓
-APLICAR NO LABORATÓRIO
+BOA PRÁTICA
 ```
 
-Durante a sessão, a regra pedagógica é:
+O laboratório integrado apresenta o percurso operacional completo. Este manual explica **o que está a acontecer e porquê**.
+
+Durante a sessão seguimos sempre:
 
 ```text
 COMPREENDER
@@ -57,13 +59,13 @@ EXPLICAR
 AVANÇAR
 ```
 
-O objetivo não é memorizar comandos. É compreender **o estado do cluster antes da operação, a alteração provocada e a evidência que demonstra que o resultado é o esperado**.
+O objetivo não é memorizar comandos. É conseguir explicar o estado do sistema **antes**, a alteração provocada pelo comando e a evidência que demonstra o resultado **depois**.
 
 ---
 
 # 2. Objetivos da sessão
 
-No final da sessão, deverás ser capaz de:
+No final da sessão deverás ser capaz de:
 
 - explicar a arquitetura básica de um cluster Kubernetes;
 - distinguir Control Plane de Worker Node;
@@ -72,7 +74,7 @@ No final da sessão, deverás ser capaz de:
 - explicar a relação `kubelet → CRI → containerd → runc → kernel`;
 - instalar explicitamente uma versão Kubernetes sem deixar a escolha ao APT;
 - inicializar um Control Plane com `kubeadm`;
-- compreender o papel do kubeconfig;
+- compreender o papel do kubeconfig e dos contextos;
 - instalar e validar uma rede CNI com Calico;
 - adicionar um Worker ao cluster;
 - observar Nodes, Pods, eventos e condições;
@@ -80,6 +82,7 @@ No final da sessão, deverás ser capaz de:
 - aplicar `cordon`, `drain` e `uncordon`;
 - construir um health gate antes de uma alteração de risco;
 - executar um upgrade minor de forma sequencial;
+- interpretar estados transitórios durante um upgrade;
 - distinguir warnings transitórios de falhas persistentes;
 - recolher evidência antes de formular uma hipótese de troubleshooting.
 
@@ -87,7 +90,7 @@ No final da sessão, deverás ser capaz de:
 
 # 3. Baseline técnica validada
 
-O laboratório desta sessão foi validado de ponta a ponta com a seguinte combinação:
+O laboratório foi validado de ponta a ponta com:
 
 ```text
 Sistema operativo:      Ubuntu 26.04.1 LTS
@@ -112,24 +115,22 @@ Service CIDR:            10.96.0.0/12
 Filesystem /:            40 GB no ambiente validado
 ```
 
-> **Importante:** os 40 GB não são um requisito universal do Kubernetes. São a baseline prática deste laboratório. O problema observado foi um filesystem raiz com cerca de 10 GB, apesar de a VM ter um disco virtual maior. Isso originou `DiskPressure` durante a instalação do Calico.
+> Os 40 GB não são um requisito universal do Kubernetes. São a baseline deste laboratório. O incidente observado ocorreu porque o filesystem `/` tinha cerca de 10 GB apesar de o disco virtual ter mais capacidade, originando `DiskPressure` durante a instalação do Calico.
 
-As versões patch devem ser reconfirmadas antes de cada nova edição. O princípio pedagógico desta sessão é demonstrar um upgrade **1.35.x → 1.36.x**, sem saltar versões minor.
+As versões patch devem ser reconfirmadas antes de cada nova edição. O objetivo pedagógico é manter um upgrade **1.35.x → 1.36.x** sem saltar versões minor.
 
 ---
 
-# 4. O modelo mental do Kubernetes
+# 4. Modelo mental do Kubernetes
 
-Kubernetes é uma plataforma de orquestração que trabalha principalmente através de um **modelo declarativo**.
-
-Em vez de indicarmos todos os passos necessários para chegar a um resultado, descrevemos o estado que queremos obter.
+Kubernetes trabalha principalmente através de um **modelo declarativo**. Em vez de indicarmos todos os passos necessários para atingir um resultado, descrevemos o estado pretendido.
 
 ```text
 ESTADO DESEJADO
       ↓
 API Server
       ↓
-armazenamento do estado
+etcd guarda o estado
       ↓
 controllers observam diferenças
       ↓
@@ -138,28 +139,28 @@ reconciliação
 ESTADO OBSERVADO aproxima-se do DESEJADO
 ```
 
-Exemplo conceptual:
+Exemplo:
 
 ```text
-Desejado:   3 Pods da aplicação
+Desejado:   3 Pods
 Observado:  2 Pods
 Diferença:  falta 1 Pod
-Ação:       um controller cria o Pod em falta
+Ação:       o controller cria outro Pod
 ```
 
-A reconciliação não acontece apenas uma vez. Os controllers continuam a observar o cluster e tentam manter o estado real alinhado com o estado declarado.
+A reconciliação é contínua. Os controllers continuam a observar o cluster e tentam manter o estado real alinhado com o que foi declarado.
 
 ## 4.1. Imperativo versus declarativo
 
-Um comando como:
+Exemplo imperativo:
 
 ```bash
 kubectl run exemplo --image=nginx
 ```
 
-é uma operação imperativa: pedimos uma ação diretamente.
+Pedimos uma ação imediata.
 
-Um manifesto YAML descreve um objeto que queremos manter:
+Exemplo declarativo:
 
 ```yaml
 apiVersion: v1
@@ -172,22 +173,20 @@ spec:
       image: nginx:1.28.0-alpine
 ```
 
-Na prática profissional, o modelo declarativo é fundamental porque facilita versionamento, revisão, repetibilidade e automação.
-
-### Resumo
+Aqui descrevemos um objeto que queremos que exista.
 
 ```text
-Imperativo  → faz esta ação agora
-Declarativo → mantém o sistema neste estado
+Imperativo  → executa esta ação
+Declarativo → mantém este estado
 ```
+
+O modelo declarativo facilita versionamento, revisão, repetibilidade e automação.
 
 ---
 
 # 5. Arquitetura do cluster
 
-Um cluster Kubernetes é composto por um **Control Plane** e por **Nodes** onde os workloads podem executar.
-
-No nosso laboratório:
+No laboratório usamos dois Nodes:
 
 ```text
                 ┌───────────────────────┐
@@ -212,93 +211,111 @@ No nosso laboratório:
                 └───────────────────────┘
 ```
 
-Esta topologia é adequada à formação, mas **não representa alta disponibilidade**. Em produção, o Control Plane é normalmente redundante.
+Esta topologia é adequada à formação, mas **não representa alta disponibilidade**.
 
 ## 5.1. Componentes do Control Plane
 
 | Componente | Função principal |
 |---|---|
-| `kube-apiserver` | expõe a API Kubernetes e recebe pedidos de clientes e componentes |
+| `kube-apiserver` | expõe a API Kubernetes |
 | `etcd` | guarda o estado persistente do cluster |
-| `kube-scheduler` | seleciona um Node adequado para Pods ainda não agendados |
-| `kube-controller-manager` | executa controllers responsáveis por reconciliação |
+| `kube-scheduler` | escolhe um Node para Pods ainda não agendados |
+| `kube-controller-manager` | executa os ciclos de reconciliação |
 
-### `kube-apiserver`
+### API Server
 
-O API Server é a porta de entrada do cluster. Um `kubectl get nodes`, a criação de um Pod e a atualização de um Deployment passam pela API.
+Quando executamos:
+
+```bash
+kubectl get nodes
+```
+
+o fluxo conceptual é:
 
 ```text
 kubectl
-   ↓ HTTPS
+   ↓ lê kubeconfig
+HTTPS
+   ↓
 kube-apiserver
    ↓
-autenticação / autorização / validação
+autenticação / autorização
    ↓
-estado do cluster
+consulta do estado
+   ↓
+resposta ao cliente
 ```
 
-### `etcd`
+### etcd
 
-`etcd` é a base de dados distribuída usada para armazenar o estado do cluster. Por isso, um plano de recuperação real de Kubernetes não se resume a guardar ficheiros YAML nem a reinstalar packages.
+`etcd` guarda o estado do cluster. Isto explica por que motivo uma estratégia real de recuperação não se resume a guardar manifests YAML ou reinstalar packages.
 
-### `kube-scheduler`
+### Scheduler
 
-O Scheduler observa Pods que ainda não têm Node atribuído. A decisão de scheduling pode considerar recursos, afinidades, restrições e outras políticas.
+O Scheduler procura Nodes adequados para Pods sem Node atribuído. A decisão pode considerar recursos, afinidade, taints, selectors e outras restrições.
 
-### `kube-controller-manager`
+### Controller Manager
 
-Os controllers comparam continuamente estado desejado e estado observado. Se um objeto deixar de cumprir o objetivo declarado, um controller pode tomar ações para corrigir a diferença.
+Os controllers executam ciclos contínuos de reconciliação: observam o estado atual, comparam-no com o desejado e tomam ações quando existe diferença.
 
 ## 5.2. Componentes dos Nodes
 
 | Componente | Função principal |
 |---|---|
-| `kubelet` | agente do Node; garante que os Pods atribuídos ao Node são executados |
-| `containerd` | runtime que gere o ciclo de vida dos containers |
-| `runc` | runtime OCI de baixo nível usado para criar os processos dos containers |
-| `kube-proxy` | implementa comportamento de rede associado a Services nesta instalação |
-| CNI / Calico | fornece conectividade de rede aos Pods e funcionalidades de networking/policy |
+| `kubelet` | agente do Node; garante a execução dos Pods atribuídos |
+| `containerd` | runtime responsável pelo ciclo de vida dos containers |
+| `runc` | runtime OCI de baixo nível que cria processos isolados |
+| `kube-proxy` | implementa comportamento de rede de Services nesta instalação |
+| Calico/CNI | fornece conectividade aos Pods e networking/policy |
 
 ---
 
 # 6. `kubeadm`, `kubelet` e `kubectl`
 
-Estes três nomes aparecem repetidamente, mas têm papéis muito diferentes.
+Os nomes são semelhantes, mas os papéis são diferentes.
 
 | Ferramenta | Pergunta a que responde |
 |---|---|
-| `kubeadm` | Como inicializo, integro ou atualizo este cluster? |
+| `kubeadm` | Como inicializo, junto ou atualizo este cluster? |
 | `kubelet` | Como mantenho os Pods deste Node em execução? |
-| `kubectl` | Como comunico administrativamente com a API Kubernetes? |
+| `kubectl` | Como comunico administrativamente com a API? |
 
 ## 6.1. `kubeadm`
-
-É uma ferramenta de bootstrap e ciclo de vida do cluster.
 
 Nesta sessão usamos:
 
 ```text
-kubeadm init          → criar o primeiro Control Plane
-kubeadm token create  → gerar credenciais temporárias de bootstrap
-kubeadm join          → integrar o Worker
-kubeadm upgrade plan  → analisar o upgrade possível
-kubeadm upgrade apply → atualizar o primeiro Control Plane
-kubeadm upgrade node  → atualizar configuração local de um Node adicional
+kubeadm init          → cria o primeiro Control Plane
+kubeadm token create  → gera credenciais temporárias de bootstrap
+kubeadm join          → integra um Node
+kubeadm upgrade plan  → analisa um upgrade possível
+kubeadm upgrade apply → aplica o upgrade ao primeiro Control Plane
+kubeadm upgrade node  → atualiza a configuração local de outro Node
 ```
 
 ## 6.2. `kubelet`
 
-É um serviço local do sistema operativo:
+É um serviço local:
 
 ```bash
-systemctl status kubelet
+systemctl status kubelet --no-pager
 ```
 
-O kubelet comunica com o API Server e com o runtime do Node.
+### Flags
+
+- `--no-pager` — mostra a saída diretamente no terminal sem abrir `less` ou outro paginador.
+
+### O que observar
+
+```text
+Active: active (running)
+```
+
+O kubelet comunica com o API Server e com o runtime local.
 
 ## 6.3. `kubectl`
 
-É um cliente. Não é o cluster e não precisa de correr como daemon.
+`kubectl` é um cliente, não um daemon.
 
 ```text
 kubectl + kubeconfig
@@ -308,21 +325,21 @@ kubectl + kubeconfig
    kube-apiserver
 ```
 
-Por esta razão, executar `kubectl` no Worker sem kubeconfig administrativo pode produzir:
+No Worker, sem kubeconfig administrativo, pode surgir:
 
 ```text
 The connection to the server localhost:8080 was refused
 ```
 
-Isso **não significa automaticamente que o cluster está em baixo**. Significa, neste cenário, que aquele utilizador no Worker não tem contexto administrativo configurado.
+Neste laboratório isto não significa que o cluster esteja em baixo; significa que esse utilizador não tem contexto administrativo configurado nesse Node.
+
+**Boa prática:** administrar o cluster a partir do Control Plane e usar no Worker apenas comandos locais de sistema quando necessário.
 
 ---
 
 # 7. Preparar Linux antes do bootstrap
 
-Kubernetes depende de funcionalidades do kernel e de uma configuração coerente do host.
-
-No laboratório, as verificações começam por:
+Antes de instalar Kubernetes temos de validar o host.
 
 ```bash
 hostname
@@ -334,18 +351,56 @@ df -h /
 stat -fc %T /sys/fs/cgroup
 ```
 
-## 7.1. Porque verificar o hostname?
+## 7.1. O que faz cada comando
 
-Várias operações são específicas de um Node. Confundir os terminais pode levar, por exemplo, a tentar executar `kubeadm token create` no Worker.
+| Comando | O que mostra |
+|---|---|
+| `hostname` | nome do host |
+| `ip -br address` | interfaces e endereços IP em formato resumido |
+| `free -h` | memória RAM e swap em unidades legíveis |
+| `swapon --show` | dispositivos/ficheiros de swap ativos |
+| `lsblk -f` | discos, partições, filesystems e mounts |
+| `df -h /` | espaço realmente utilizável no filesystem raiz |
+| `stat -fc %T /sys/fs/cgroup` | tipo de filesystem usado pelos cgroups |
+
+### Flags relevantes
+
+- `ip -br` — `brief`, formato resumido;
+- `-h` — valores legíveis para humanos;
+- `lsblk -f` — acrescenta informação de filesystem;
+- `stat -f` — mostra informação do filesystem;
+- `-c %T` — imprime apenas o tipo de filesystem.
+
+### Output esperado no laboratório
 
 ```text
-k8s-cp-01 → administração e Control Plane
-k8s-wk-01 → Worker
+k8s-cp-01 / k8s-wk-01
+swap: sem entradas
+cgroups: cgroup2fs
+filesystem /: com espaço suficiente
 ```
 
-## 7.2. Disco virtual não é o mesmo que filesystem utilizável
+## 7.2. Porque verificar sempre o hostname?
 
-Um hipervisor pode apresentar um disco de 48 GB, enquanto o filesystem `/` continua com cerca de 10 GB.
+Algumas operações só fazem sentido num determinado Node.
+
+```text
+k8s-cp-01 → kubeadm init, token create, kubectl administrativo
+k8s-wk-01 → kubeadm join, upgrade node
+```
+
+Um erro de terminal pode levar a executar a operação certa no Node errado.
+
+## 7.3. Disco virtual não é filesystem utilizável
+
+No laboratório observámos:
+
+```text
+Disco virtual ≈ 48 GB
+filesystem /  ≈ 10 GB inicialmente
+```
+
+O encadeamento era:
 
 ```text
 Disco virtual
@@ -361,76 +416,93 @@ Logical Volume
 filesystem /
 ```
 
-Por isso usamos em conjunto:
+Por isso não basta olhar para o tamanho do disco da VM.
+
+Comandos de diagnóstico:
 
 ```bash
 lsblk
-pvs
-vgs
-lvs
+sudo pvs
+sudo vgs
+sudo lvs
 df -h /
 ```
 
-No ensaio desta sessão, a falta de espaço útil provocou `DiskPressure`, que levou a evictions de Pods. A correção foi aumentar o Logical Volume e o filesystem raiz.
+### O que significam
 
-> O procedimento de expansão LVM deve ser aplicado apenas depois de confirmar o layout real do disco. Não se deve copiar cegamente comandos de `growpart`, `pvresize` ou `lvextend` para outra topologia.
+- `pvs` — Physical Volumes;
+- `vgs` — Volume Groups;
+- `lvs` — Logical Volumes;
+- `df` — espaço do filesystem montado.
 
-## 7.3. Swap
+### Incidente real observado
 
-Na baseline do laboratório usamos swap desativada:
+A falta de espaço em `/` levou a:
+
+```text
+DiskPressure=True
+      ↓
+eviction de Pods
+      ↓
+churn de componentes Calico/Tigera
+```
+
+Depois de expandir o LV e o filesystem, o Node convergiu para:
+
+```text
+DiskPressure=False
+```
+
+**Boa prática:** diagnosticar a camada correta. Aumentar o disco virtual não aumenta automaticamente o filesystem.
+
+## 7.4. Swap
+
+No laboratório usamos:
 
 ```bash
 sudo swapoff -a
 ```
 
-É uma decisão de configuração do laboratório, coerente com o percurso `kubeadm` adotado. Não deve ser transformada numa afirmação genérica de que Kubernetes nunca pode funcionar com swap.
+- `swapoff` — desativa swap ativa;
+- `-a` — aplica a todas as áreas de swap configuradas/ativas.
 
-## 7.4. Módulos do kernel
+A baseline da sessão usa swap desativada. Isto é uma decisão do laboratório e não deve ser convertido na afirmação genérica “Kubernetes nunca suporta swap”.
 
-```text
-overlay       → suporte ao modelo de filesystem em camadas usado por containers
-br_netfilter  → permite que tráfego de bridges seja observado pelas regras de netfilter
-```
-
-Carregamento:
+## 7.5. Módulos do kernel
 
 ```bash
 sudo modprobe overlay
 sudo modprobe br_netfilter
 ```
 
-## 7.5. Forwarding e tráfego bridged
+- `overlay` — suporta filesystem em camadas usado por containers;
+- `br_netfilter` — permite integrar tráfego bridged com netfilter.
 
-Na preparação do laboratório configuramos:
+Validar:
+
+```bash
+lsmod | grep -E 'overlay|br_netfilter'
+```
+
+### Flags e operadores
+
+- `grep -E` — ativa expressões regulares estendidas;
+- `|` — encaminha a saída do comando anterior para o seguinte.
+
+## 7.6. Sysctl de rede
 
 ```text
 net.ipv4.ip_forward = 1
 net.bridge.bridge-nf-call-iptables = 1
 ```
 
-`ip_forward=1` permite que o host encaminhe pacotes IPv4 entre interfaces/redes. O segundo parâmetro permite integrar tráfego bridged com o processamento netfilter usado pela solução de rede.
-
-## 7.6. cgroup v2
-
-No ambiente validado:
-
-```bash
-stat -fc %T /sys/fs/cgroup
-```
-
-produz:
-
-```text
-cgroup2fs
-```
-
-Os cgroups permitem controlar e contabilizar recursos associados a processos. Kubernetes, o kubelet e o runtime precisam de uma estratégia coerente para gerir esses grupos.
+O primeiro permite encaminhamento IPv4. O segundo permite que tráfego bridged seja processado pela infraestrutura netfilter usada pela solução de rede.
 
 ---
 
 # 8. Runtime: CRI, containerd e runc
 
-O kubelet não deve depender diretamente da implementação interna de cada runtime. A integração é realizada através do **Container Runtime Interface (CRI)**.
+O kubelet comunica com o runtime através do **Container Runtime Interface (CRI)**.
 
 ```text
 kubelet
@@ -442,112 +514,205 @@ runc
 Linux kernel
 ```
 
-## 8.1. CRI
+## 8.1. Porque existe o CRI?
 
-CRI é uma interface/protocolo que permite ao kubelet trabalhar com runtimes compatíveis.
+O kubelet não deve depender das particularidades internas de cada runtime. O CRI define a interface de integração.
 
-No laboratório, o endpoint é:
+No laboratório, o socket é:
 
 ```text
 /run/containerd/containerd.sock
 ```
 
-Podemos pensar no socket como o ponto local através do qual kubelet e containerd comunicam.
+## 8.2. Instalação do containerd
 
-## 8.2. containerd
+A baseline usa `containerd.io 2.2.6`.
 
-A baseline usa `containerd 2.2.6`. A série 2.2 é adequada ao percurso Kubernetes 1.35/1.36 adotado nesta sessão.
-
-A configuração é gerada a partir de:
+Para observar versões disponíveis:
 
 ```bash
-containerd config default
+apt-cache madison containerd.io
 ```
 
-Depois confirmamos dois aspetos essenciais:
+### O que faz
+
+Consulta as versões publicadas nos repositórios APT configurados.
+
+A seleção do laboratório filtra a série 2.2:
+
+```bash
+apt-cache madison containerd.io \
+  | awk '$3 ~ /^2\.2\./ {print $3; exit}'
+```
+
+### Como ler a expressão `awk`
+
+| Fragmento | Significado |
+|---|---|
+| `$3` | terceira coluna |
+| `~` | corresponde a expressão regular |
+| `/^2\.2\./` | começa por `2.2.` |
+| `print $3` | imprime a versão |
+| `exit` | termina após a primeira correspondência |
+
+No ambiente validado o package escolhido foi:
 
 ```text
-CRI ativo
+2.2.6-1~ubuntu.26.04~resolute
+```
+
+## 8.3. Configuração
+
+Geramos uma configuração base:
+
+```bash
+sudo mkdir -p /etc/containerd
+containerd config default \
+  | sudo tee /etc/containerd/config.toml >/dev/null
+```
+
+### Elementos importantes
+
+- `mkdir -p` — cria a diretoria e não falha se já existir;
+- `containerd config default` — escreve a configuração predefinida no stdout;
+- `|` — encaminha essa configuração;
+- `tee` — grava-a no ficheiro indicado;
+- `>/dev/null` — evita duplicar o conteúdo no terminal.
+
+Depois confirmamos:
+
+```text
+CRI não desativado
 SystemdCgroup = true
 ```
 
-## 8.3. Porque `SystemdCgroup = true`?
+## 8.4. Porque `SystemdCgroup = true`?
 
-Ubuntu usa `systemd`, e a baseline usa cgroup v2. Para evitar duas estratégias diferentes de gestão de cgroups, kubelet e runtime devem estar alinhados no driver `systemd`.
+A baseline usa `systemd` e cgroup v2. O runtime e o kubelet devem utilizar uma estratégia coerente para gerir cgroups.
 
-No containerd 2.x, a opção fica associada ao runtime `runc`.
+## 8.5. Validar o runtime
 
-## 8.4. `containerd.io` e `runc`
+```bash
+containerd --version
+runc --version
+systemctl is-active containerd
+sudo ctr plugins ls | grep -i cri
+```
 
-Na instalação validada, o package `containerd.io` forneceu também o `runc` utilizado pelo runtime. A combinação observada foi:
+### Output esperado
 
 ```text
 containerd 2.2.6
-runc       1.3.6
+runc 1.3.6
+active
+CRI plugin ... ok
 ```
 
-Isto é relevante para troubleshooting: quando se investiga uma falha de runtime, é importante saber **qual package forneceu efetivamente os binários**, e não apenas assumir com base no nome do comando.
+### O que observar
+
+Não basta `containerd` estar instalado. Queremos provar:
+
+```text
+serviço ativo
++ CRI disponível
++ versão esperada
++ runtime consistente nos dois Nodes
+```
 
 ---
 
 # 9. Gestão explícita de versões Kubernetes
 
-Uma formação reproduzível não deve instalar simplesmente:
+Uma instalação reproduzível não deve depender de:
 
 ```bash
 sudo apt install kubeadm kubelet kubectl
 ```
 
-sem controlar a origem e a versão.
+sem controlar versão e repositório.
 
 ## 9.1. Repositórios por minor
 
-Nesta sessão usamos primeiro o repositório da minor 1.35 e, no upgrade, o da minor 1.36.
-
-Exemplo conceptual:
+Primeiro usamos:
 
 ```text
-pkgs.k8s.io/core:/stable:/v1.35/deb/
-                    │
-                    └── minor pretendida
+https://pkgs.k8s.io/core:/stable:/v1.35/deb/
 ```
 
-## 9.2. Descobrir a versão disponível
+No upgrade mudamos para:
+
+```text
+https://pkgs.k8s.io/core:/stable:/v1.36/deb/
+```
+
+Assim a própria origem APT já restringe a minor pretendida.
+
+## 9.2. Descobrir e fixar o patch
 
 ```bash
 apt-cache madison kubeadm
 ```
 
-permite observar as versões publicadas pelo repositório configurado.
-
-No laboratório, a seleção é filtrada:
+No laboratório o filtro foi:
 
 ```bash
-awk '$3 ~ /^1\.35\./ {print $3; exit}'
+K8S_PKG_VERSION="$(
+  apt-cache madison kubeadm |
+  awk '$3 ~ /^1\.35\./ {print $3; exit}'
+)"
 ```
 
-Interpretação:
+### O que está a acontecer
 
-| Fragmento | Significado |
-|---|---|
-| `$3` | terceira coluna da linha |
-| `~` | corresponde a uma expressão regular |
-| `/^1\.35\./` | começa por `1.35.` |
-| `{print $3; exit}` | mostra a primeira correspondência e termina |
+- `$(...)` — command substitution: guarda a saída de um comando numa variável;
+- `awk` — seleciona apenas versões `1.35.*`;
+- `exit` — usa a primeira correspondência devolvida pelo APT.
 
-Isto evita que uma versão de outra minor seja escolhida silenciosamente.
+### Output esperado
 
-## 9.3. `apt-mark hold`
+```text
+K8S_PKG_VERSION=1.35.8-1.1
+```
 
-Depois de instalar:
+## 9.3. Instalação exata
+
+```bash
+sudo apt-get install -y \
+  kubelet="$K8S_PKG_VERSION" \
+  kubeadm="$K8S_PKG_VERSION" \
+  kubectl="$K8S_PKG_VERSION"
+```
+
+- `-y` — aceita a confirmação APT;
+- `pacote=versão` — exige exatamente aquela versão.
+
+Validar:
+
+```bash
+kubeadm version -o short
+kubelet --version
+kubectl version --client
+```
+
+### Output esperado
+
+```text
+v1.35.8
+Kubernetes v1.35.8
+Client Version: v1.35.8
+```
+
+**Erro frequente:** aparecer `1.36` ou `1.37` porque o repositório ou a versão não foram fixados.
+
+## 9.4. `apt-mark hold`
 
 ```bash
 sudo apt-mark hold kubelet kubeadm kubectl
 ```
 
-O objetivo é impedir que um upgrade genérico do sistema altere estes packages sem intenção.
+Impede que um upgrade genérico do sistema altere estes packages sem intenção.
 
-Durante um upgrade controlado usamos o padrão:
+Durante o upgrade controlado usamos:
 
 ```text
 unhold
@@ -556,16 +721,14 @@ instalar versão exata
   ↓
 validar
   ↓
-hold novamente
+hold
 ```
 
 ---
 
 # 10. Inicializar o Control Plane com `kubeadm`
 
-A operação é executada apenas em `k8s-cp-01`.
-
-No laboratório validado:
+Esta operação é executada **apenas em `k8s-cp-01`**.
 
 ```bash
 sudo kubeadm init \
@@ -575,83 +738,108 @@ sudo kubeadm init \
   --cri-socket=unix:///run/containerd/containerd.sock
 ```
 
-## 10.1. Significado dos argumentos
+## 10.1. Flags
 
 | Argumento | Função |
 |---|---|
 | `--kubernetes-version=v1.35.8` | fixa a versão usada no bootstrap |
-| `--apiserver-advertise-address=192.168.50.46` | indica o endereço do Control Plane anunciado pelo API Server |
-| `--pod-network-cidr=10.244.0.0/16` | reserva a rede destinada aos endereços dos Pods |
-| `--cri-socket=unix:///run/containerd/containerd.sock` | escolhe explicitamente o runtime CRI local |
+| `--apiserver-advertise-address=192.168.50.46` | define o endereço anunciado pelo API Server |
+| `--pod-network-cidr=10.244.0.0/16` | define a rede reservada aos Pods |
+| `--cri-socket=unix:///run/containerd/containerd.sock` | seleciona explicitamente o runtime CRI |
 
-## 10.2. O que `kubeadm init` prepara
+## 10.2. O que o comando faz
 
 De forma simplificada:
 
 ```text
-pré-flight checks
+preflight checks
       ↓
-certificados e kubeconfigs
+certificados
       ↓
-manifestos dos static Pods
+kubeconfigs
+      ↓
+static Pod manifests
       ↓
 etcd + API Server + controllers + scheduler
       ↓
 configuração kubelet
       ↓
-bootstrap do cluster
+bootstrap concluído
 ```
 
-Os principais componentes do Control Plane são executados como **static Pods** geridos localmente pelo kubelet a partir de manifestos em `/etc/kubernetes/manifests/`.
+Os principais componentes do Control Plane são static Pods geridos pelo kubelet a partir de:
 
-## 10.3. Porque o Node pode ficar `NotReady` após o `init`?
+```text
+/etc/kubernetes/manifests/
+```
 
-Porque ainda não instalámos a rede CNI.
+## 10.3. Output esperado
+
+No final, `kubeadm` apresenta uma mensagem equivalente a:
+
+```text
+Your Kubernetes control-plane has initialized successfully!
+```
+
+Também fornece instruções para configurar o kubeconfig e um exemplo de `kubeadm join`.
+
+## 10.4. Porque o Node pode ficar `NotReady`?
+
+Logo após o `init` ainda não existe CNI funcional.
 
 ```text
 Control Plane criado
        ↓
-CNI ainda ausente
+rede de Pods ainda ausente
        ↓
-rede de Pods incompleta
-       ↓
-Node pode surgir NotReady
+Node pode estar NotReady
+CoreDNS pode não ficar Ready
 ```
 
-Isso é um estado intermédio esperado, não uma razão para repetir `kubeadm init`.
+Isto é um estado intermédio esperado. Não se repete `kubeadm init` para “corrigir” este estado.
 
 ---
 
 # 11. kubeconfig e contextos
 
-Depois do `kubeadm init`, o ficheiro administrativo é:
+O ficheiro administrativo criado pelo `kubeadm` é:
 
 ```text
 /etc/kubernetes/admin.conf
 ```
 
-No laboratório copiamos esse kubeconfig para:
+No laboratório copiamos para:
 
 ```text
 $HOME/.kube/config
 ```
 
-para permitir ao utilizador administrativo executar `kubectl` sem indicar o ficheiro em cada comando.
+## 11.1. Comandos
 
-## 11.1. O que contém um kubeconfig?
-
-Conceptualmente:
-
-```text
-clusters    → onde está o API Server e em quem confiar
-users       → credenciais
-contexts    → associação entre cluster + user + namespace opcional
+```bash
+mkdir -p "$HOME/.kube"
+sudo cp /etc/kubernetes/admin.conf "$HOME/.kube/config"
+sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
+chmod 600 "$HOME/.kube/config"
 ```
 
-Um contexto pode ser visto como:
+### O que fazem
+
+- `mkdir -p` — cria a diretoria `.kube`;
+- `cp` — copia o kubeconfig administrativo;
+- `chown` — atribui o ficheiro ao utilizador atual;
+- `chmod 600` — leitura/escrita apenas para o proprietário.
+
+### Porque usamos `$(id -u):$(id -g)`?
+
+Obtém dinamicamente UID e GID do utilizador atual, evitando escrever números fixos.
+
+## 11.2. Conteúdo conceptual
 
 ```text
-contexto = cluster + identidade + namespace opcional
+clusters → endpoint e confiança na CA
+users    → credenciais
+contexts → cluster + user + namespace opcional
 ```
 
 Comandos úteis:
@@ -662,73 +850,69 @@ kubectl config get-contexts
 kubectl config view
 ```
 
-> `admin.conf` contém credenciais privilegiadas. Não deve ser distribuído indiscriminadamente nem copiado para o Worker apenas para facilitar comandos administrativos.
+**Boa prática:** `admin.conf` é privilegiado. Não deve ser copiado para o Worker apenas para facilitar a administração.
 
 ---
 
-# 12. Redes do cluster: host, Pod e Service
+# 12. Redes do cluster
 
 No laboratório coexistem três espaços de endereçamento:
 
 ```text
-Rede das VMs   192.168.50.0/24
-Pod CIDR       10.244.0.0/16
-Service CIDR   10.96.0.0/12
+Rede física   192.168.50.0/24
+Pod CIDR      10.244.0.0/16
+Service CIDR  10.96.0.0/12
 ```
 
-Estas redes não devem sobrepor-se.
+## 12.1. Porque não usar `192.168.0.0/16` para Pods?
 
-## 12.1. Porque não usamos `192.168.0.0/16` para Pods?
-
-Porque `192.168.0.0/16` inclui `192.168.50.0/24`.
+Porque inclui a rede física `192.168.50.0/24`.
 
 ```text
 192.168.0.0/16
 └── contém 192.168.50.0/24
 ```
 
-Isso criaria ambiguidade de routing entre a rede física dos hosts e a rede virtual dos Pods.
-
-Por essa razão, a baseline validada usa:
-
-```text
-10.244.0.0/16
-```
+Uma sobreposição pode criar ambiguidades de routing entre a rede física e a rede virtual dos Pods.
 
 ## 12.2. Service CIDR
 
-O Service CIDR representa endereços virtuais atribuídos a Services do cluster. Na configuração `kubeadm` desta sessão usamos o valor predefinido:
+O Service CIDR é usado para IPs virtuais de Services. No laboratório fica no valor predefinido do `kubeadm`:
 
 ```text
 10.96.0.0/12
 ```
 
-Não deve ser confundido com a rede dos Pods nem com os IPs físicos dos Nodes.
+Não deve ser confundido com endereços dos Nodes nem dos Pods.
 
 ---
 
 # 13. CNI, Calico e Tigera Operator
 
-Kubernetes define o modelo de networking, mas depende de uma implementação CNI para fornecer a conectividade de Pods.
+Kubernetes define o modelo de networking, mas precisa de uma implementação CNI para fornecer conectividade aos Pods.
 
-No laboratório usamos:
+Na sessão usamos:
 
 ```text
 Calico 3.32.2
 Tigera Operator 1.42.6
 ```
 
-## 13.1. O papel do Operator
+## 13.1. O que é um Operator?
 
-Um Operator é software que observa recursos Kubernetes e executa lógica operacional para manter um componente no estado pretendido.
+Um Operator observa recursos Kubernetes e automatiza tarefas operacionais de um produto.
 
-Nesta sessão, o Tigera Operator gere a instalação do Calico.
+```text
+Recurso Installation
+        ↓
+Tigera Operator observa
+        ↓
+cria/configura componentes Calico
+        ↓
+rede de Pods converge
+```
 
-## 13.2. Instalação mínima da Sessão 4
-
-Em vez de aplicar indiscriminadamente todos os recursos opcionais do exemplo completo da release, usamos apenas um recurso `Installation` controlado para o core networking.
-
-Estrutura simplificada:
+## 13.2. Manifesto mínimo utilizado
 
 ```yaml
 apiVersion: operator.tigera.io/v1
@@ -746,97 +930,105 @@ spec:
         nodeSelector: all()
 ```
 
-## 13.3. Campos principais
+### Campos principais
 
 | Campo | Significado |
 |---|---|
-| `kind: Installation` | recurso interpretado pelo Tigera Operator |
-| `cidr` | intervalo de endereços usado pelos Pods |
-| `blockSize: 26` | tamanho dos blocos IPAM distribuídos aos Nodes; não é a máscara de cada Pod |
-| `encapsulation: VXLANCrossSubnet` | política de encapsulamento VXLAN adotada pela instalação |
-| `natOutgoing: Enabled` | permite NAT de saída para destinos externos ao pool |
-| `nodeSelector: all()` | aplica o pool aos Nodes elegíveis |
+| `apiVersion` | API group e versão do recurso |
+| `kind: Installation` | tipo de recurso observado pelo Operator |
+| `metadata.name` | nome do objeto |
+| `cidr` | rede atribuída aos Pods |
+| `blockSize: 26` | tamanho dos blocos IPAM distribuídos aos Nodes |
+| `encapsulation` | política de encapsulamento VXLAN |
+| `natOutgoing` | NAT de saída do pool |
+| `nodeSelector: all()` | torna o pool aplicável aos Nodes elegíveis |
 
-## 13.4. CoreDNS e o CNI
-
-É normal o CoreDNS não ficar funcional enquanto a rede de Pods não estiver operacional.
-
-```text
-kubeadm init
-   ↓
-CoreDNS criado
-   ↓
-CNI ainda ausente
-   ↓
-CoreDNS pode ficar Pending
-   ↓
-Calico converge
-   ↓
-CoreDNS pode executar normalmente
-```
-
-## 13.5. `tigerastatus`
-
-No laboratório usamos principalmente:
+## 13.3. Validar o Calico
 
 ```bash
 kubectl get tigerastatus
+kubectl get pods -n calico-system -o wide
+kubectl get nodes -o wide
 ```
 
-O critério para o core Calico é:
+### Flags
+
+- `-n calico-system` — restringe ao namespace indicado;
+- `-o wide` — mostra informação adicional, incluindo Node e IP.
+
+### Output esperado
+
+Para o core Calico:
 
 ```text
 calico   AVAILABLE=True   PROGRESSING=False   DEGRADED=False
+ippools  AVAILABLE=True   PROGRESSING=False   DEGRADED=False
 ```
 
-A instalação mínima não cria o recurso Tigera `APIServer`. Por isso, o componente `tiers` pode apresentar:
+A instalação mínima não cria o Tigera `APIServer`, pelo que `tiers` pode apresentar:
 
 ```text
 Waiting for Tigera API server to be ready
 ```
 
-Isso é uma consequência conhecida do âmbito reduzido deste laboratório e não deve ser confundido com falha do core networking quando `calico` e `ippools` estão disponíveis.
+No âmbito desta sessão, isso não representa falha do core networking quando `calico` e `ippools` estão saudáveis.
 
 ---
 
 # 14. Integrar o Worker
 
-O Worker entra no cluster através de um processo de bootstrap controlado.
+O Worker entra no cluster através de bootstrap controlado.
 
-## 14.1. Gerar o comando no Control Plane
-
-No `k8s-cp-01`:
+## 14.1. Gerar o comando de join — Control Plane
 
 ```bash
 sudo kubeadm token create --print-join-command \
   --kubeconfig=/etc/kubernetes/admin.conf
 ```
 
-O resultado tem a forma:
+### Flags
+
+| Opção | Função |
+|---|---|
+| `--print-join-command` | gera um comando de join pronto a usar |
+| `--kubeconfig=...` | indica as credenciais administrativas para aceder à API |
+
+### Output esperado
+
+Estrutura semelhante a:
 
 ```text
-kubeadm join ENDERECO:6443 \
-  --token TOKEN \
-  --discovery-token-ca-cert-hash sha256:HASH
+kubeadm join 192.168.50.46:6443 \
+  --token abcdef.0123456789abcdef \
+  --discovery-token-ca-cert-hash sha256:...
 ```
 
-## 14.2. Significado dos elementos
+Os valores reais variam.
+
+## 14.2. Elementos do join
 
 | Elemento | Função |
 |---|---|
-| `ENDERECO:6443` | endpoint do API Server |
+| `192.168.50.46:6443` | endpoint do API Server |
 | `--token` | credencial temporária de bootstrap |
-| `--discovery-token-ca-cert-hash` | permite ao Worker validar a identidade da CA do cluster |
+| `--discovery-token-ca-cert-hash` | ajuda o Worker a validar a identidade da CA do cluster |
+| `--cri-socket` quando usado | escolhe explicitamente o socket CRI local |
 
-No Worker, o comando é executado com privilégios:
+No Worker o comando exige privilégios:
 
 ```text
 sudo kubeadm join ...
 ```
 
-Sem `sudo`, o preflight devolve um erro relacionado com privilégios de root. A correção é executar o comando com os privilégios necessários, **não ignorar o preflight**.
+### Erro frequente 1 — sem `sudo`
 
-## 14.3. Não executar placeholders literalmente
+```text
+[ERROR IsPrivilegedUser]: user is not running as root
+```
+
+Correção: usar os privilégios necessários; não ignorar o preflight.
+
+### Erro frequente 2 — placeholders literais
 
 Isto é documentação:
 
@@ -846,15 +1038,22 @@ Isto é documentação:
 <HASH>
 ```
 
-Os símbolos `<` e `>` têm significado para a shell. Devem ser substituídos pelos valores reais gerados.
+Não se executam os símbolos `< >`. Em Bash têm significado de redirecionamento.
 
-## 14.4. Como validar corretamente
+## 14.3. Validar o join
 
 No Worker:
 
 ```bash
-systemctl is-active kubelet
-ls -l /etc/kubernetes/kubelet.conf
+sudo systemctl is-active kubelet
+sudo ls -l /etc/kubernetes/kubelet.conf
+```
+
+### Output esperado
+
+```text
+active
+/etc/kubernetes/kubelet.conf existe
 ```
 
 No Control Plane:
@@ -863,15 +1062,28 @@ No Control Plane:
 kubectl get nodes -o wide
 ```
 
-O Worker não precisa do `admin.conf` para funcionar como Node.
+Esperado após convergência:
+
+```text
+k8s-cp-01   Ready   control-plane   ... v1.35.8
+k8s-wk-01   Ready   <none>          ... v1.35.8
+```
+
+### Erro frequente 3 — `kubectl` no Worker
+
+Sem kubeconfig administrativo:
+
+```text
+The connection to the server localhost:8080 was refused
+```
+
+Isto não invalida um join bem-sucedido. A validação global é feita a partir do Control Plane.
 
 ---
 
 # 15. Observar antes de alterar
 
-Administrar Kubernetes não é apenas executar operações. É conseguir demonstrar o estado anterior e posterior.
-
-Comandos básicos:
+Comandos fundamentais:
 
 ```bash
 kubectl get nodes -o wide
@@ -881,44 +1093,34 @@ kubectl describe node k8s-wk-01
 kubectl get tigerastatus
 ```
 
-## 15.1. `get`, `describe` e `events`
+## 15.1. Flags e subcomandos
 
-```text
-get       → fotografia resumida do estado
--o wide   → acrescenta informação operacional
-
-describe  → detalhes, condições e eventos relacionados com um objeto
-
-events    → sequência temporal de acontecimentos observados no cluster
-```
-
-Um diagnóstico sólido cruza várias fontes em vez de depender de uma única linha de output.
+| Elemento | Função |
+|---|---|
+| `get` | fotografia resumida do estado |
+| `describe` | detalhes, condições e eventos de um objeto |
+| `-A` | todos os namespaces |
+| `-o wide` | colunas adicionais |
+| `--sort-by=.lastTimestamp` | ordena eventos pelo timestamp indicado |
 
 ## 15.2. Condições dos Nodes
 
-Duas condições particularmente importantes nesta sessão são:
-
-```text
-Ready
-DiskPressure
-```
-
-Interpretação desejada:
+Nesta sessão observamos especialmente:
 
 ```text
 Ready=True
 DiskPressure=False
 ```
 
-`Ready=True` indica que o Node está disponível para o cluster. `DiskPressure=True` indica pressão de armazenamento suficiente para o kubelet tomar medidas de eviction.
+`Ready=True` indica que o Node está disponível para o cluster. `DiskPressure=True` significa pressão de armazenamento suficiente para o kubelet considerar medidas de eviction.
+
+**Boa prática:** não tirar uma conclusão com base num único comando. Cruzar Nodes, Pods, eventos, serviços locais e logs.
 
 ---
 
 # 16. Labels e selectors
 
-Labels são pares chave/valor colocados nos metadados dos objetos.
-
-Exemplo:
+Uma label é metadata chave/valor.
 
 ```yaml
 metadata:
@@ -926,28 +1128,22 @@ metadata:
     app: cordon-test
 ```
 
-Podem ser usados para selecionar objetos:
+Pode ser usada para selecionar:
 
 ```bash
 kubectl get pods -l app=cordon-test
 ```
 
+- `-l` — label selector.
+
 ## 16.1. Label não é `nodeSelector`
 
-Uma label descreve um objeto:
-
 ```text
-app=cordon-test
+label       → descreve um objeto
+nodeSelector → restringe scheduling com base em labels de Nodes
 ```
 
-Um `nodeSelector` exprime uma restrição de scheduling baseada em labels do Node:
-
-```yaml
-nodeSelector:
-  kubernetes.io/hostname: k8s-wk-01
-```
-
-No Pod de teste da sessão:
+No Pod de teste:
 
 ```yaml
 apiVersion: v1
@@ -963,24 +1159,29 @@ spec:
     - name: web
       image: nginx:1.28.0-alpine
       imagePullPolicy: IfNotPresent
+      ports:
+        - containerPort: 80
   restartPolicy: Always
 ```
 
-Interpretação:
+### Campos
 
 | Campo | Função |
 |---|---|
-| `app: cordon-test` | label usada para identificar/selecionar o Pod |
-| `nodeSelector` | força o Pod para o Worker indicado |
-| `image` | imagem a executar |
-| `imagePullPolicy: IfNotPresent` | só faz pull se a imagem não existir localmente |
-| `restartPolicy: Always` | o kubelet tenta reiniciar o container enquanto o Pod existir |
+| `kind: Pod` | cria diretamente um Pod |
+| `metadata.name` | nome do objeto |
+| `labels.app` | label usada na seleção do exercício |
+| `nodeSelector` | obriga o Pod a um Node com aquela label |
+| `image` | imagem do container |
+| `imagePullPolicy: IfNotPresent` | faz pull apenas se a imagem não existir localmente |
+| `containerPort: 80` | documenta a porta usada pelo container |
+| `restartPolicy: Always` | reinicia o container enquanto o Pod existir |
 
-Este Pod é criado diretamente e não é gerido por um Deployment. Essa diferença torna-se importante durante o `drain`.
+Este Pod não é controlado por Deployment/ReplicaSet. Isso torna-se importante no `drain`.
 
 ---
 
-# 17. Manutenção: `cordon`, `drain` e `uncordon`
+# 17. `cordon`, `drain` e `uncordon`
 
 ## 17.1. `cordon`
 
@@ -988,21 +1189,31 @@ Este Pod é criado diretamente e não é gerido por um Deployment. Essa diferen�
 kubectl cordon k8s-wk-01
 ```
 
-Marca o Node como não elegível para novo scheduling normal.
+### O que faz
 
-O estado passa a incluir:
+Marca o Node como não elegível para novos agendamentos normais.
+
+### Output esperado
 
 ```text
-SchedulingDisabled
+node/k8s-wk-01 cordoned
 ```
 
-Os Pods já existentes não são removidos apenas por causa do `cordon`.
+Depois:
+
+```bash
+kubectl get nodes
+```
+
+mostra:
+
+```text
+Ready,SchedulingDisabled
+```
+
+Os Pods existentes **não são removidos** apenas por causa do `cordon`.
 
 ## 17.2. `drain`
-
-`drain` prepara um Node para manutenção, tentando evacuar Pods de forma controlada.
-
-No exercício inicial usamos um selector para limitar o âmbito:
 
 ```bash
 kubectl drain k8s-wk-01 \
@@ -1014,10 +1225,14 @@ kubectl drain k8s-wk-01 \
 
 | Flag | Significado |
 |---|---|
-| `--ignore-daemonsets` | não tenta eliminar Pods controlados por DaemonSets |
-| `--pod-selector=...` | restringe a operação aos Pods que correspondem à label indicada |
+| `--ignore-daemonsets` | não tenta eliminar Pods geridos por DaemonSets |
+| `--pod-selector=...` | limita a operação a Pods correspondentes à label |
 
-O Pod `cordon-test` é um Pod direto, sem controller. Por isso, o drain recusa removê-lo sem uma decisão explícita.
+O Pod de teste é direto, sem controller. O primeiro drain deve recusar a remoção.
+
+### Porque essa recusa é útil?
+
+Kubernetes está a impedir que eliminemos silenciosamente um workload que não tem controller capaz de o recriar.
 
 No exercício controlado acrescentamos:
 
@@ -1025,11 +1240,21 @@ No exercício controlado acrescentamos:
 --force
 ```
 
-Aqui `--force` significa aceitar a remoção de determinados Pods sem controller. Não é uma opção que deva ser acrescentada automaticamente sempre que um drain falha.
+Isto autoriza conscientemente a remoção desse Pod sem controller.
 
-## 17.3. Porque os DaemonSets ficam no Node?
+**Boa prática:** não acrescentar `--force` automaticamente sempre que um drain falha. Ler primeiro a razão da recusa.
 
-Um DaemonSet existe precisamente para garantir um Pod por Node elegível. Componentes como `calico-node`, o CSI node driver e `kube-proxy` são exemplos observados no laboratório.
+## 17.3. DaemonSets
+
+Componentes como:
+
+```text
+calico-node
+csi-node-driver
+kube-proxy
+```
+
+podem permanecer no Node durante o drain porque são geridos por DaemonSets.
 
 ## 17.4. `uncordon`
 
@@ -1037,132 +1262,154 @@ Um DaemonSet existe precisamente para garantir um Pod por Node elegível. Compon
 kubectl uncordon k8s-wk-01
 ```
 
-volta a tornar o Node elegível para scheduling.
-
-### Resumo
+### Output esperado
 
 ```text
-cordon   → impedir novos agendamentos
+node/k8s-wk-01 uncordoned
+```
+
+O Node volta a ficar elegível para scheduling.
+
+```text
+cordon   → fechar scheduling
    ↓
 drain    → evacuar workloads apropriados
    ↓
 manutenção
    ↓
-uncordon → reabrir o Node ao scheduler
+uncordon → reabrir scheduling
 ```
 
 ---
 
-# 18. Health gates: quando é seguro avançar?
+# 18. Health gates
 
-Uma alteração de risco deve ser precedida por um **health gate**.
+Um health gate responde à pergunta:
 
-Antes do upgrade verificamos:
+> O cluster está suficientemente saudável para avançarmos para uma alteração de risco?
+
+Antes do upgrade queremos:
 
 ```text
 Nodes Ready
 DiskPressure=False
 Pods críticos estáveis
-CoreDNS Running/Ready
+CoreDNS Ready
 Calico core saudável
 containerd ativo
 kubelet ativo
-sem churn persistente de Pods
-sem erros graves de runtime recorrentes
+sem churn persistente
+sem erros graves recorrentes do runtime
 ```
 
-Exemplo de observação compacta:
+Um comando útil:
 
 ```bash
 kubectl get nodes \
   -o custom-columns='NAME:.metadata.name,READY:.status.conditions[?(@.type=="Ready")].status,DISK:.status.conditions[?(@.type=="DiskPressure")].status,KUBELET:.status.nodeInfo.kubeletVersion,RUNTIME:.status.nodeInfo.containerRuntimeVersion'
 ```
 
-O valor pedagógico deste comando é cruzar, na mesma tabela:
+## 18.1. Como ler `-o custom-columns`
+
+- `-o` — escolhe formato de output;
+- `custom-columns=...` — define as colunas pretendidas;
+- `.metadata.name` — nome do Node;
+- `.status.conditions[...]` — procura uma condição específica;
+- `.status.nodeInfo.kubeletVersion` — versão do kubelet;
+- `.status.nodeInfo.containerRuntimeVersion` — runtime reportado pelo Node.
+
+### Output esperado antes do upgrade
 
 ```text
-identidade do Node
-+ condição Ready
-+ pressão de disco
-+ versão do kubelet
-+ runtime
+NAME        READY   DISK    KUBELET   RUNTIME
+k8s-cp-01   True    False   v1.35.8   containerd://2.2.6
+k8s-wk-01   True    False   v1.35.8   containerd://2.2.6
 ```
 
 ---
 
 # 19. Recuperação antes do upgrade
 
-No laboratório, depois de o health gate estar limpo, criamos snapshots **coordenados** das duas VMs.
+Depois de o health gate estar limpo, criamos snapshots coordenados das duas VMs.
 
 ```text
 cluster saudável
       ↓
-snapshot CP
+snapshot Control Plane
 snapshot Worker
       ↓
 upgrade
 ```
 
-Os snapshots servem como ponto de retorno do **ambiente pedagógico**.
+Os snapshots são um ponto de retorno do **ambiente pedagógico**.
 
-> Em produção, snapshots de VMs não substituem uma estratégia de backup e recuperação do cluster. É necessário considerar especialmente o estado persistente em `etcd`, certificados, configuração e workloads com dados.
+> Em produção, snapshots de VMs não substituem uma estratégia de backup e recuperação do cluster. É necessário considerar `etcd`, certificados, configuração e workloads com dados.
 
-Também não se deve tratar rollback de Kubernetes como simples downgrade de packages APT. Um upgrade altera componentes, configuração e estado distribuído.
+Também não tratamos rollback Kubernetes como simples downgrade de packages APT.
 
 ---
 
-# 20. Porque o upgrade é sequencial
+# 20. Upgrade Kubernetes: princípios
 
-A sessão demonstra:
+O percurso validado é:
 
 ```text
-Kubernetes 1.35.8
-        ↓
-Kubernetes 1.36.4
+1.35.8
+  ↓
+1.36.4
 ```
 
-Não saltamos diretamente para outra minor.
-
-A ordem geral é:
+A ordem é deliberada:
 
 ```text
-1. preparar versão destino
-2. kubeadm do primeiro Control Plane
-3. kubeadm upgrade plan
-4. kubeadm upgrade apply
-5. kubelet/kubectl do Control Plane
-6. validar
-7. kubeadm do Worker
+1. atualizar kubeadm do Control Plane
+2. kubeadm upgrade plan
+3. kubeadm upgrade apply
+4. drain do Control Plane
+5. atualizar kubelet/kubectl do Control Plane
+6. validar e uncordon
+7. atualizar kubeadm do Worker
 8. kubeadm upgrade node
-9. kubelet/kubectl do Worker
-10. validar novamente
+9. drain do Worker
+10. atualizar kubelet/kubectl do Worker
+11. validar e uncordon
+12. health gate final
 ```
 
-## 20.1. Porque atualizar `kubeadm` primeiro?
+## 20.1. Porque `kubeadm` primeiro?
 
-`kubeadm` é a ferramenta que conhece o workflow de upgrade e valida a versão destino. Por isso, o binário `kubeadm` é atualizado antes de executar o plano/aplicação do upgrade.
+`kubeadm` conhece o workflow e as validações do upgrade para a versão destino. O binário é atualizado antes de aplicar o upgrade ao cluster.
 
-## 20.2. `kubeadm upgrade plan`
+---
+
+# 21. `kubeadm upgrade plan`
 
 ```bash
 sudo kubeadm upgrade plan
 ```
 
-analisa o estado e mostra o upgrade possível.
+## O que faz
 
-No ensaio validado, indicou:
+Analisa o estado atual e indica o upgrade possível.
+
+## O que não faz
+
+Não altera o cluster.
+
+### Output relevante observado
 
 ```text
-Cluster:    1.35.8
-kubeadm:    1.36.4
-Target:     1.36.4
+Cluster: 1.35.8
+Target:  1.36.4
 ```
 
-Também mostrou as mudanças esperadas em componentes do Control Plane e addons.
+O plano também mostra componentes e addons afetados.
 
-> `upgrade plan` **não atualiza o cluster**. É uma operação de análise.
+**Boa prática:** distinguir sempre uma operação de análise de uma operação que altera estado.
 
-## 20.3. `kubeadm upgrade apply`
+---
+
+# 22. `kubeadm upgrade apply`
 
 No primeiro Control Plane:
 
@@ -1170,7 +1417,15 @@ No primeiro Control Plane:
 sudo kubeadm upgrade apply v1.36.4
 ```
 
-No ensaio, a operação atualizou com sucesso:
+## 22.1. Significado
+
+- `upgrade` — entra no workflow de atualização;
+- `apply` — aplica efetivamente o upgrade;
+- `v1.36.4` — versão Kubernetes destino.
+
+## 22.2. O que aconteceu no ensaio
+
+Foram atualizados:
 
 ```text
 kube-apiserver            1.35.8 → 1.36.4
@@ -1181,103 +1436,157 @@ CoreDNS                   1.13.1 → 1.14.2
 etcd                      3.6.6-0 → 3.6.8-0
 ```
 
-Durante esta fase surgiram timeouts transitórios enquanto `etcd` reiniciava, mas o próprio `kubeadm` confirmou a recuperação do componente e terminou com `SUCCESS`.
+Durante a reinicialização de `etcd` surgiram timeouts transitórios, mas o próprio `kubeadm` recuperou a operação e terminou com:
 
-A regra é avaliar **o resultado completo**, e não concluir que todo o upgrade falhou por causa de uma linha intermédia.
+```text
+[upgrade] SUCCESS!
+```
+
+### Aprendizagem
+
+Uma linha intermédia de erro não significa automaticamente que toda a operação falhou. É necessário interpretar o resultado completo e voltar a validar o estado.
 
 ---
 
-# 21. Versões mistas durante o upgrade
+# 23. Versões mistas durante o upgrade
 
-Depois de `kubeadm upgrade apply`, é normal encontrar temporariamente:
+Depois de `kubeadm upgrade apply`, é normal observar temporariamente:
 
 ```text
-API Server:          1.36.4
-kubelet CP:          1.35.8
-kubelet Worker:      1.35.8
-kubectl client:      1.35.8
+API Server:      1.36.4
+kubelet CP:      1.35.8
+kubelet Worker:  1.35.8
+kubectl client:  1.35.8
 ```
 
-`kubectl get nodes` apresenta a versão do **kubelet do Node**, não a versão do API Server.
+## Porque acontece?
 
-Isto explica um dos outputs mais importantes do laboratório:
+Porque `kubeadm upgrade apply` atualiza o Control Plane e addons, mas o package do kubelet ainda não foi atualizado.
+
+`kubectl get nodes` mostra a versão do **kubelet**, não a do API Server.
+
+Exemplo:
 
 ```text
 kubectl version
-  Client Version: 1.35.8
-  Server Version: 1.36.4
+Client Version: v1.35.8
+Server Version: v1.36.4
 
 kubectl get nodes
-  k8s-cp-01  ...  1.35.8
+k8s-cp-01 ... v1.35.8
 ```
 
-Não existe contradição: estamos a observar componentes diferentes em momentos diferentes de um upgrade sequencial.
+Não existe contradição. Estamos a consultar componentes diferentes.
 
 ---
 
-# 22. Atualizar o kubelet do Control Plane
+# 24. Atualizar o kubelet do Control Plane
 
-Antes de atualizar o kubelet para uma nova minor, o Node é drenado:
+Antes de mudar a minor do kubelet, drenamos o Node:
 
 ```bash
 kubectl drain k8s-cp-01 --ignore-daemonsets
 ```
 
-Num Control Plane criado por `kubeadm`, os componentes principais são static Pods e não são tratados como workloads normais a evacuar.
-
-Depois atualizamos `kubelet` e `kubectl`, reiniciamos o serviço e validamos:
+### Output esperado
 
 ```text
-kubelet ativo
-Node Ready
-kubelet 1.36.4
-containerd 2.2.6
+node/k8s-cp-01 cordoned
+...
+node/k8s-cp-01 drained
 ```
 
-Só depois usamos:
+Os static Pods do Control Plane permanecem porque são geridos localmente pelo kubelet e não como workloads normais a evacuar.
+
+Atualizamos depois:
+
+```text
+kubelet 1.35.8 → 1.36.4
+kubectl 1.35.8 → 1.36.4
+```
+
+Reiniciamos:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+```
+
+### Porque `daemon-reload`?
+
+Faz o `systemd` reler as definições das units antes de reiniciar o serviço.
+
+### Estado transitório observado
+
+Imediatamente após o restart vimos:
+
+```text
+NotReady,SchedulingDisabled
+```
+
+Pouco depois:
+
+```text
+Ready,SchedulingDisabled
+```
+
+Só então executámos:
 
 ```bash
 kubectl uncordon k8s-cp-01
 ```
 
-No ensaio, o Node passou brevemente por `NotReady,SchedulingDisabled` imediatamente após o restart do kubelet e depois convergiu para `Ready,SchedulingDisabled`. A mudança transitória foi observada antes de fazer `uncordon`.
+**Boa prática:** não confundir um estado transitório curto com uma falha persistente; observar a convergência.
 
 ---
 
-# 23. Atualizar o Worker
+# 25. Atualizar o Worker
 
-No Worker, a sequência é diferente do primeiro Control Plane.
+O Worker não usa `kubeadm upgrade apply`.
 
-Primeiro:
+Primeiro atualizamos o binário `kubeadm`, depois:
 
 ```bash
 sudo kubeadm upgrade node
 ```
 
-Este comando atualiza a configuração local do kubelet para a nova versão de configuração. Não é equivalente a `kubeadm upgrade apply` e não atualiza o binário `kubelet` por magia.
+## 25.1. O que faz
 
-Depois o Worker é drenado a partir do Control Plane, o package do kubelet é atualizado localmente e o serviço é reiniciado.
+Atualiza a configuração local do kubelet para a nova versão de configuração.
 
-## 23.1. O Tigera Operator durante o drain
+## 25.2. O que não faz
 
-No laboratório observámos que o Tigera Operator podia estar no Worker. Como o Deployment possui tolerations amplas, preferimos tornar a colocação explícita durante a manutenção e fixá-lo temporariamente ao Control Plane.
+Não atualiza automaticamente o package `kubelet`.
 
-Exemplo conceptual:
+É normal ficar temporariamente:
+
+```text
+kubeadm  v1.36.4
+kubelet  v1.35.8
+```
+
+Depois o Worker é drenado a partir do Control Plane e o kubelet é atualizado localmente.
+
+## 25.3. Tigera Operator e o drain
+
+No cluster pedagógico de dois Nodes, o Tigera Operator estava no Worker antes do drain integral.
+
+Para tornar o comportamento previsível durante a manutenção, foi aplicado temporariamente:
 
 ```yaml
 nodeSelector:
   kubernetes.io/hostname: k8s-cp-01
 ```
 
-Depois do upgrade e `uncordon` do Worker, o `nodeSelector` temporário é removido.
+Depois do upgrade e `uncordon`, esse `nodeSelector` foi removido.
 
-> Esta é uma decisão operacional específica da topologia pedagógica de dois nós. Não é uma regra universal de upgrade Kubernetes.
+Esta é uma decisão específica da topologia pedagógica. Não é uma regra universal de Kubernetes.
 
 ---
 
-# 24. Resultado final validado
+# 26. Resultado final validado
 
-O health gate final do laboratório produziu:
+O health gate final apresentou:
 
 ```text
 NAME        READY   DISK    KUBELET   RUNTIME
@@ -1285,16 +1594,14 @@ k8s-cp-01   True    False   v1.36.4   containerd://2.2.6
 k8s-wk-01   True    False   v1.36.4   containerd://2.2.6
 ```
 
-Também verificámos:
+`kubectl version` apresentou:
 
 ```text
 Client Version: v1.36.4
 Server Version: v1.36.4
 ```
 
-Todos os Pods ativos estavam `Running`, não existiam recursos em estados anómalos no filtro final e o core Calico permanecia saudável.
-
-O percurso completo ficou assim:
+Todos os Pods ativos estavam `Running`, não existiam recursos anómalos no filtro final e o core Calico permanecia saudável.
 
 ```text
 1.35.8 saudável
@@ -1312,9 +1619,9 @@ cluster convergido
 
 ---
 
-# 25. Troubleshooting orientado por evidências
+# 27. Troubleshooting orientado por evidências
 
-A abordagem da sessão é:
+A metodologia é:
 
 ```text
 SINTOMA
@@ -1333,14 +1640,17 @@ VALIDAR NOVAMENTE
 Não usamos:
 
 ```text
-erro → experimentar flags aleatórias → esconder o erro
+erro → acrescentar flags aleatórias → esconder o erro
 ```
 
-## 25.1. `DiskPressure` durante a instalação do Calico
+## 27.1. `DiskPressure`
 
 ### Sintoma
 
-Pods começam a ser evicted e o Node reporta pressão de disco.
+```text
+DiskPressure=True
+Pods Evicted
+```
 
 ### Evidência
 
@@ -1348,22 +1658,22 @@ Pods começam a ser evicted e o Node reporta pressão de disco.
 kubectl describe node <NODE>
 df -h /
 lsblk
-pvs
-vgs
-lvs
+sudo pvs
+sudo vgs
+sudo lvs
 ```
 
-### Causa observada no laboratório
+### Causa observada
 
-O disco virtual tinha capacidade suficiente, mas o LV do filesystem raiz não tinha sido expandido.
+O disco virtual tinha capacidade, mas o Logical Volume do filesystem raiz não tinha sido expandido.
 
 ### Aprendizagem
 
 ```text
-tamanho do disco virtual ≠ tamanho disponível em /
+tamanho do disco virtual ≠ capacidade disponível em /
 ```
 
-## 25.2. `kubectl` no Worker tenta `localhost:8080`
+## 27.2. `kubectl` no Worker tenta `localhost:8080`
 
 ### Sintoma
 
@@ -1375,55 +1685,63 @@ The connection to the server localhost:8080 was refused
 
 O utilizador não tem kubeconfig administrativo configurado naquele Node.
 
-### Correção no laboratório
+### Ação correta no laboratório
 
-Administrar o cluster a partir do Control Plane e validar localmente no Worker com `systemctl`, `kubelet --version` e os ficheiros de configuração apropriados.
+Administrar a partir do Control Plane; no Worker, validar serviços e configuração local.
 
-## 25.3. `kubeadm token create` falha no Worker
+## 27.3. `kubeadm token create` no Worker
 
-O token é criado no Control Plane porque a operação precisa de credenciais administrativas para comunicar com a API.
+### Sintoma
+
+Falha a carregar kubeconfig administrativo.
+
+### Causa
+
+O comando está a ser executado no Node errado.
 
 ```text
 Control Plane → cria token
 Worker        → executa join
 ```
 
-## 25.4. Erro de chave GPG no repositório Docker
+## 27.4. Erro de chave GPG do repositório Docker
 
-Durante a preparação do upgrade observámos:
+Foi observado:
 
 ```text
 NO_PUBKEY 7EA0A9C3F273FCD8
 ```
 
-A solução foi recriar a configuração atual do repositório Docker usando `/etc/apt/keyrings/docker.asc` e um ficheiro `docker.sources`, e só depois repetir `apt-get update`.
+A correção consistiu em recriar a configuração atual do repositório Docker com `docker.asc` e `docker.sources`, e só depois repetir `apt-get update`.
 
-A aprendizagem é importante: um APT que avisa que está a reutilizar índices anteriores não deve ser tratado como se todos os repositórios tivessem sido atualizados com sucesso.
+### Aprendizagem
 
-## 25.5. AppArmor / runc
+Se o APT reutilizar índices antigos devido a erro de assinatura, não devemos assumir que todos os repositórios foram atualizados corretamente.
 
-Num ensaio anterior surgiram mensagens como:
+## 27.5. AppArmor / runc
+
+Num ensaio anterior surgiram:
 
 ```text
 unable to signal init: permission denied
 apparmor="DENIED"
 ```
 
-Na instalação limpa validada com `containerd 2.2.6` e `runc 1.3.6`, o problema **não voltou a ser reproduzido**, mesmo após criação/remoção de Pods, drains e upgrade.
+Na baseline limpa com `containerd 2.2.6` e `runc 1.3.6`, o problema **não se reproduziu** após criação/remoção de Pods, drains e upgrade.
 
-A conclusão correta é limitada à evidência:
+A conclusão suportada pela evidência é apenas:
 
 ```text
-problema anterior não reproduzido na baseline limpa validada
+problema anterior não reproduzido na baseline validada
 ```
 
-Não concluímos que “AppArmor estava avariado” nem que uma determinada versão do runtime é, por si só, a causa ou a cura.
+Não concluímos que AppArmor estava “avariado” nem que uma versão específica é, por si só, causa ou cura.
 
-Não se desativa AppArmor globalmente como primeira tentativa de troubleshooting.
+Não se desativa AppArmor globalmente como primeira tentativa.
 
-## 25.6. Warnings de arranque do kubelet
+## 27.6. Warnings de arranque do kubelet
 
-Após o restart do kubelet no Worker apareceram de forma transitória mensagens como:
+Foram observadas de forma transitória mensagens como:
 
 ```text
 checkpoint is not found
@@ -1437,30 +1755,75 @@ Ready=True
 DiskPressure=False
 ```
 
-As mensagens não continuaram a repetir-se como falha persistente.
-
-A regra é:
+As mensagens não persistiram como falha operacional.
 
 ```text
-uma linha de log isolada
+uma linha isolada no log
         ≠
-falha operacional persistente
+falha persistente
 ```
 
-Devemos verificar recorrência, condições do Node, estado dos Pods e impacto real.
+Devemos verificar recorrência, impacto, condições do Node e estado dos Pods.
 
 ---
 
-# 26. Comandos de observação que deves dominar
+# 28. Como interpretar os principais outputs
+
+## 28.1. `kubectl get nodes`
+
+```text
+NAME        STATUS   ROLES           VERSION
+k8s-cp-01   Ready    control-plane   v1.36.4
+k8s-wk-01   Ready    <none>          v1.36.4
+```
+
+- `NAME` — nome registado do Node;
+- `STATUS` — condição de disponibilidade resumida;
+- `ROLES` — papel identificado por labels;
+- `VERSION` — versão do **kubelet**.
+
+## 28.2. `kubectl get pods -A -o wide`
+
+Colunas frequentes:
+
+| Coluna | Significado |
+|---|---|
+| `NAMESPACE` | namespace do Pod |
+| `NAME` | nome do Pod |
+| `READY` | containers prontos / total |
+| `STATUS` | fase/estado resumido |
+| `RESTARTS` | reinícios observados |
+| `AGE` | idade do objeto |
+| `IP` | IP do Pod ou host-network |
+| `NODE` | Node onde está agendado |
+
+Um Pod `Running` com `READY 0/1` ainda não está pronto.
+
+## 28.3. `kubectl get tigerastatus`
+
+```text
+AVAILABLE   PROGRESSING   DEGRADED
+True        False         False
+```
+
+- `AVAILABLE=True` — componente disponível;
+- `PROGRESSING=True` — ainda a convergir;
+- `DEGRADED=True` — existe condição degradada.
+
+Nesta instalação mínima, interpretar `tiers` separadamente devido à ausência deliberada do Tigera API Server.
+
+---
+
+# 29. Comandos de observação que deves dominar
 
 | Objetivo | Comando |
 |---|---|
 | Nodes | `kubectl get nodes -o wide` |
 | Pods de todos os namespaces | `kubectl get pods -A -o wide` |
 | Estado Calico | `kubectl get tigerastatus` |
-| Eventos recentes | `kubectl get events -A --sort-by=.lastTimestamp` |
-| Detalhes de um Node | `kubectl describe node <NODE>` |
-| Versão API/client | `kubectl version` |
+| Eventos | `kubectl get events -A --sort-by=.lastTimestamp` |
+| Detalhes de Node | `kubectl describe node <NODE>` |
+| Versões cliente/servidor | `kubectl version` |
 | Versão kubelet local | `kubelet --version` |
 | Serviço kubelet | `systemctl is-active kubelet` |
 | Serviço containerd | `systemctl is-active containerd` |
@@ -1472,17 +1835,18 @@ Devemos verificar recorrência, condições do Node, estado dos Pods e impacto r
 | Flag | Função |
 |---|---|
 | `-n <namespace>` | restringe a um namespace |
-| `-A` | inclui todos os namespaces |
-| `-o wide` | apresenta colunas adicionais |
-| `-o yaml` | mostra a representação YAML do recurso |
-| `-l chave=valor` | filtra através de labels |
+| `-A` | todos os namespaces |
+| `-o wide` | acrescenta informação |
+| `-o yaml` | mostra representação YAML |
+| `-l chave=valor` | label selector |
 | `--field-selector` | filtra por campos do objeto |
 | `--sort-by` | ordena pelo campo indicado |
-| `--no-headers` | omite cabeçalhos quando apropriado |
+| `--no-headers` | omite cabeçalhos |
+| `--help` | ajuda contextual do comando |
 
 ---
 
-# 27. Pontos-chave da sessão
+# 30. Pontos-chave da sessão
 
 ```text
 Kubernetes trabalha por estado desejado e reconciliação.
@@ -1500,13 +1864,17 @@ CNI é necessário para a rede de Pods.
 
 Ready=True não elimina a necessidade de observar outras condições.
 
-DiskPressure é uma condição operacional relevante.
+DiskPressure é uma condição operacional importante.
+
+label ≠ nodeSelector.
 
 cordon ≠ drain ≠ uncordon.
 
 upgrade plan observa; upgrade apply altera.
 
-A versão mostrada em `kubectl get nodes` é a versão do kubelet.
+A VERSION de `kubectl get nodes` é a versão do kubelet.
+
+Control Plane e Worker não são atualizados da mesma forma.
 
 Upgrades minor são sequenciais.
 
@@ -1516,21 +1884,21 @@ Depois de alterar: validar novamente.
 
 ---
 
-# 28. Exercícios de consolidação
+# 31. Exercícios de consolidação
 
-## Exercício 1 — Arquitetura
+## Exercício 1 — Da CLI à API
 
-Explica, por palavras tuas, o que acontece desde o momento em que executas:
+Explica o percurso desde:
 
 ```bash
 kubectl get nodes
 ```
 
-até receberes uma resposta. Inclui `kubectl`, kubeconfig e API Server.
+até à resposta apresentada no terminal. Inclui kubeconfig, API Server e autenticação/autorização.
 
 ## Exercício 2 — Runtime
 
-Ordena corretamente:
+Ordena:
 
 ```text
 runc
@@ -1544,24 +1912,24 @@ Depois explica a função de cada elemento.
 
 ## Exercício 3 — Redes
 
-Tens:
+Dada a rede física:
 
 ```text
-rede física: 192.168.50.0/24
+192.168.50.0/24
 ```
 
-Explica por que motivo `192.168.0.0/16` não é uma boa escolha para Pod CIDR neste ambiente e por que `10.244.0.0/16` evita essa sobreposição.
+explica por que `192.168.0.0/16` entra em conflito com o laboratório e por que `10.244.0.0/16` evita a sobreposição.
 
-## Exercício 4 — Estado intermédio
+## Exercício 4 — Estado intermédio do upgrade
 
-Depois de `kubeadm upgrade apply v1.36.4` observas:
+Observas:
 
 ```text
-kubectl version       → Server v1.36.4
-kubectl get nodes     → k8s-cp-01 v1.35.8
+kubectl version    → Server v1.36.4
+kubectl get nodes  → k8s-cp-01 v1.35.8
 ```
 
-Existe uma contradição? Justifica.
+Existe contradição? Justifica.
 
 ## Exercício 5 — Manutenção
 
@@ -1573,37 +1941,48 @@ drain
 uncordon
 ```
 
-e indica por que motivo `--force` não deve ser acrescentado automaticamente a um drain que falhou.
+E explica por que `--force` não deve ser acrescentado automaticamente quando um `drain` falha.
 
-## Exercício 6 — Troubleshooting
+## Exercício 6 — `DiskPressure`
 
-Um Node aparece:
+Um Node apresenta:
 
 ```text
 Ready=True
 DiskPressure=True
 ```
 
-Que evidências recolherias antes de tentar corrigir o problema?
+Que evidências recolherias antes de tentar corrigir?
 
-## Exercício 7 — Sequência do upgrade
+## Exercício 7 — Upgrade
 
-Coloca pela ordem correta:
+Ordena corretamente:
 
 ```text
-upgrade do kubelet Worker
 kubeadm upgrade plan
-kubeadm upgrade node
-upgrade do kubelet Control Plane
-kubeadm upgrade apply
-upgrade kubeadm no Control Plane
 upgrade kubeadm no Worker
 health gate final
+kubeadm upgrade node
+upgrade kubelet Control Plane
+kubeadm upgrade apply
+upgrade kubeadm Control Plane
+upgrade kubelet Worker
 ```
+
+## Exercício 8 — Interpretação de Pod
+
+Tens:
+
+```text
+READY   STATUS    RESTARTS
+0/1     Running   0
+```
+
+O Pod está pronto para servir tráfego? Explica a diferença entre `STATUS=Running` e `READY=1/1`.
 
 ---
 
-# 29. Autoavaliação
+# 32. Autoavaliação
 
 No final da sessão, confirma se consegues afirmar:
 
@@ -1611,21 +1990,24 @@ No final da sessão, confirma se consegues afirmar:
 - [ ] Sei identificar os principais componentes do Control Plane e dos Nodes.
 - [ ] Sei distinguir `kubeadm`, `kubelet` e `kubectl`.
 - [ ] Sei explicar CRI, containerd, runc e cgroups.
+- [ ] Sei interpretar os comandos básicos de preparação Linux.
 - [ ] Sei verificar o espaço real do filesystem e interpretar `DiskPressure`.
 - [ ] Sei explicar por que o Pod CIDR não pode sobrepor-se à rede das VMs.
 - [ ] Sei explicar o papel do CNI e do Calico.
 - [ ] Sei explicar kubeconfig e contextos.
 - [ ] Sei gerar o join no Control Plane e executá-lo no Worker.
-- [ ] Sei explicar labels e `nodeSelector`.
+- [ ] Sei interpretar labels e `nodeSelector`.
 - [ ] Sei aplicar e interpretar `cordon`, `drain` e `uncordon`.
 - [ ] Sei construir um health gate antes de um upgrade.
 - [ ] Sei explicar a sequência `1.35.x → 1.36.x`.
-- [ ] Sei interpretar um estado temporário com versões diferentes no mesmo cluster.
+- [ ] Sei explicar `upgrade plan`, `upgrade apply` e `upgrade node`.
+- [ ] Sei interpretar um cluster temporariamente com versões diferentes.
+- [ ] Sei ler os principais campos de `kubectl get nodes` e `kubectl get pods`.
 - [ ] Sei distinguir um warning transitório de uma falha persistente através de evidências.
 
 ---
 
-# 30. Laboratório e recursos de apoio
+# 33. Laboratório e recursos de apoio
 
 O procedimento operacional completo encontra-se em:
 
@@ -1633,34 +2015,34 @@ O procedimento operacional completo encontra-se em:
 sessao-04/formando/labs/laboratorio_integrado_sessao_4.md
 ```
 
-Recursos complementares da sessão:
+Recursos complementares:
 
 - [`README.md`](README.md) — enquadramento da sessão;
-- [`compatibilidade.md`](compatibilidade.md) — matriz de versões adotada;
+- [`compatibilidade.md`](compatibilidade.md) — matriz de versões;
 - [`checklist.md`](checklist.md) — preparação das VMs;
-- [`checklist_operacional.md`](checklist_operacional.md) — checkpoints operacionais;
+- [`checklist_operacional.md`](checklist_operacional.md) — checkpoints;
 - [`folha_evidencias.md`](folha_evidencias.md) — registo de evidências;
 - [`cheat_sheet.md`](cheat_sheet.md) — referência rápida;
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico por evidências;
-- [`manifests/`](manifests/) — manifestos utilizados na sessão;
-- [`referencias.md`](referencias.md) — bibliografia e documentação oficial.
+- [`manifests/`](manifests/) — manifests usados na sessão;
+- [`referencias.md`](referencias.md) — bibliografia e documentação.
 
 ---
 
-# 31. Fontes e leituras recomendadas
+# 34. Fontes e leituras recomendadas
 
 A preparação conceptual deste manual é coerente com a bibliografia disponibilizada na formação, nomeadamente:
 
 - *The Kubernetes Book* — modelo declarativo, estado desejado, reconciliação, Control Plane, CNI e CRI;
-- *Kubernetes in Action* — arquitetura, Pods, Nodes, scheduling e operação do cluster;
+- *Kubernetes in Action* — arquitetura, Pods, Nodes, scheduling e operação;
 - *Kubernetes: Up & Running* — arquitetura e administração de clusters Kubernetes.
 
-Para procedimentos que dependem da versão, deve prevalecer a documentação oficial da versão utilizada no laboratório:
+Para procedimentos dependentes da versão deve prevalecer a documentação oficial da versão utilizada:
 
-- Kubernetes v1.36 — Cluster Architecture: https://v1-36.docs.kubernetes.io/docs/concepts/architecture/
-- Kubernetes — Container Runtimes / CRI e cgroup drivers: https://kubernetes.io/docs/setup/production-environment/container-runtimes/
-- Kubernetes v1.36 — Upgrading kubeadm clusters 1.35.x → 1.36.x: https://v1-36.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
-- Calico — System requirements e versões Kubernetes testadas: https://docs.tigera.io/calico/latest/getting-started/kubernetes/requirements
-- containerd — Kubernetes support matrix: https://github.com/containerd/containerd/blob/main/RELEASES.md
+- Kubernetes v1.36 — Cluster Architecture;
+- Kubernetes — Container Runtimes / CRI e cgroup drivers;
+- Kubernetes v1.36 — Upgrading kubeadm clusters 1.35.x → 1.36.x;
+- Calico — System requirements e versões Kubernetes testadas;
+- containerd — Kubernetes support matrix.
 
-> Livros são excelentes para conceitos e modelos mentais. Para comandos, versões suportadas, compatibilidade e procedimentos de upgrade, consultar sempre a documentação oficial correspondente à versão em utilização.
+> Os livros são especialmente úteis para conceitos e modelos mentais. Para versões suportadas, compatibilidade, flags e procedimentos de upgrade, deve ser consultada a documentação oficial correspondente à versão em utilização.
