@@ -16,20 +16,20 @@ Referência rápida à **finalidade**, sintaxe, opções mais utilizadas e estru
 docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
 ```
 
-| Flag | Forma longa | Utilização |
-|---|---|---|
-| `-d` | `--detach` | Executa o container em segundo plano |
-| `-i` | `--interactive` | Mantém a entrada standard aberta |
-| `-t` | `--tty` | Aloca um terminal |
-| `-p` | `--publish` | Publica uma porta, por exemplo `<host>:<container>` |
-| `-v` | `--volume` | Monta um volume ou caminho |
-| `-e` | `--env` | Define uma variável de ambiente |
-| — | `--env-file` | Lê variáveis de ambiente de um ficheiro |
-| — | `--name` | Define o nome do container |
-| — | `--network` | Liga o container a uma rede |
-| — | `--rm` | Remove automaticamente o container quando termina |
+| Flag | Forma longa | Utilização | Exemplo |
+|---|---|---|---|
+| `-d` | `--detach` | Executa o container em segundo plano | `docker run -d nginx` |
+| `-i` | `--interactive` | Mantém a entrada standard aberta | `docker run -i ubuntu` |
+| `-t` | `--tty` | Aloca um terminal | `docker run -it ubuntu bash` |
+| `-p` | `--publish` | Publica uma porta no formato `<host>:<container>` | `docker run -p 8080:80 nginx` |
+| `-v` | `--volume` | Monta um volume ou caminho | `docker run -v dados:/data nginx` |
+| `-e` | `--env` | Define uma variável de ambiente | `docker run -e APP_ENV=dev <imagem>` |
+| — | `--env-file` | Lê variáveis de ambiente de um ficheiro | `docker run --env-file .env <imagem>` |
+| — | `--name` | Define o nome do container | `docker run --name web nginx` |
+| — | `--network` | Liga o container a uma rede | `docker run --network app-net nginx` |
+| — | `--rm` | Remove automaticamente o container quando termina | `docker run --rm hello-world` |
 
-Exemplo:
+Exemplo combinado:
 
 ```bash
 docker run --name web-demo -d -p 8080:80 nginx
@@ -45,13 +45,13 @@ docker run --name web-demo -d -p 8080:80 nginx
 docker ps [OPTIONS]
 ```
 
-| Flag | Forma longa | Utilização |
-|---|---|---|
-| `-a` | `--all` | Mostra também containers parados |
-| `-q` | `--quiet` | Mostra apenas os IDs |
-| `-f` | `--filter` | Filtra os resultados |
-| — | `--format` | Formata a saída |
-| — | `--no-trunc` | Não trunca a informação apresentada |
+| Flag | Forma longa | Utilização | Exemplo |
+|---|---|---|---|
+| `-a` | `--all` | Mostra também containers parados | `docker ps -a` |
+| `-q` | `--quiet` | Mostra apenas os IDs | `docker ps -q` |
+| `-f` | `--filter` | Filtra os resultados | `docker ps -f status=running` |
+| — | `--format` | Formata a saída | `docker ps --format '{{.Names}}'` |
+| — | `--no-trunc` | Não trunca a informação apresentada | `docker ps --no-trunc` |
 
 ### `docker logs`
 
@@ -63,13 +63,13 @@ docker ps [OPTIONS]
 docker logs [OPTIONS] CONTAINER
 ```
 
-| Flag | Forma longa | Utilização |
-|---|---|---|
-| `-f` | `--follow` | Continua a acompanhar novos logs |
-| `-n` | `--tail` | Mostra apenas as últimas linhas |
-| `-t` | `--timestamps` | Apresenta timestamps |
-| — | `--since` | Mostra logs posteriores ao instante indicado |
-| — | `--until` | Mostra logs anteriores ao instante indicado |
+| Flag | Forma longa | Utilização | Exemplo |
+|---|---|---|---|
+| `-f` | `--follow` | Continua a acompanhar novos logs | `docker logs -f web-demo` |
+| `-n` | `--tail` | Mostra apenas as últimas linhas | `docker logs --tail 50 web-demo` |
+| `-t` | `--timestamps` | Apresenta timestamps | `docker logs -t web-demo` |
+| — | `--since` | Mostra logs posteriores ao instante indicado | `docker logs --since 10m web-demo` |
+| — | `--until` | Mostra logs anteriores ao instante indicado | `docker logs --until 2026-09-11T12:00:00 web-demo` |
 
 ### `docker stop`
 
@@ -81,10 +81,10 @@ docker logs [OPTIONS] CONTAINER
 docker stop [OPTIONS] CONTAINER [CONTAINER...]
 ```
 
-| Flag | Forma longa | Utilização |
-|---|---|---|
-| `-t` | `--timeout` | Define o tempo de espera antes de forçar a paragem |
-| `-s` | `--signal` | Define o sinal enviado ao container |
+| Flag | Forma longa | Utilização | Exemplo |
+|---|---|---|---|
+| `-t` | `--timeout` | Define o tempo de espera antes de forçar a paragem | `docker stop -t 20 web-demo` |
+| `-s` | `--signal` | Define o sinal enviado ao container | `docker stop --signal SIGTERM web-demo` |
 
 ### `docker rm`
 
@@ -96,28 +96,28 @@ docker stop [OPTIONS] CONTAINER [CONTAINER...]
 docker rm [OPTIONS] CONTAINER [CONTAINER...]
 ```
 
-| Flag | Forma longa | Utilização |
-|---|---|---|
-| `-f` | `--force` | Força a remoção de um container em execução |
-| `-v` | `--volumes` | Remove volumes anónimos associados ao container |
+| Flag | Forma longa | Utilização | Exemplo |
+|---|---|---|---|
+| `-f` | `--force` | Força a remoção de um container em execução | `docker rm -f web-demo` |
+| `-v` | `--volumes` | Remove volumes anónimos associados ao container | `docker rm -v web-demo` |
 
 ### `docker volume`
 
 **Para que serve:** gere volumes Docker, utilizados para manter dados fora do ciclo de vida do container.
 
-| Operação | Sintaxe | Para que serve |
-|---|---|---|
-| Criar | `docker volume create [OPTIONS] [VOLUME]` | Cria um volume |
-| Listar | `docker volume ls [OPTIONS]` | Lista os volumes existentes |
-| Inspecionar | `docker volume inspect [OPTIONS] VOLUME [VOLUME...]` | Mostra informação detalhada sobre um volume |
-| Remover | `docker volume rm [OPTIONS] VOLUME [VOLUME...]` | Remove um ou mais volumes não utilizados |
+| Operação | Sintaxe | Para que serve | Exemplo |
+|---|---|---|---|
+| Criar | `docker volume create [OPTIONS] [VOLUME]` | Cria um volume | `docker volume create dados-demo` |
+| Listar | `docker volume ls [OPTIONS]` | Lista os volumes existentes | `docker volume ls` |
+| Inspecionar | `docker volume inspect [OPTIONS] VOLUME [VOLUME...]` | Mostra informação detalhada sobre um volume | `docker volume inspect dados-demo` |
+| Remover | `docker volume rm [OPTIONS] VOLUME [VOLUME...]` | Remove um ou mais volumes não utilizados | `docker volume rm dados-demo` |
 
 Flags frequentes em `docker volume ls`:
 
-| Flag | Forma longa | Utilização |
-|---|---|---|
-| `-q` | `--quiet` | Mostra apenas os nomes dos volumes |
-| `-f` | `--filter` | Filtra a listagem |
+| Flag | Forma longa | Utilização | Exemplo |
+|---|---|---|---|
+| `-q` | `--quiet` | Mostra apenas os nomes dos volumes | `docker volume ls -q` |
+| `-f` | `--filter` | Filtra a listagem | `docker volume ls -f dangling=true` |
 
 ---
 
@@ -135,26 +135,26 @@ A sintaxe das operações básicas é semelhante à utilizada com Docker, mas de
 podman run [OPTIONS] IMAGE [COMMAND [ARG...]]
 ```
 
-| Flag | Forma longa | Utilização |
-|---|---|---|
-| `-d` | `--detach` | Executa em segundo plano |
-| `-i` | `--interactive` | Mantém a entrada standard aberta |
-| `-t` | `--tty` | Aloca um terminal |
-| `-p` | `--publish` | Publica portas |
-| `-v` | `--volume` | Monta volumes |
-| `-e` | `--env` | Define variáveis de ambiente |
-| — | `--name` | Define o nome do container |
-| — | `--network` | Define a rede utilizada |
-| — | `--rm` | Remove o container quando termina |
+| Flag | Forma longa | Utilização | Exemplo |
+|---|---|---|---|
+| `-d` | `--detach` | Executa em segundo plano | `podman run -d nginx` |
+| `-i` | `--interactive` | Mantém a entrada standard aberta | `podman run -i ubuntu` |
+| `-t` | `--tty` | Aloca um terminal | `podman run -it ubuntu bash` |
+| `-p` | `--publish` | Publica portas | `podman run -p 8080:80 nginx` |
+| `-v` | `--volume` | Monta volumes | `podman run -v dados:/data nginx` |
+| `-e` | `--env` | Define variáveis de ambiente | `podman run -e APP_ENV=dev <imagem>` |
+| — | `--name` | Define o nome do container | `podman run --name web nginx` |
+| — | `--network` | Define a rede utilizada | `podman run --network app-net nginx` |
+| — | `--rm` | Remove o container quando termina | `podman run --rm hello-world` |
 
 ### Operações básicas
 
-| Comando | Sintaxe | Para que serve |
-|---|---|---|
-| `podman ps` | `podman ps [OPTIONS]` | Lista containers |
-| `podman logs` | `podman logs [OPTIONS] CONTAINER` | Consulta os logs de um container |
-| `podman stop` | `podman stop [OPTIONS] CONTAINER [CONTAINER...]` | Para um ou mais containers |
-| `podman rm` | `podman rm [OPTIONS] CONTAINER [CONTAINER...]` | Remove um ou mais containers |
+| Comando | Sintaxe | Para que serve | Exemplo |
+|---|---|---|---|
+| `podman ps` | `podman ps [OPTIONS]` | Lista containers | `podman ps -a` |
+| `podman logs` | `podman logs [OPTIONS] CONTAINER` | Consulta os logs de um container | `podman logs -f web-demo` |
+| `podman stop` | `podman stop [OPTIONS] CONTAINER [CONTAINER...]` | Para um ou mais containers | `podman stop web-demo` |
+| `podman rm` | `podman rm [OPTIONS] CONTAINER [CONTAINER...]` | Remove um ou mais containers | `podman rm web-demo` |
 
 ---
 
@@ -179,12 +179,12 @@ nodes
 
 ### Flags transversais frequentes
 
-| Flag | Forma longa | Utilização |
-|---|---|---|
-| `-n` | `--namespace` | Executa a operação num Namespace específico |
-| `-A` | `--all-namespaces` | Abrange todos os Namespaces, quando suportado pelo comando |
-| `-o` | `--output` | Define o formato de saída (`wide`, `yaml`, `json`, etc.) |
-| `-l` | `--selector` | Filtra recursos através de labels |
+| Flag | Forma longa | Utilização | Exemplo |
+|---|---|---|---|
+| `-n` | `--namespace` | Executa a operação num Namespace específico | `kubectl get pods -n formacao` |
+| `-A` | `--all-namespaces` | Abrange todos os Namespaces, quando suportado pelo comando | `kubectl get pods -A` |
+| `-o` | `--output` | Define o formato de saída (`wide`, `yaml`, `json`, etc.) | `kubectl get pods -o wide` |
+| `-l` | `--selector` | Filtra recursos através de labels | `kubectl get pods -l app=web` |
 
 ## `kubectl get`
 
@@ -198,25 +198,16 @@ kubectl get TYPE [NAME] [FLAGS]
 
 Flags muito utilizadas:
 
-| Flag | Utilização |
-|---|---|
-| `-n <namespace>` | Seleciona o Namespace |
-| `-A` | Lista recursos em todos os Namespaces |
-| `-o wide` | Mostra informação adicional |
-| `-o yaml` | Mostra o recurso em YAML |
-| `-o json` | Mostra o recurso em JSON |
-| `-l <chave>=<valor>` | Filtra através de labels |
-| `--show-labels` | Apresenta as labels dos recursos |
-| `-w` / `--watch` | Mantém a consulta ativa e acompanha alterações |
-
-Exemplos:
-
-```bash
-kubectl get pods -n formacao
-kubectl get pods -n formacao -o wide
-kubectl get pods -n formacao --show-labels
-kubectl get pods -n formacao -l app=web
-```
+| Flag | Utilização | Exemplo |
+|---|---|---|
+| `-n <namespace>` | Seleciona o Namespace | `kubectl get pods -n formacao` |
+| `-A` | Lista recursos em todos os Namespaces | `kubectl get pods -A` |
+| `-o wide` | Mostra informação adicional | `kubectl get pods -o wide` |
+| `-o yaml` | Mostra o recurso em YAML | `kubectl get pod web-demo -o yaml` |
+| `-o json` | Mostra o recurso em JSON | `kubectl get pod web-demo -o json` |
+| `-l <chave>=<valor>` | Filtra através de labels | `kubectl get pods -l app=web` |
+| `--show-labels` | Apresenta as labels dos recursos | `kubectl get pods --show-labels` |
+| `-w` / `--watch` | Mantém a consulta ativa e acompanha alterações | `kubectl get pods -w` |
 
 ## `kubectl apply`
 
@@ -230,17 +221,11 @@ kubectl apply -f <ficheiro|diretório|URL> [FLAGS]
 
 Flags úteis:
 
-| Flag | Utilização |
-|---|---|
-| `-f` / `--filename` | Indica o ficheiro, diretório ou URL com a configuração |
-| `-n <namespace>` | Define o Namespace da operação quando aplicável |
-| `--dry-run=client` | Processa localmente sem persistir a alteração no cluster |
-
-Exemplo:
-
-```bash
-kubectl apply -f manifests/pod-demo.yaml
-```
+| Flag | Utilização | Exemplo |
+|---|---|---|
+| `-f` / `--filename` | Indica o ficheiro, diretório ou URL com a configuração | `kubectl apply -f pod-demo.yaml` |
+| `-n <namespace>` | Define o Namespace da operação quando aplicável | `kubectl apply -f pod-demo.yaml -n formacao` |
+| `--dry-run=client` | Processa localmente sem persistir a alteração no cluster | `kubectl apply -f pod-demo.yaml --dry-run=client` |
 
 ## `kubectl describe`
 
@@ -261,22 +246,22 @@ kubectl describe namespace <namespace>
 
 ## Namespaces
 
-| Operação | Sintaxe | Para que serve |
-|---|---|---|
-| Criar | `kubectl create namespace <nome>` | Cria um novo Namespace |
-| Listar | `kubectl get namespaces` | Lista os Namespaces existentes |
-| Detalhar | `kubectl describe namespace <nome>` | Mostra informação detalhada do Namespace |
-| Remover | `kubectl delete namespace <nome>` | Remove o Namespace e os recursos namespaced nele existentes |
+| Operação | Sintaxe | Para que serve | Exemplo |
+|---|---|---|---|
+| Criar | `kubectl create namespace <nome>` | Cria um novo Namespace | `kubectl create namespace formacao` |
+| Listar | `kubectl get namespaces` | Lista os Namespaces existentes | `kubectl get namespaces` |
+| Detalhar | `kubectl describe namespace <nome>` | Mostra informação detalhada do Namespace | `kubectl describe namespace formacao` |
+| Remover | `kubectl delete namespace <nome>` | Remove o Namespace e os recursos namespaced nele existentes | `kubectl delete namespace formacao` |
 
 ## Cluster e contextos
 
-| Comando | Sintaxe | Para que serve |
-|---|---|---|
-| `cluster-info` | `kubectl cluster-info` | Apresenta informação sobre o Control Plane e serviços principais do cluster |
-| `get nodes` | `kubectl get nodes [FLAGS]` | Lista os nodes conhecidos pelo cluster |
-| `current-context` | `kubectl config current-context` | Mostra o contexto atualmente selecionado |
-| `get-contexts` | `kubectl config get-contexts [<nome>]` | Lista os contextos disponíveis ou apresenta um contexto específico |
-| `use-context` | `kubectl config use-context <contexto>` | Altera o contexto ativo no kubeconfig |
+| Comando | Sintaxe | Para que serve | Exemplo |
+|---|---|---|---|
+| `cluster-info` | `kubectl cluster-info` | Apresenta informação sobre o Control Plane e serviços principais do cluster | `kubectl cluster-info` |
+| `get nodes` | `kubectl get nodes [FLAGS]` | Lista os nodes conhecidos pelo cluster | `kubectl get nodes -o wide` |
+| `current-context` | `kubectl config current-context` | Mostra o contexto atualmente selecionado | `kubectl config current-context` |
+| `get-contexts` | `kubectl config get-contexts [<nome>]` | Lista os contextos disponíveis ou apresenta um contexto específico | `kubectl config get-contexts` |
+| `use-context` | `kubectl config use-context <contexto>` | Altera o contexto ativo no kubeconfig | `kubectl config use-context minikube` |
 
 ---
 
@@ -296,15 +281,15 @@ spec:
 
 ### Campos principais
 
-| Campo | Para que serve |
-|---|---|
-| `apiVersion` | Indica a versão da API utilizada pelo recurso |
-| `kind` | Identifica o tipo de recurso Kubernetes |
-| `metadata` | Contém informação de identificação e metadados |
-| `metadata.name` | Define o nome do recurso |
-| `metadata.namespace` | Define o Namespace onde o recurso pertence, quando aplicável |
-| `metadata.labels` | Associa pares chave/valor utilizados para organização e seleção |
-| `spec` | Descreve o estado/configuração pretendida do recurso |
+| Campo | Para que serve | Exemplo |
+|---|---|---|
+| `apiVersion` | Indica a versão da API utilizada pelo recurso | `apiVersion: v1` |
+| `kind` | Identifica o tipo de recurso Kubernetes | `kind: Pod` |
+| `metadata` | Contém informação de identificação e metadados | `metadata:` |
+| `metadata.name` | Define o nome do recurso | `name: web-demo` |
+| `metadata.namespace` | Define o Namespace onde o recurso pertence, quando aplicável | `namespace: formacao` |
+| `metadata.labels` | Associa pares chave/valor utilizados para organização e seleção | `app: web` |
+| `spec` | Descreve o estado/configuração pretendida do recurso | `spec:` |
 
 ### Exemplo de Pod
 
