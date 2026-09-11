@@ -208,20 +208,19 @@ kubectl get TYPE [NAME] [FLAGS]
 
 ## `kubectl apply`
 
-**Para que serve:** aplica configuração declarativa a recursos a partir de ficheiros, diretórios ou entrada standard. Pode criar o recurso caso ainda não exista e aplicar alterações a recursos já existentes.
+**Para que serve:** aplica configuração declarativa a recursos a partir de um ficheiro, diretório ou entrada standard. Pode criar o recurso caso ainda não exista e aplicar alterações a recursos já existentes.
 
-**Sintaxe**
+**Sintaxe utilizada nesta sessão**
 
 ```bash
-kubectl apply (-f FILENAME | -k DIRECTORY)
+kubectl apply -f FILENAME [FLAGS]
 ```
 
-**Opções úteis:**
+**Flags úteis:**
 
 | Flag | Utilização | Exemplo |
 |---|---|---|
 | `-f` / `--filename` | Indica um ficheiro, diretório, URL ou `-` para entrada standard | `kubectl apply -f pod-demo.yaml` |
-| `-k` / `--kustomize` | Processa um diretório com `kustomization.yaml` | `kubectl apply -k ./overlays/dev` |
 | `-n <namespace>` | Define o Namespace da operação quando aplicável | `kubectl apply -f pod-demo.yaml -n formacao` |
 | `--dry-run=client` | Processa localmente sem persistir a alteração no cluster | `kubectl apply -f pod-demo.yaml --dry-run=client` |
 
