@@ -1,5 +1,13 @@
 # Recursos do formador — Sessão 5
 
+## Preparação da infraestrutura
+
+Antes do laboratório dos formandos, seguir:
+
+[`preparar_infra_sessao5.md`](preparar_infra_sessao5.md)
+
+Este guia fixa a baseline validada de `local-path-provisioner`, Gateway API e Traefik.
+
 ## Validador técnico
 
 O ficheiro [`validar_lab_sessao5.sh`](validar_lab_sessao5.sh) foi criado para validar a baseline **antes** da formação.
