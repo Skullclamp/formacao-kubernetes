@@ -1,14 +1,12 @@
 # Laboratório — Sessão 4
 
-Tal como na Sessão 3, o laboratório principal destinado ao formando está organizado em `formando/labs/`.
+A Sessão 4 utiliza um único laboratório integrado, localizado diretamente nesta pasta:
 
-Percurso atual:
+[**Laboratório Integrado — Sessão 4**](laboratorio_integrado_sessao_4.md)
 
-[**Laboratório Integrado — Sessão 4**](../formando/labs/laboratorio_integrado_sessao_4.md)
-
-O laboratório é executado manualmente em duas VMs por formando:
+O laboratório é executado em duas VMs por formando:
 
 - `k8s-cp-01` — Control Plane;
 - `k8s-wk-01` — Worker.
 
-Não existe um script de instalação para o formando. Cada checkpoint exige execução, observação, registo de evidência e explicação.
+As explicações conceptuais detalhadas ficam no [`../manual_formando.md`](../manual_formando.md). O laboratório concentra-se no percurso prático, outputs essenciais, checkpoints e evidências.
