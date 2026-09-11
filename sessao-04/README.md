@@ -54,8 +54,6 @@ EXPLICAR
 AVANÇAR
 ```
 
-Não existe um script de instalação para o formando.
-
 ## Percurso
 
 ```text
@@ -90,17 +88,17 @@ cluster 1.36.4 validado novamente
 
 ## Laboratório único da sessão
 
-Tal como na Sessão 3, o formando segue um único percurso integrado:
+A Sessão 4 utiliza um único laboratório integrado:
 
-[**Laboratório Integrado — da VM Ubuntu limpa ao cluster Kubernetes 1.36.4 atualizado**](formando/labs/laboratorio_integrado_sessao_4.md)
+[**Laboratório Integrado — da VM Ubuntu limpa ao cluster Kubernetes 1.36.4 atualizado**](labs/laboratorio_integrado_sessao_4.md)
 
-O laboratório contém os checkpoints CP1–CP11, outputs de referência, health gates, `cordon`/`drain`, instalação do CNI e o upgrade completo `1.35.8 → 1.36.4`.
+O laboratório concentra-se no percurso prático, nos outputs essenciais, nos checkpoints e nas evidências. As explicações detalhadas dos conceitos, argumentos, flags e decisões ficam no manual do formando.
 
 ## Materiais
 
 - [`plano_sessao_4.md`](plano_sessao_4.md) — plano pedagógico;
-- [`manual_formando.md`](manual_formando.md) — explicação progressiva;
-- [`formando/labs/laboratorio_integrado_sessao_4.md`](formando/labs/laboratorio_integrado_sessao_4.md) — laboratório manual completo e validado;
+- [`manual_formando.md`](manual_formando.md) — explicação progressiva e consolidação;
+- [`labs/laboratorio_integrado_sessao_4.md`](labs/laboratorio_integrado_sessao_4.md) — laboratório único da sessão;
 - [`compatibilidade.md`](compatibilidade.md) — matriz de versões adotada;
 - [`checklist.md`](checklist.md) — preparação das VMs;
 - [`checklist_operacional.md`](checklist_operacional.md) — checkpoints manuais;
@@ -108,7 +106,6 @@ O laboratório contém os checkpoints CP1–CP11, outputs de referência, health
 - [`cheat_sheet.md`](cheat_sheet.md) — referência rápida;
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico orientado por evidências;
 - [`manifests/`](manifests/) — manifests usados no laboratório;
-- [`exercicios/`](exercicios/) — atividades, quiz e consolidação do upgrade;
 - [`referencias.md`](referencias.md) — documentação e bibliografia.
 
 ## Regras críticas
