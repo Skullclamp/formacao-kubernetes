@@ -1,14 +1,14 @@
 # Cheatsheet — Sessão 1
 
-Referência rápida à **finalidade**, sintaxe, opções mais utilizadas e estruturas trabalhadas na sessão.
+Referência rápida à **finalidade**, sintaxe, opções mais utilizadas, exemplos e estruturas trabalhadas na sessão.
 
-> Convenções: valores entre `< >` devem ser substituídos. Elementos entre `[ ]` são opcionais.
+> **Convenções:** valores entre `< >` devem ser substituídos. Elementos entre `[ ]` são opcionais. Termos em maiúsculas como `IMAGE`, `CONTAINER`, `COMMAND` ou `TYPE` representam argumentos que devem ser fornecidos ao comando.
 
 ## Docker
 
 ### `docker run`
 
-**Para que serve:** cria um novo container a partir de uma imagem e inicia a sua execução. Se a imagem não existir localmente, Docker tenta obtê-la do registry configurado.
+**Para que serve:** cria um novo container a partir de uma imagem e inicia a sua execução. Se a imagem não existir localmente, Docker tenta obtê-la a partir de um registry.
 
 **Sintaxe**
 
@@ -29,7 +29,7 @@ docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
 | — | `--network` | Liga o container a uma rede | `docker run --network app-net nginx` |
 | — | `--rm` | Remove automaticamente o container quando termina | `docker run --rm hello-world` |
 
-Exemplo combinado:
+**Exemplo combinado:**
 
 ```bash
 docker run --name web-demo -d -p 8080:80 nginx
@@ -37,7 +37,7 @@ docker run --name web-demo -d -p 8080:80 nginx
 
 ### `docker ps`
 
-**Para que serve:** lista os containers. Sem opções mostra apenas os containers em execução; com `-a` inclui também os containers parados.
+**Para que serve:** lista containers. Sem opções mostra apenas os containers em execução; com `-a` inclui também os containers parados.
 
 **Sintaxe**
 
@@ -55,7 +55,7 @@ docker ps [OPTIONS]
 
 ### `docker logs`
 
-**Para que serve:** consulta a saída de logs produzida por um container. É particularmente útil para observar o arranque de uma aplicação e diagnosticar erros.
+**Para que serve:** consulta a saída de logs produzida por um container. É útil para observar o arranque de uma aplicação, acompanhar a execução e diagnosticar erros.
 
 **Sintaxe**
 
@@ -112,7 +112,7 @@ docker rm [OPTIONS] CONTAINER [CONTAINER...]
 | Inspecionar | `docker volume inspect [OPTIONS] VOLUME [VOLUME...]` | Mostra informação detalhada sobre um volume | `docker volume inspect dados-demo` |
 | Remover | `docker volume rm [OPTIONS] VOLUME [VOLUME...]` | Remove um ou mais volumes não utilizados | `docker volume rm dados-demo` |
 
-Flags frequentes em `docker volume ls`:
+**Flags frequentes em `docker volume ls`:**
 
 | Flag | Forma longa | Utilização | Exemplo |
 |---|---|---|---|
@@ -123,11 +123,11 @@ Flags frequentes em `docker volume ls`:
 
 ## Podman
 
-A sintaxe das operações básicas é semelhante à utilizada com Docker, mas deve ser consultada na documentação do Podman quando forem utilizadas opções específicas.
+A sintaxe das operações básicas é semelhante à utilizada com Docker, mas as opções devem ser confirmadas na documentação do Podman quando forem utilizados comportamentos específicos.
 
 ### `podman run`
 
-**Para que serve:** cria e executa um novo container a partir de uma imagem utilizando Podman.
+**Para que serve:** cria e executa um novo container a partir de uma imagem utilizando Podman. Se a imagem não estiver disponível localmente, Podman pode obtê-la de um registry antes da execução.
 
 **Sintaxe**
 
@@ -151,7 +151,7 @@ podman run [OPTIONS] IMAGE [COMMAND [ARG...]]
 
 | Comando | Sintaxe | Para que serve | Exemplo |
 |---|---|---|---|
-| `podman ps` | `podman ps [OPTIONS]` | Lista containers | `podman ps -a` |
+| `podman ps` | `podman ps [OPTIONS]` | Lista containers; por omissão apresenta os que estão em execução | `podman ps -a` |
 | `podman logs` | `podman logs [OPTIONS] CONTAINER` | Consulta os logs de um container | `podman logs -f web-demo` |
 | `podman stop` | `podman stop [OPTIONS] CONTAINER [CONTAINER...]` | Para um ou mais containers | `podman stop web-demo` |
 | `podman rm` | `podman rm [OPTIONS] CONTAINER [CONTAINER...]` | Remove um ou mais containers | `podman rm web-demo` |
@@ -193,7 +193,7 @@ kubectl [COMMAND] [TYPE] [NAME] [FLAGS]
 kubectl get TYPE [NAME] [FLAGS]
 ```
 
-Flags muito utilizadas:
+**Flags muito utilizadas:**
 
 | Flag | Utilização | Exemplo |
 |---|---|---|
@@ -208,19 +208,20 @@ Flags muito utilizadas:
 
 ## `kubectl apply`
 
-**Para que serve:** aplica uma configuração declarativa descrita num ficheiro ou entrada standard. Cria o recurso se este ainda não existir e aplica alterações quando já existe.
+**Para que serve:** aplica configuração declarativa a recursos a partir de ficheiros, diretórios ou entrada standard. Pode criar o recurso caso ainda não exista e aplicar alterações a recursos já existentes.
 
 **Sintaxe**
 
 ```bash
-kubectl apply -f <ficheiro|diretório|URL> [FLAGS]
+kubectl apply (-f FILENAME | -k DIRECTORY)
 ```
 
-Flags úteis:
+**Opções úteis:**
 
 | Flag | Utilização | Exemplo |
 |---|---|---|
-| `-f` / `--filename` | Indica o ficheiro, diretório ou URL com a configuração | `kubectl apply -f pod-demo.yaml` |
+| `-f` / `--filename` | Indica um ficheiro, diretório, URL ou `-` para entrada standard | `kubectl apply -f pod-demo.yaml` |
+| `-k` / `--kustomize` | Processa um diretório com `kustomization.yaml` | `kubectl apply -k ./overlays/dev` |
 | `-n <namespace>` | Define o Namespace da operação quando aplicável | `kubectl apply -f pod-demo.yaml -n formacao` |
 | `--dry-run=client` | Processa localmente sem persistir a alteração no cluster | `kubectl apply -f pod-demo.yaml --dry-run=client` |
 
@@ -228,13 +229,13 @@ Flags úteis:
 
 **Para que serve:** apresenta informação detalhada sobre um recurso, incluindo estado, configuração e, quando disponíveis, eventos e recursos relacionados.
 
-**Sintaxe**
+**Sintaxe simplificada**
 
 ```bash
 kubectl describe TYPE [NAME] [FLAGS]
 ```
 
-Exemplos:
+**Exemplos:**
 
 ```bash
 kubectl describe pod <pod> -n <namespace>
@@ -284,7 +285,7 @@ spec:
 | `kind` | Identifica o tipo de recurso Kubernetes | `kind: Pod` |
 | `metadata` | Contém informação de identificação e metadados | `metadata:` |
 | `metadata.name` | Define o nome do recurso | `name: web-demo` |
-| `metadata.namespace` | Define o Namespace onde o recurso pertence, quando aplicável | `namespace: formacao` |
+| `metadata.namespace` | Define o Namespace do recurso, quando aplicável | `namespace: formacao` |
 | `metadata.labels` | Associa pares chave/valor utilizados para organização e seleção | `app: web` |
 | `spec` | Descreve o estado/configuração pretendida do recurso | `spec:` |
 
@@ -306,7 +307,7 @@ spec:
 
 ## Labels e selectors
 
-Label num manifest:
+**Label num manifest:**
 
 ```yaml
 metadata:
@@ -315,13 +316,13 @@ metadata:
     environment: formacao
 ```
 
-Selector na linha de comandos:
+**Selector na linha de comandos:**
 
 ```bash
 kubectl get pods -l <chave>=<valor>
 ```
 
-Exemplo:
+**Exemplo:**
 
 ```bash
 kubectl get pods -n formacao -l app=web
@@ -331,22 +332,25 @@ kubectl get pods -n formacao -l app=web
 
 ## Verificações rápidas
 
+Esta secção reúne comandos úteis para confirmar rapidamente o estado do ambiente antes de avançar para diagnóstico mais detalhado.
+
 ### Docker
 
-```bash
-docker ps -a
-docker logs --tail 50 <container>
-docker logs -f <container>
-```
+| Comando | O que verifica | O que procurar |
+|---|---|---|
+| `docker ps -a` | Estado de todos os containers, incluindo os que já terminaram | Nome do container, imagem utilizada e estado (`Up`, `Exited`, etc.) |
+| `docker logs --tail 50 <container>` | Últimas 50 linhas de logs | Mensagens de erro, falhas de arranque ou informação recente da aplicação |
+| `docker logs -f <container>` | Logs em tempo real | Novas mensagens produzidas enquanto a aplicação executa |
+| `docker volume ls` | Volumes existentes no host Docker | Confirmar que o volume esperado foi criado e está disponível |
 
 ### Kubernetes
 
-```bash
-kubectl get nodes -o wide
-kubectl config current-context
-kubectl get pods -n <namespace> -o wide
-kubectl describe pod <pod> -n <namespace>
-```
+| Comando | O que verifica | O que procurar |
+|---|---|---|
+| `kubectl get nodes -o wide` | Estado e informação adicional dos nodes | Estado `Ready`, versão, IP e outras informações do node |
+| `kubectl config current-context` | Contexto Kubernetes atualmente selecionado | Confirmar que está a trabalhar no cluster/contexto pretendido |
+| `kubectl get pods -n <namespace> -o wide` | Estado dos Pods num Namespace | `STATUS`, número de reinícios, IP e node onde o Pod está executado |
+| `kubectl describe pod <pod> -n <namespace>` | Informação detalhada de um Pod | Estado dos containers, condições e eventos relevantes |
 
 ---
 
@@ -354,6 +358,8 @@ kubectl describe pod <pod> -n <namespace>
 
 - Docker CLI: https://docs.docker.com/reference/cli/docker/
 - Docker `run`: https://docs.docker.com/reference/cli/docker/container/run/
+- Docker volumes: https://docs.docker.com/reference/cli/docker/volume/
 - Podman `run`: https://docs.podman.io/en/latest/markdown/podman-run.1.html
 - Referência `kubectl`: https://kubernetes.io/docs/reference/kubectl/
+- `kubectl apply`: https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/
 - Quick Reference oficial de `kubectl`: https://kubernetes.io/docs/reference/kubectl/quick-reference/
