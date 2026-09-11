@@ -334,22 +334,36 @@ kubectl create -f \
   https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml
 ```
 
-Confirmar o manifesto local antes de aplicar:
+Descarregar o manifesto da formação diretamente do GitHub para uma localização conhecida:
 
 ```bash
-grep -n 'cidr:' ../manifests/calico_installation_sessao4.yaml
+LAB_ROOT="$HOME/formacao-kubernetes/sessao-04"
+MANIFEST_DIR="$LAB_ROOT/manifests"
+
+mkdir -p "$MANIFEST_DIR"
+
+curl -fsSL \
+  https://raw.githubusercontent.com/Skullclamp/formacao-kubernetes/main/sessao-04/manifests/calico_installation_sessao4.yaml \
+  -o "$MANIFEST_DIR/calico_installation_sessao4.yaml"
+```
+
+Confirmar que o ficheiro existe e validar o CIDR antes de aplicar:
+
+```bash
+ls -l "$MANIFEST_DIR/calico_installation_sessao4.yaml"
+grep -n 'cidr:' "$MANIFEST_DIR/calico_installation_sessao4.yaml"
 ```
 
 Esperado:
 
 ```text
-10.244.0.0/16
+cidr: 10.244.0.0/16
 ```
 
 Aplicar:
 
 ```bash
-kubectl create -f ../manifests/calico_installation_sessao4.yaml
+kubectl create -f "$MANIFEST_DIR/calico_installation_sessao4.yaml"
 ```
 
 Acompanhar:
@@ -432,10 +446,25 @@ sudo kubeadm token list --kubeconfig=/etc/kubernetes/admin.conf
 
 **Executar comandos `kubectl` em:** `k8s-cp-01`.
 
+Descarregar o manifesto do Pod de teste diretamente do GitHub:
+
+```bash
+LAB_ROOT="$HOME/formacao-kubernetes/sessao-04"
+MANIFEST_DIR="$LAB_ROOT/manifests"
+
+mkdir -p "$MANIFEST_DIR"
+
+curl -fsSL \
+  https://raw.githubusercontent.com/Skullclamp/formacao-kubernetes/main/sessao-04/manifests/pod_cordon_test.yaml \
+  -o "$MANIFEST_DIR/pod_cordon_test.yaml"
+
+ls -l "$MANIFEST_DIR/pod_cordon_test.yaml"
+```
+
 Criar o Pod de teste:
 
 ```bash
-kubectl apply -f ../manifests/pod_cordon_test.yaml
+kubectl apply -f "$MANIFEST_DIR/pod_cordon_test.yaml"
 kubectl wait --for=condition=Ready pod/cordon-test --timeout=120s
 kubectl get pod cordon-test -o wide
 ```
