@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-backup
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: pg-dump
+          image: postgres:16
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+
+              pg_dump \
+                -h postgres \
+                -U postgres \
+                -d symfony_demo \
+                -f /backup/dump.sql
+
+              test -s /backup/dump.sql
+              echo "Backup criado com sucesso: /backup/dump.sql"
+          volumeMounts:
+            - name: backup
+              mountPath: /backup
+      volumes:
+        - name: backup
+          persistentVolumeClaim:
+            claimName: backup-pvc

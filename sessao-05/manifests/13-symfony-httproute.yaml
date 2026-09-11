@@ -1,0 +1,17 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: symfony-demo
+spec:
+  parentRefs:
+    - name: symfony-gateway
+  hostnames:
+    - symfony-gateway.lab
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: symfony-demo
+          port: 80

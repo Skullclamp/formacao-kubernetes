@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup-daily
+spec:
+  schedule: "0 3 * * *"
+  timeZone: "Europe/Lisbon"
+  suspend: true
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: pg-dump
+              image: postgres:16
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: password
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+
+                  FILE="/backup/dump-$(date +%F).sql"
+
+                  pg_dump \
+                    -h postgres \
+                    -U postgres \
+                    -d symfony_demo \
+                    -f "$FILE"
+
+                  test -s "$FILE"
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: backup-pvc
