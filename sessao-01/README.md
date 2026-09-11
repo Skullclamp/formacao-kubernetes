@@ -9,10 +9,8 @@ No final da sessão deverá compreender os fundamentos de virtualização, conta
 
 ## Documentação da sessão
 
-- [Plano da Sessão 1](plano_sessao_1.md)
 - [Manual do formando](manual_formando.md)
-- [Cheatsheet](cheatsheet.md)
-- [Checklist de validação](checklist.md)
+- [Cheatsheet — referência rápida](cheatsheet.md)
 
 ## Percurso
 
@@ -45,7 +43,6 @@ YAML / Pod / Namespace / Labels / Selectors
 
 - [`manifests/pod-demo.yaml`](manifests/pod-demo.yaml)
 - [`cheatsheet.md`](cheatsheet.md)
-- [`checklist.md`](checklist.md)
 
 ## Antes de começar
 
@@ -62,5 +59,3 @@ docker version
 kubectl version --client
 kubectl config current-context
 ```
-
-> Nesta sessão o objetivo principal é compreender os fundamentos. Dockerfiles, construção de imagens, Deployments, Services, Ingress, PV/PVC, RBAC e outros objetos serão aprofundados nas sessões seguintes.
