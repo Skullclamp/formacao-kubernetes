@@ -1139,7 +1139,7 @@ kubectl get pods -l app=cordon-test
 ## 16.1. Label não é `nodeSelector`
 
 ```text
-label       → descreve um objeto
+label        → descreve um objeto
 nodeSelector → restringe scheduling com base em labels de Nodes
 ```
 
@@ -1183,6 +1183,34 @@ Este Pod não é controlado por Deployment/ReplicaSet. Isso torna-se importante 
 
 # 17. `cordon`, `drain` e `uncordon`
 
+Estas três operações fazem parte do ciclo normal de **manutenção de um Node**, mas têm efeitos diferentes. Devem ser entendidas como etapas, não como sinónimos.
+
+```text
+Node em serviço
+     ↓
+cordon
+     ↓
+impedir novos agendamentos
+     ↓
+drain
+     ↓
+evacuar/remover workloads apropriados
+     ↓
+manutenção
+     ↓
+uncordon
+     ↓
+voltar a aceitar scheduling
+```
+
+Um cenário típico é atualizar o sistema operativo, reiniciar o host ou atualizar o kubelet. Antes de mexer no Node, reduzimos o risco de novos workloads serem colocados nele e tentamos retirar os workloads que podem ser deslocados.
+
+| Operação | Objetivo | Novos Pods | Pods já existentes |
+|---|---|---|---|
+| `cordon` | fechar o Node ao scheduling normal | deixam de ser agendados normalmente no Node | permanecem |
+| `drain` | preparar o Node para manutenção | Node fica sem novos agendamentos | tenta evacuar/remover os Pods apropriados |
+| `uncordon` | reabrir o Node ao scheduler | podem voltar a ser agendados | não recria Pods que tenham sido eliminados |
+
 ## 17.1. `cordon`
 
 ```bash
@@ -1191,7 +1219,24 @@ kubectl cordon k8s-wk-01
 
 ### O que faz
 
-Marca o Node como não elegível para novos agendamentos normais.
+`cordon` marca o Node como **unschedulable**, isto é, não elegível para novos agendamentos normais. O Node continua ligado, o kubelet continua a correr e os Pods já existentes continuam onde estavam.
+
+Conceptualmente:
+
+```text
+antes
+k8s-wk-01 = Ready + aceita novos Pods
+
+cordon
+   ↓
+
+depois
+k8s-wk-01 = Ready + não aceita novos Pods pelo scheduling normal
+```
+
+### Porque é útil?
+
+Imagina que vais reiniciar o Worker. Sem `cordon`, o scheduler poderia colocar um novo Pod nesse Node segundos antes da manutenção. O `cordon` estabiliza o alvo: deixamos de adicionar workloads enquanto preparamos a intervenção.
 
 ### Output esperado
 
@@ -1211,9 +1256,18 @@ mostra:
 Ready,SchedulingDisabled
 ```
 
+É importante interpretar corretamente:
+
+```text
+Ready               → Node continua saudável e contactável
+SchedulingDisabled  → novos agendamentos normais estão bloqueados
+```
+
 Os Pods existentes **não são removidos** apenas por causa do `cordon`.
 
 ## 17.2. `drain`
+
+Exemplo do laboratório:
 
 ```bash
 kubectl drain k8s-wk-01 \
@@ -1221,18 +1275,49 @@ kubectl drain k8s-wk-01 \
   --pod-selector=app=cordon-test
 ```
 
+### O que faz
+
+`drain` prepara efetivamente o Node para manutenção. O comando garante que o Node fica sem novos agendamentos e tenta **evacuar ou remover de forma controlada** os Pods abrangidos.
+
+Quando possível, `kubectl drain` utiliza o mecanismo de eviction da API. Isto permite que políticas como PodDisruptionBudget sejam consideradas. Se um Pod pertence a um Deployment, ReplicaSet ou StatefulSet, o respetivo controller pode criar uma substituição noutro Node elegível, desde que o cluster tenha condições para isso.
+
+```text
+Pod gerido por controller
+        ↓
+drain / eviction
+        ↓
+Pod sai do Node
+        ↓
+controller observa falta
+        ↓
+pode criar substituição noutro Node elegível
+```
+
+O `drain` também marca o Node como unschedulable. No laboratório executamos `cordon` explicitamente primeiro **para observar e compreender a diferença entre bloquear scheduling e evacuar workloads**.
+
 ### Flags
 
 | Flag | Significado |
 |---|---|
-| `--ignore-daemonsets` | não tenta eliminar Pods geridos por DaemonSets |
-| `--pod-selector=...` | limita a operação a Pods correspondentes à label |
+| `--ignore-daemonsets` | permite continuar sabendo que Pods de DaemonSets não são evacuados desta forma |
+| `--pod-selector=...` | limita a operação aos Pods correspondentes à label |
+| `--force` | permite continuar com determinados Pods sem controller; exige decisão consciente |
 
-O Pod de teste é direto, sem controller. O primeiro drain deve recusar a remoção.
+### Porque usamos `--ignore-daemonsets`?
 
-### Porque essa recusa é útil?
+DaemonSets existem precisamente para manter um Pod em cada Node elegível. Componentes como `calico-node`, `csi-node-driver` e `kube-proxy` são exemplos desta sessão. Esses Pods não são tratados como workloads normais a deslocar pelo `drain`.
 
-Kubernetes está a impedir que eliminemos silenciosamente um workload que não tem controller capaz de o recriar.
+### Porque o primeiro `drain` do laboratório falha?
+
+O Pod `cordon-test` foi criado diretamente:
+
+```yaml
+kind: Pod
+```
+
+Não existe Deployment, ReplicaSet ou outro controller que o recrie.
+
+Por isso, o primeiro `drain` deve recusar a remoção. Esta recusa é útil: evita eliminar silenciosamente um workload que não tem mecanismo de reposição.
 
 No exercício controlado acrescentamos:
 
@@ -1242,9 +1327,17 @@ No exercício controlado acrescentamos:
 
 Isto autoriza conscientemente a remoção desse Pod sem controller.
 
-**Boa prática:** não acrescentar `--force` automaticamente sempre que um drain falha. Ler primeiro a razão da recusa.
+Depois da remoção:
 
-## 17.3. DaemonSets
+```text
+cordon-test deixa de existir
+```
+
+Como não existe controller, o Pod **não reaparece automaticamente** noutro Node.
+
+**Boa prática:** não acrescentar `--force` automaticamente sempre que um drain falha. Ler primeiro a razão da recusa e perceber que workload está em risco.
+
+## 17.3. DaemonSets durante o `drain`
 
 Componentes como:
 
@@ -1254,7 +1347,9 @@ csi-node-driver
 kube-proxy
 ```
 
-podem permanecer no Node durante o drain porque são geridos por DaemonSets.
+podem permanecer no Node porque são geridos por DaemonSets.
+
+Isto não significa que o `drain` tenha falhado. Significa que estamos a distinguir workloads normais de componentes cujo modelo é “um Pod por Node elegível”.
 
 ## 17.4. `uncordon`
 
@@ -1262,23 +1357,54 @@ podem permanecer no Node durante o drain porque são geridos por DaemonSets.
 kubectl uncordon k8s-wk-01
 ```
 
+### O que faz
+
+`uncordon` remove a marca de unschedulable e volta a tornar o Node elegível para scheduling normal.
+
 ### Output esperado
 
 ```text
 node/k8s-wk-01 uncordoned
 ```
 
-O Node volta a ficar elegível para scheduling.
+Depois:
+
+```bash
+kubectl get nodes
+```
+
+volta a mostrar o Node simplesmente como:
 
 ```text
-cordon   → fechar scheduling
-   ↓
-drain    → evacuar workloads apropriados
-   ↓
-manutenção
-   ↓
-uncordon → reabrir scheduling
+Ready
 ```
+
+### O que `uncordon` não faz
+
+Não reinicia o Node, não restaura automaticamente Pods eliminados e não “desfaz” o `drain`. Apenas reabre o Node ao scheduler.
+
+Se um Pod direto foi removido com `--force`, continua removido. Se existirem controllers, estes mantêm o seu próprio estado desejado independentemente do `uncordon`.
+
+## 17.5. Resumo operacional
+
+```text
+cordon
+→ fecha a entrada de novos workloads
+
+
+drain
+→ prepara a manutenção e evacua/remove workloads apropriados
+
+
+manutenção
+→ atualizar, reiniciar ou intervir no Node
+
+
+uncordon
+→ volta a permitir scheduling
+```
+
+Pergunta de controlo: se um Node estiver `Ready,SchedulingDisabled`, isso não quer dizer que esteja avariado. Pode simplesmente estar corretamente colocado em manutenção.
 
 ---
 
