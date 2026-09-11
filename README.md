@@ -16,6 +16,7 @@ formacao-kubernetes/
 ├── docs/
 ├── app/
 │   └── symfony-demo/
+├── sessao-01/
 ├── sessao-02/
 ├── sessao-03/
 ├── sessao-04/
@@ -53,14 +54,19 @@ A variante de laboratório disponibiliza os endpoints pedagógicos:
 1. Consulte [`docs/pre-requisitos.md`](docs/pre-requisitos.md).
 2. Leia [`docs/como-usar-repositorio.md`](docs/como-usar-repositorio.md).
 3. Confirme o contexto em [`docs/ambiente-laboratorio.md`](docs/ambiente-laboratorio.md).
-4. Para a Sessão 2, comece em [`sessao-02/README.md`](sessao-02/README.md).
-5. Para a Sessão 3, comece em [`sessao-03/README.md`](sessao-03/README.md).
-6. Para a Sessão 4, comece em [`sessao-04/README.md`](sessao-04/README.md).
-7. Para a Sessão 5, comece em [`sessao-05/README.md`](sessao-05/README.md).
+4. Para a Sessão 1, comece em [`sessao-01/README.md`](sessao-01/README.md).
+5. Para a Sessão 2, comece em [`sessao-02/README.md`](sessao-02/README.md).
+6. Para a Sessão 3, comece em [`sessao-03/README.md`](sessao-03/README.md).
+7. Para a Sessão 4, comece em [`sessao-04/README.md`](sessao-04/README.md).
+8. Para a Sessão 5, comece em [`sessao-05/README.md`](sessao-05/README.md).
 
 ## Progressão das sessões publicadas
 
 ```text
+Sessão 1 — COMPREENDER FUNDAMENTOS
+             VMs / Containers / Kubernetes
+             kubectl / YAML / Pod / Namespace
+        ↓
 Sessão 2 — OPERAR CONTAINERS
         ↓
 Sessão 3 — CONSTRUIR E PROMOVER IMAGENS
@@ -83,6 +89,8 @@ Sessão 5 — ADMINISTRAR WORKLOADS, REDE E DADOS
                     ↓
              Job / CronJob / Backup / Restore
 ```
+
+Na Sessão 1, o foco está nos fundamentos comuns: virtualização, containers, imagens, runtimes, volumes, princípios de Kubernetes, arquitetura do cluster, `kubectl`, `kubeconfig`, YAML, Pods, Namespaces, labels e selectors.
 
 Na Sessão 4, o laboratório é executado manualmente pelos formandos: preparar os nós, configurar `containerd`, instalar explicitamente Kubernetes 1.35.x, construir o cluster com `kubeadm`, instalar o CNI, integrar o Worker, praticar manutenção, preparar um ponto de recuperação e concluir com o upgrade controlado para Kubernetes 1.36.x.
 
