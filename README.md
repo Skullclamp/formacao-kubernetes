@@ -18,19 +18,15 @@ formacao-kubernetes/
 │   └── symfony-demo/
 ├── sessao-02/
 ├── sessao-03/
-└── sessao-04/
+├── sessao-04/
+└── sessao-05/
     ├── README.md
-    ├── plano_sessao_4.md
     ├── manual_formando.md
-    ├── compatibilidade.md
-    ├── checklist.md
-    ├── checklist_operacional.md
-    ├── folha_evidencias.md
-    ├── cheat_sheet.md
-    ├── troubleshooting.md
+    ├── formando/
+    │   └── labs/
     ├── labs/
     ├── manifests/
-    └── exercicios/
+    └── formador/
 ```
 
 ## Aplicação transversal
@@ -60,6 +56,7 @@ A variante de laboratório disponibiliza os endpoints pedagógicos:
 4. Para a Sessão 2, comece em [`sessao-02/README.md`](sessao-02/README.md).
 5. Para a Sessão 3, comece em [`sessao-03/README.md`](sessao-03/README.md).
 6. Para a Sessão 4, comece em [`sessao-04/README.md`](sessao-04/README.md).
+7. Para a Sessão 5, comece em [`sessao-05/README.md`](sessao-05/README.md).
 
 ## Progressão das sessões publicadas
 
@@ -74,9 +71,22 @@ Sessão 4 — CONSTRUIR E EVOLUIR O CLUSTER
                   upgrade
                     ↓
              Kubernetes 1.36.x
+        ↓
+Sessão 5 — ADMINISTRAR WORKLOADS, REDE E DADOS
+             Deployment / DaemonSet / StatefulSet
+                    ↓
+             PV / PVC / StorageClass
+                    ↓
+             Services / DNS / EndpointSlice
+                    ↓
+             Ingress / Gateway API
+                    ↓
+             Job / CronJob / Backup / Restore
 ```
 
 Na Sessão 4, o laboratório é executado manualmente pelos formandos: preparar os nós, configurar `containerd`, instalar explicitamente Kubernetes 1.35.x, construir o cluster com `kubeadm`, instalar o CNI, integrar o Worker, praticar manutenção, preparar um ponto de recuperação e concluir com o upgrade controlado para Kubernetes 1.36.x.
+
+Na Sessão 5, o laboratório parte do cluster 1.36.4 já construído e trabalha workloads, identidade estável, storage local com dynamic provisioning, Services e DNS, Ingress e Gateway API com Traefik, PostgreSQL 16, backup lógico, perda controlada de dados e restore.
 
 ## Método de troubleshooting
 
