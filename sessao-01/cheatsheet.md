@@ -166,16 +166,13 @@ podman run [OPTIONS] IMAGE [COMMAND [ARG...]]
 kubectl [COMMAND] [TYPE] [NAME] [FLAGS]
 ```
 
-Exemplos de `TYPE`:
+`TYPE` identifica o tipo de recurso Kubernetes sobre o qual o comando vai atuar. Pode ser utilizado no singular ou no plural.
 
-```text
-pod
-pods
-namespace
-namespaces
-node
-nodes
-```
+| `TYPE` | O que representa |
+|---|---|
+| `pod` / `pods` | Unidade de execução |
+| `namespace` / `namespaces` | Agrupamento lógico |
+| `node` / `nodes` | Máquina do cluster |
 
 ### Flags transversais frequentes
 
