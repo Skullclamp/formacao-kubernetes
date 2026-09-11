@@ -1,12 +1,14 @@
 # Cheatsheet — Sessão 1
 
-Referência rápida à **sintaxe**, opções mais utilizadas e estruturas trabalhadas na sessão.
+Referência rápida à **finalidade**, sintaxe, opções mais utilizadas e estruturas trabalhadas na sessão.
 
 > Convenções: valores entre `< >` devem ser substituídos. Elementos entre `[ ]` são opcionais.
 
 ## Docker
 
 ### `docker run`
+
+**Para que serve:** cria um novo container a partir de uma imagem e inicia a sua execução. Se a imagem não existir localmente, Docker tenta obtê-la do registry configurado.
 
 **Sintaxe**
 
@@ -35,6 +37,8 @@ docker run --name web-demo -d -p 8080:80 nginx
 
 ### `docker ps`
 
+**Para que serve:** lista os containers. Sem opções mostra apenas os containers em execução; com `-a` inclui também os containers parados.
+
 **Sintaxe**
 
 ```bash
@@ -51,6 +55,8 @@ docker ps [OPTIONS]
 
 ### `docker logs`
 
+**Para que serve:** consulta a saída de logs produzida por um container. É particularmente útil para observar o arranque de uma aplicação e diagnosticar erros.
+
 **Sintaxe**
 
 ```bash
@@ -63,8 +69,11 @@ docker logs [OPTIONS] CONTAINER
 | `-n` | `--tail` | Mostra apenas as últimas linhas |
 | `-t` | `--timestamps` | Apresenta timestamps |
 | — | `--since` | Mostra logs posteriores ao instante indicado |
+| — | `--until` | Mostra logs anteriores ao instante indicado |
 
 ### `docker stop`
+
+**Para que serve:** solicita a paragem de um ou mais containers em execução, permitindo uma terminação controlada antes de recorrer a uma paragem forçada.
 
 **Sintaxe**
 
@@ -79,6 +88,8 @@ docker stop [OPTIONS] CONTAINER [CONTAINER...]
 
 ### `docker rm`
 
+**Para que serve:** remove um ou mais containers já criados. A remoção do container não equivale à remoção de volumes nomeados utilizados para persistência.
+
 **Sintaxe**
 
 ```bash
@@ -90,20 +101,22 @@ docker rm [OPTIONS] CONTAINER [CONTAINER...]
 | `-f` | `--force` | Força a remoção de um container em execução |
 | `-v` | `--volumes` | Remove volumes anónimos associados ao container |
 
-### Volumes
+### `docker volume`
 
-| Operação | Sintaxe |
-|---|---|
-| Criar volume | `docker volume create [OPTIONS] [VOLUME]` |
-| Listar volumes | `docker volume ls [OPTIONS]` |
-| Inspecionar volume | `docker volume inspect [OPTIONS] VOLUME [VOLUME...]` |
-| Remover volume | `docker volume rm [OPTIONS] VOLUME [VOLUME...]` |
+**Para que serve:** gere volumes Docker, utilizados para manter dados fora do ciclo de vida do container.
+
+| Operação | Sintaxe | Para que serve |
+|---|---|---|
+| Criar | `docker volume create [OPTIONS] [VOLUME]` | Cria um volume |
+| Listar | `docker volume ls [OPTIONS]` | Lista os volumes existentes |
+| Inspecionar | `docker volume inspect [OPTIONS] VOLUME [VOLUME...]` | Mostra informação detalhada sobre um volume |
+| Remover | `docker volume rm [OPTIONS] VOLUME [VOLUME...]` | Remove um ou mais volumes não utilizados |
 
 Flags frequentes em `docker volume ls`:
 
 | Flag | Forma longa | Utilização |
 |---|---|---|
-| `-q` | `--quiet` | Mostra apenas os nomes/IDs |
+| `-q` | `--quiet` | Mostra apenas os nomes dos volumes |
 | `-f` | `--filter` | Filtra a listagem |
 
 ---
@@ -113,6 +126,8 @@ Flags frequentes em `docker volume ls`:
 A sintaxe das operações básicas é semelhante à utilizada com Docker, mas deve ser consultada na documentação do Podman quando forem utilizadas opções específicas.
 
 ### `podman run`
+
+**Para que serve:** cria e executa um novo container a partir de uma imagem utilizando Podman.
 
 **Sintaxe**
 
@@ -134,16 +149,18 @@ podman run [OPTIONS] IMAGE [COMMAND [ARG...]]
 
 ### Operações básicas
 
-| Operação | Sintaxe |
-|---|---|
-| Listar containers | `podman ps [OPTIONS]` |
-| Consultar logs | `podman logs [OPTIONS] CONTAINER` |
-| Parar container | `podman stop [OPTIONS] CONTAINER [CONTAINER...]` |
-| Remover container | `podman rm [OPTIONS] CONTAINER [CONTAINER...]` |
+| Comando | Sintaxe | Para que serve |
+|---|---|---|
+| `podman ps` | `podman ps [OPTIONS]` | Lista containers |
+| `podman logs` | `podman logs [OPTIONS] CONTAINER` | Consulta os logs de um container |
+| `podman stop` | `podman stop [OPTIONS] CONTAINER [CONTAINER...]` | Para um ou mais containers |
+| `podman rm` | `podman rm [OPTIONS] CONTAINER [CONTAINER...]` | Remove um ou mais containers |
 
 ---
 
 ## `kubectl` — sintaxe geral
+
+**Para que serve:** `kubectl` é a ferramenta de linha de comandos utilizada para comunicar com a API Kubernetes e consultar ou gerir recursos do cluster.
 
 ```bash
 kubectl [COMMAND] [TYPE] [NAME] [FLAGS]
@@ -170,6 +187,8 @@ nodes
 | `-l` | `--selector` | Filtra recursos através de labels |
 
 ## `kubectl get`
+
+**Para que serve:** consulta e apresenta um ou vários recursos existentes no cluster.
 
 **Sintaxe**
 
@@ -201,6 +220,8 @@ kubectl get pods -n formacao -l app=web
 
 ## `kubectl apply`
 
+**Para que serve:** aplica uma configuração declarativa descrita num ficheiro ou entrada standard. Cria o recurso se este ainda não existir e aplica alterações quando já existe.
+
 **Sintaxe**
 
 ```bash
@@ -213,7 +234,7 @@ Flags úteis:
 |---|---|
 | `-f` / `--filename` | Indica o ficheiro, diretório ou URL com a configuração |
 | `-n <namespace>` | Define o Namespace da operação quando aplicável |
-| `--dry-run=client` | Valida/processa localmente sem persistir a alteração no cluster |
+| `--dry-run=client` | Processa localmente sem persistir a alteração no cluster |
 
 Exemplo:
 
@@ -222,6 +243,8 @@ kubectl apply -f manifests/pod-demo.yaml
 ```
 
 ## `kubectl describe`
+
+**Para que serve:** apresenta informação detalhada sobre um recurso, incluindo estado, configuração e, quando disponíveis, eventos e recursos relacionados.
 
 **Sintaxe**
 
@@ -238,22 +261,22 @@ kubectl describe namespace <namespace>
 
 ## Namespaces
 
-| Operação | Sintaxe |
-|---|---|
-| Criar | `kubectl create namespace <nome>` |
-| Listar | `kubectl get namespaces` |
-| Detalhar | `kubectl describe namespace <nome>` |
-| Remover | `kubectl delete namespace <nome>` |
+| Operação | Sintaxe | Para que serve |
+|---|---|---|
+| Criar | `kubectl create namespace <nome>` | Cria um novo Namespace |
+| Listar | `kubectl get namespaces` | Lista os Namespaces existentes |
+| Detalhar | `kubectl describe namespace <nome>` | Mostra informação detalhada do Namespace |
+| Remover | `kubectl delete namespace <nome>` | Remove o Namespace e os recursos namespaced nele existentes |
 
 ## Cluster e contextos
 
-| Operação | Sintaxe |
-|---|---|
-| Informação do cluster | `kubectl cluster-info` |
-| Listar nodes | `kubectl get nodes [FLAGS]` |
-| Contexto atual | `kubectl config current-context` |
-| Listar contextos | `kubectl config get-contexts [<nome>]` |
-| Alterar contexto | `kubectl config use-context <contexto>` |
+| Comando | Sintaxe | Para que serve |
+|---|---|---|
+| `cluster-info` | `kubectl cluster-info` | Apresenta informação sobre o Control Plane e serviços principais do cluster |
+| `get nodes` | `kubectl get nodes [FLAGS]` | Lista os nodes conhecidos pelo cluster |
+| `current-context` | `kubectl config current-context` | Mostra o contexto atualmente selecionado |
+| `get-contexts` | `kubectl config get-contexts [<nome>]` | Lista os contextos disponíveis ou apresenta um contexto específico |
+| `use-context` | `kubectl config use-context <contexto>` | Altera o contexto ativo no kubeconfig |
 
 ---
 
@@ -270,6 +293,18 @@ metadata:
 spec:
   # configuração pretendida do recurso
 ```
+
+### Campos principais
+
+| Campo | Para que serve |
+|---|---|
+| `apiVersion` | Indica a versão da API utilizada pelo recurso |
+| `kind` | Identifica o tipo de recurso Kubernetes |
+| `metadata` | Contém informação de identificação e metadados |
+| `metadata.name` | Define o nome do recurso |
+| `metadata.namespace` | Define o Namespace onde o recurso pertence, quando aplicável |
+| `metadata.labels` | Associa pares chave/valor utilizados para organização e seleção |
+| `spec` | Descreve o estado/configuração pretendida do recurso |
 
 ### Exemplo de Pod
 
