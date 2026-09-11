@@ -121,6 +121,32 @@ Todos os comandos administrativos são executados no **`k8s-cp-01`**. Os Workers
 
 A infraestrutura seguinte já deve estar preparada antes do laboratório: Calico, CoreDNS, `local-path-provisioner`, StorageClass `local-path`, Gateway API CRDs, Traefik, IngressClass `traefik`, GatewayClass `traefik`, NodePorts `30080/30443`.
 
+## 0.1. Diretoria de trabalho
+
+Os comandos `kubectl apply -f ../../manifests/...` assumem que o repositório foi clonado e que o terminal está na mesma diretoria deste guião.
+
+A partir de qualquer diretoria dentro do clone:
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT/sessao-05/formando/labs"
+pwd
+```
+
+O final de `pwd` deve ser:
+
+```text
+/sessao-05/formando/labs
+```
+
+Confirmar também que os manifests estão acessíveis:
+
+```bash
+ls ../../manifests/
+```
+
+Se esta verificação falhar, corrigir a diretoria antes de avançar.
+
 ---
 
 # CP1 — Pré-flight e namespace
@@ -194,7 +220,7 @@ POD_SYMFONY=$(kubectl get pods -l app=symfony-demo \
   -o jsonpath='{.items[0].metadata.name}')
 
 kubectl delete pod "$POD_SYMFONY" --wait=true
-kubectl wait --for=condition=Ready pod -l app=symfony-demo --timeout=300s
+kubectl rollout status deployment/symfony-demo --timeout=300s
 kubectl get pods -l app=symfony-demo -o wide
 ```
 
