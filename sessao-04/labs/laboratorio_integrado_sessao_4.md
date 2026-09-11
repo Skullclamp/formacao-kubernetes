@@ -36,15 +36,79 @@ Worker:              k8s-wk-01 / 192.168.50.65
 Kubernetes inicial:  1.35.8
 Kubernetes final:    1.36.4
 containerd:          2.2.6
-runc:                1.3.6
-Calico:              3.32.2
-Tigera Operator:     1.42.6
-Pod CIDR:            10.244.0.0/16
-Service CIDR:        10.96.0.0/12
-Filesystem /:        40 GB no ambiente validado
+runc:                 1.3.6
+Calico:               3.32.2
+Tigera Operator:      1.42.6
+Pod CIDR:             10.244.0.0/16
+Service CIDR:         10.96.0.0/12
+Filesystem /:         40 GB no ambiente validado
 ```
 
 A rede física é `192.168.50.0/24`; por isso usamos `10.244.0.0/16` para Pods, evitando sobreposição.
+
+---
+
+# CP0 — Obter ou atualizar os recursos da formação
+
+**Executar em:** `k8s-cp-01`.
+
+Os manifestos usados mais à frente pertencem ao repositório da formação. Antes de os referenciar, é necessário garantir que o repositório existe localmente e está atualizado a partir da branch `main`.
+
+Instalar `git`, se necessário:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+```
+
+Definir a localização local e o repositório remoto:
+
+```bash
+REPO_DIR="$HOME/formacao-kubernetes"
+REPO_URL="https://github.com/Skullclamp/formacao-kubernetes.git"
+```
+
+Obter ou atualizar o repositório:
+
+```bash
+if [ -d "$REPO_DIR/.git" ]; then
+  git -C "$REPO_DIR" switch main
+  git -C "$REPO_DIR" pull --ff-only origin main
+elif [ -e "$REPO_DIR" ]; then
+  BACKUP_DIR="${REPO_DIR}.bak-$(date +%Y%m%d-%H%M%S)"
+  mv "$REPO_DIR" "$BACKUP_DIR"
+  echo "Diretoria anterior preservada em: $BACKUP_DIR"
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+else
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+fi
+```
+
+> Se existir uma diretoria `~/formacao-kubernetes` que não seja um repositório Git — por exemplo, criada manualmente numa tentativa anterior — o bloco acima preserva-a com sufixo `.bak-...` e faz depois um clone limpo.
+
+Confirmar que os recursos necessários existem:
+
+```bash
+test -d "$REPO_DIR/.git" \
+  && echo 'OK: repositório Git disponível'
+
+test -f "$REPO_DIR/sessao-04/manifests/calico_installation_sessao4.yaml" \
+  && echo 'OK: manifesto Calico disponível'
+
+test -f "$REPO_DIR/sessao-04/manifests/pod_cordon_test.yaml" \
+  && echo 'OK: manifesto do Pod de teste disponível'
+```
+
+### CHECKPOINT CP0
+
+```text
+repositório clonado ou atualizado a partir de main
+~/formacao-kubernetes/.git existe
+calico_installation_sessao4.yaml existe
+pod_cordon_test.yaml existe
+```
+
+**Não avançar se algum dos dois manifestos não existir.**
 
 ---
 
@@ -334,24 +398,24 @@ kubectl create -f \
   https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml
 ```
 
-Descarregar o manifesto da formação diretamente do GitHub para uma localização conhecida:
+Atualizar novamente os recursos da formação e definir a pasta de manifests:
 
 ```bash
-LAB_ROOT="$HOME/formacao-kubernetes/sessao-04"
-MANIFEST_DIR="$LAB_ROOT/manifests"
+REPO_DIR="$HOME/formacao-kubernetes"
+MANIFEST_DIR="$REPO_DIR/sessao-04/manifests"
 
-mkdir -p "$MANIFEST_DIR"
+git -C "$REPO_DIR" switch main
+git -C "$REPO_DIR" pull --ff-only origin main
 
-curl -fsSL \
-  https://raw.githubusercontent.com/Skullclamp/formacao-kubernetes/main/sessao-04/manifests/calico_installation_sessao4.yaml \
-  -o "$MANIFEST_DIR/calico_installation_sessao4.yaml"
+test -d "$MANIFEST_DIR"
+test -f "$MANIFEST_DIR/calico_installation_sessao4.yaml"
 ```
 
-Confirmar que o ficheiro existe e validar o CIDR antes de aplicar:
+Confirmar o CIDR antes de aplicar:
 
 ```bash
-ls -l "$MANIFEST_DIR/calico_installation_sessao4.yaml"
-grep -n 'cidr:' "$MANIFEST_DIR/calico_installation_sessao4.yaml"
+grep -n 'cidr:' \
+  "$MANIFEST_DIR/calico_installation_sessao4.yaml"
 ```
 
 Esperado:
@@ -363,7 +427,8 @@ cidr: 10.244.0.0/16
 Aplicar:
 
 ```bash
-kubectl create -f "$MANIFEST_DIR/calico_installation_sessao4.yaml"
+kubectl create -f \
+  "$MANIFEST_DIR/calico_installation_sessao4.yaml"
 ```
 
 Acompanhar:
@@ -446,19 +511,17 @@ sudo kubeadm token list --kubeconfig=/etc/kubernetes/admin.conf
 
 **Executar comandos `kubectl` em:** `k8s-cp-01`.
 
-Descarregar o manifesto do Pod de teste diretamente do GitHub:
+Garantir novamente que o repositório está atualizado e que o manifesto existe:
 
 ```bash
-LAB_ROOT="$HOME/formacao-kubernetes/sessao-04"
-MANIFEST_DIR="$LAB_ROOT/manifests"
+REPO_DIR="$HOME/formacao-kubernetes"
+MANIFEST_DIR="$REPO_DIR/sessao-04/manifests"
 
-mkdir -p "$MANIFEST_DIR"
+git -C "$REPO_DIR" switch main
+git -C "$REPO_DIR" pull --ff-only origin main
 
-curl -fsSL \
-  https://raw.githubusercontent.com/Skullclamp/formacao-kubernetes/main/sessao-04/manifests/pod_cordon_test.yaml \
-  -o "$MANIFEST_DIR/pod_cordon_test.yaml"
-
-ls -l "$MANIFEST_DIR/pod_cordon_test.yaml"
+test -f "$MANIFEST_DIR/pod_cordon_test.yaml" \
+  && echo 'OK: manifesto do Pod de teste disponível'
 ```
 
 Criar o Pod de teste:
