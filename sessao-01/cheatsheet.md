@@ -1,107 +1,54 @@
 # Cheatsheet — Sessão 1
 
-## 1. Conceitos essenciais de containers
+Referência rápida aos comandos e estruturas utilizados na sessão.
 
-| Conceito | Ideia principal |
+## Docker
+
+| Operação | Comando |
 |---|---|
-| **VM** | Ambiente virtualizado com sistema operativo convidado próprio |
-| **Container** | Ambiente isolado para executar uma aplicação, partilhando o kernel do host |
-| **Imagem** | Base utilizada para criar uma ou várias instâncias de containers |
-| **Container Runtime** | Componente responsável pela execução dos containers |
-| **Registry** | Armazena e disponibiliza imagens |
-| **Volume** | Permite separar os dados do ciclo de vida do container |
+| Executar container | `docker run --name web-demo -d nginx` |
+| Listar containers em execução | `docker ps` |
+| Consultar logs | `docker logs web-demo` |
+| Parar container | `docker stop web-demo` |
+| Remover container | `docker rm web-demo` |
+| Criar volume | `docker volume create dados-demo` |
+| Listar volumes | `docker volume ls` |
 
-```text
-Imagem
-  ↓
-Runtime
-  ↓
-Container
-  ↓
-Aplicação
-```
+## Podman
 
-Ideias a reter:
-
-```text
-Container ≠ Imagem
-Container ≠ Máquina Virtual
-Dados ≠ ciclo de vida do Container
-```
-
-## 2. Docker — comandos essenciais
-
-```bash
-docker run --name web-demo -d nginx
-docker ps
-docker logs web-demo
-docker stop web-demo
-docker rm web-demo
-```
-
-### Volumes
-
-```bash
-docker volume create dados-demo
-docker volume ls
-```
-
-## 3. Conceitos essenciais de Kubernetes
-
-| Conceito | Ideia principal |
+| Operação | Comando |
 |---|---|
-| **Kubernetes** | Plataforma de orquestração de aplicações containerizadas |
-| **Cluster** | Conjunto de recursos Kubernetes geridos como uma unidade |
-| **Control Plane** | Gere e coordena o estado do cluster |
-| **Worker Node** | Executa os workloads |
-| **Pod** | Unidade básica onde Kubernetes executa containers |
-| **Namespace** | Organiza e separa logicamente recursos |
-| **Label** | Metadado chave-valor associado a um recurso |
-| **Selector** | Seleciona recursos com base nas labels |
-| **Annotation** | Metadado adicional não utilizado para seleção |
-| **kubectl** | Ferramenta de linha de comandos para interagir com o cluster |
-| **kubeconfig** | Configuração de acesso a clusters, utilizadores e contextos |
+| Executar container | `podman run --name web-demo -d nginx` |
+| Listar containers em execução | `podman ps` |
+| Consultar logs | `podman logs web-demo` |
+| Parar container | `podman stop web-demo` |
+| Remover container | `podman rm web-demo` |
 
-```text
-kubectl
-   ↓
-kubeconfig
-   ↓
-Context
-   ↓
-Cluster / User / Namespace
-```
+## kubectl — cluster e contextos
 
-## 4. kubectl — consulta rápida
+| Operação | Comando |
+|---|---|
+| Informação do cluster | `kubectl cluster-info` |
+| Listar nodes | `kubectl get nodes` |
+| Listar namespaces | `kubectl get namespaces` |
+| Contexto atual | `kubectl config current-context` |
+| Listar contextos | `kubectl config get-contexts` |
+| Alterar contexto | `kubectl config use-context <contexto>` |
 
-```bash
-kubectl cluster-info
-kubectl get nodes
-kubectl get namespaces
-kubectl config current-context
-kubectl config get-contexts
-```
+## kubectl — recursos
 
-### Criar e consultar recursos
+| Operação | Comando |
+|---|---|
+| Criar namespace | `kubectl create namespace formacao` |
+| Listar namespaces | `kubectl get ns` |
+| Aplicar manifest | `kubectl apply -f manifests/pod-demo.yaml` |
+| Listar Pods | `kubectl get pods -n formacao` |
+| Mostrar labels | `kubectl get pods -n formacao --show-labels` |
+| Filtrar por label | `kubectl get pods -n formacao -l app=web` |
+| Detalhar Pod | `kubectl describe pod <pod> -n <namespace>` |
+| Remover namespace | `kubectl delete namespace formacao` |
 
-```bash
-kubectl create namespace formacao
-kubectl get ns
-
-kubectl apply -f manifests/pod-demo.yaml
-kubectl get pods -n formacao
-
-kubectl get pods -n formacao --show-labels
-kubectl get pods -n formacao -l app=web
-```
-
-### Limpeza
-
-```bash
-kubectl delete namespace formacao
-```
-
-## 5. Anatomia mínima de um manifest YAML
+## YAML — estrutura base
 
 ```yaml
 apiVersion: v1
@@ -111,20 +58,39 @@ metadata:
   namespace: formacao
   labels:
     app: web
+    environment: formacao
 spec:
   containers:
     - name: web
       image: nginx
 ```
 
-```text
-apiVersion → versão da API
-kind       → tipo de recurso
-metadata   → identificação e metadados
-spec       → estado pretendido
+## Campos mais utilizados
+
+| Campo | Exemplo |
+|---|---|
+| `apiVersion` | `v1` |
+| `kind` | `Pod` |
+| `metadata.name` | `web-demo` |
+| `metadata.namespace` | `formacao` |
+| `metadata.labels` | `app: web` |
+| `spec.containers[].name` | `web` |
+| `spec.containers[].image` | `nginx` |
+
+## Labels e selectors
+
+```yaml
+labels:
+  app: web
+  environment: formacao
 ```
 
-## 6. Primeiras verificações quando algo não funciona
+```bash
+kubectl get pods -n formacao -l app=web
+kubectl get pods -n formacao -l environment=formacao
+```
+
+## Verificações rápidas
 
 ### Docker
 
@@ -136,7 +102,8 @@ docker logs <container>
 ### Kubernetes
 
 ```bash
+kubectl get nodes
+kubectl config current-context
 kubectl get pods -n <namespace>
-kubectl get pods -n <namespace> --show-labels
 kubectl describe pod <pod> -n <namespace>
 ```
