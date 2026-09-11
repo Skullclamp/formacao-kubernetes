@@ -1,85 +1,11 @@
-# Manual do Formando
-## Sessão 1 — Fundamentos de Containers e Kubernetes
+# Manual do Formando — Sessão 1
+## Fundamentos de Containers e Kubernetes
 
-Esta versão separa explicitamente os dois módulos que constituem a Sessão 1:
+# 1. Virtualização
 
-- **Módulo 1 — Fundamentos de Containers**
-- **Módulo 2 — Fundamentos e Arquitetura Kubernetes**
+A virtualização permite abstrair os recursos físicos de uma máquina e criar ambientes virtuais independentes.
 
-A sessão tem a duração total de 4 horas e destina-se a formandos de nível intermédio.
-
----
-
-# Introdução à Sessão 1
-
-Antes de trabalhar com Kubernetes é essencial compreender a tecnologia que está na sua base: os **containers**.
-
-Nesta sessão, o percurso inicia-se na virtualização tradicional, evolui para containers e termina com a criação dos primeiros recursos Kubernetes.
-
-A progressão será:
-
-```text
-Virtualização
-      ↓
-Containers
-      ↓
-Imagens / Runtimes / Networking / Volumes
-      ↓
-Necessidade de Orquestração
-      ↓
-Kubernetes
-      ↓
-Cluster
-      ↓
-Kubernetes API
-      ↑
-   kubectl
-      ↑
- kubeconfig
-      ↓
-Manifest YAML
-      ↓
-Namespaces / Pods / Labels / Selectors
-```
-
----
-
-# Objetivos da Sessão
-
-No final desta sessão, o formando deverá conseguir:
-
-- explicar os conceitos fundamentais de virtualização e containerização;
-- distinguir containers de máquinas virtuais;
-- compreender o papel dos container runtimes;
-- enquadrar Docker, Podman e OCI;
-- distinguir imagens de containers;
-- compreender registries, networking e volumes;
-- executar operações básicas sobre containers;
-- reconhecer princípios elementares de segurança;
-- explicar a necessidade de orquestração;
-- compreender a arquitetura geral de Kubernetes;
-- identificar Control Plane e Worker Nodes;
-- compreender o papel da Kubernetes API;
-- utilizar `kubectl`;
-- compreender contextos e `kubeconfig`;
-- interpretar manifests YAML simples;
-- compreender Pods e Namespaces;
-- utilizar labels e selectors;
-- criar recursos Kubernetes básicos.
-
----
-
-# Módulo 1 — Fundamentos de Containers
-
-O primeiro módulo estabelece as bases necessárias para compreender o funcionamento dos containers e, posteriormente, a necessidade de uma plataforma de orquestração.
-
-Os conteúdos abrangem virtualização, containers, runtimes, Docker, Podman, OCI, imagens, registries, ciclo de vida, networking, volumes e princípios básicos de segurança.
-
----
-
-## 1. Virtualização
-
-Durante muitos anos, uma aplicação era normalmente instalada diretamente num servidor físico.
+Num modelo tradicional, várias aplicações podem ser instaladas diretamente no mesmo servidor físico, partilhando o sistema operativo e os respetivos recursos:
 
 ```text
 Servidor físico
@@ -90,15 +16,13 @@ Servidor físico
 └── Aplicação C
 ```
 
-Este modelo pode criar problemas de utilização dos recursos, dependências entre aplicações e dificuldades na criação de ambientes isolados.
-
-A **virtualização** permite abstrair os recursos físicos de uma máquina e criar diferentes ambientes virtuais independentes.
+A utilização de ambientes virtualizados permite separar cargas de trabalho e atribuir recursos de forma mais controlada.
 
 ---
 
-## 2. Máquinas Virtuais
+# 2. Máquinas Virtuais
 
-Uma **máquina virtual**, normalmente designada por **VM — Virtual Machine**, representa um sistema computacional virtualizado.
+Uma **máquina virtual**, ou **VM — Virtual Machine**, representa um sistema computacional virtualizado.
 
 ```text
 Servidor físico
@@ -111,9 +35,7 @@ Servidor físico
 VM1  VM2  VM3
 ```
 
-Cada VM dispõe do seu próprio ambiente de sistema operativo.
-
-Uma representação simplificada é:
+Cada VM dispõe do seu próprio ambiente de sistema operativo convidado.
 
 ```text
 +---------------------------+
@@ -129,15 +51,15 @@ Uma representação simplificada é:
 +---------------------------+
 ```
 
+O **hipervisor** é a camada responsável por criar e gerir as máquinas virtuais sobre os recursos físicos disponíveis.
+
 ---
 
-## 3. Containers
+# 3. Containers
 
-Um **container** permite executar uma aplicação num ambiente isolado relativamente a outras aplicações.
+Um **container** permite executar uma aplicação num ambiente isolado relativamente às restantes aplicações do sistema.
 
-Ao contrário de uma máquina virtual, um container não necessita normalmente de transportar um sistema operativo convidado completo.
-
-Os containers partilham o kernel do sistema anfitrião, mantendo isolamento entre os processos executados.
+Ao contrário de uma máquina virtual, um container não necessita normalmente de transportar um sistema operativo convidado completo. Os containers executados no mesmo host partilham o kernel do sistema operativo anfitrião, mantendo isolamento entre processos e recursos.
 
 ```text
 +-----------+ +-----------+ +-----------+
@@ -152,9 +74,11 @@ Os containers partilham o kernel do sistema anfitrião, mantendo isolamento entr
                 Host
 ```
 
+Esta arquitetura reduz o overhead associado a um sistema operativo completo por aplicação e permite, em muitos cenários, criar e iniciar ambientes com maior rapidez.
+
 ---
 
-## 4. Containers vs. Máquinas Virtuais
+# 4. Containers vs. Máquinas Virtuais
 
 | Máquina Virtual | Container |
 |---|---|
@@ -164,19 +88,13 @@ Os containers partilham o kernel do sistema anfitrião, mantendo isolamento entr
 | Isolamento ao nível da VM | Isolamento ao nível dos processos |
 | Imagens tendencialmente maiores | Imagens tendencialmente menores |
 
-### Ideia fundamental
-
-Containers e máquinas virtuais não são necessariamente tecnologias concorrentes.
-
-É perfeitamente possível executar plataformas de containers em máquinas virtuais, situação muito comum em ambientes empresariais e cloud.
+Containers e máquinas virtuais não são tecnologias mutuamente exclusivas. É comum executar plataformas de containers sobre máquinas virtuais, tanto em datacenters como em ambientes cloud.
 
 ---
 
-## 5. Container Runtime
+# 5. Container Runtime
 
 Um **container runtime** é um dos componentes responsáveis pela execução dos containers.
-
-Conceptualmente:
 
 ```text
 Imagem
@@ -188,45 +106,47 @@ Container Runtime
 Container
 ```
 
-Nesta sessão o objetivo é compreender a função do runtime e a sua posição no ecossistema de containers, sem aprofundar os seus componentes internos.
+O runtime participa na criação e execução do ambiente isolado descrito pela imagem e na gestão do ciclo de vida do container.
 
 ---
 
-## 6. Docker
+# 6. Docker
 
 Docker disponibiliza ferramentas para trabalhar com imagens e containers.
 
-### Executar um container
+## Executar um container
 
 ```bash
 docker run --name web-demo -d nginx
 ```
 
-### Consultar containers em execução
+Este comando cria e inicia um container denominado `web-demo` a partir da imagem `nginx`.
+
+## Consultar containers em execução
 
 ```bash
 docker ps
 ```
 
-### Consultar os logs
+## Consultar logs
 
 ```bash
 docker logs web-demo
 ```
 
-### Parar o container
+## Parar o container
 
 ```bash
 docker stop web-demo
 ```
 
-### Remover o container
+## Remover o container
 
 ```bash
 docker rm web-demo
 ```
 
-A sequência básica pode ser representada por:
+O ciclo básico pode ser representado por:
 
 ```text
 Imagem
@@ -246,11 +166,9 @@ remove
 
 ---
 
-## 7. Podman
+# 7. Podman
 
-Podman é outra ferramenta do ecossistema de containers.
-
-Os mesmos exemplos básicos podem ser executados através de:
+Podman é outra ferramenta do ecossistema de containers e disponibiliza comandos semelhantes para operações básicas:
 
 ```bash
 podman run --name web-demo -d nginx
@@ -260,26 +178,18 @@ podman stop web-demo
 podman rm web-demo
 ```
 
-Nesta sessão não se pretende realizar um estudo aprofundado ou uma comparação exaustiva entre Docker e Podman.
-
-O objetivo é perceber que ambos permitem trabalhar com containers e que fazem parte do ecossistema abordado na formação.
-
-### Nota prática — Docker e Podman
-
 Em configurações típicas:
 
-- o **Docker** utiliza uma arquitetura cliente/servidor, em que a linha de comandos comunica com um daemon;
-- o **Podman** é *daemonless* e foi concebido para facilitar a execução de containers em modo **rootless**, isto é, sem privilégios administrativos permanentes.
+- o **Docker** utiliza uma arquitetura cliente/servidor em que a linha de comandos comunica com um daemon;
+- o **Podman** é *daemonless* e foi concebido para facilitar a execução de containers em modo **rootless**.
 
-Esta distinção pode originar pequenas diferenças de comportamento em laboratórios mistos. O objetivo nesta sessão é apenas reconhecer essa diferença. Existem também configurações *rootless* para Docker, pelo que não se deve assumir que Docker implica sempre execução privilegiada.
+Docker também pode ser configurado em modo *rootless*. Por isso, a existência de privilégios administrativos não deve ser inferida apenas a partir da ferramenta utilizada.
 
 ---
 
-## 8. OCI
+# 8. OCI
 
-**OCI — Open Container Initiative** surge neste módulo para enquadrar a existência de especificações comuns no ecossistema de containers.
-
-De forma conceptual:
+**OCI — Open Container Initiative** define especificações comuns para o ecossistema de containers.
 
 ```text
 Ecossistema de Containers
@@ -292,17 +202,17 @@ Ecossistema de Containers
 Ferramentas e runtimes
 ```
 
-Nesta sessão é suficiente compreender este enquadramento.
+Estas especificações contribuem para a interoperabilidade entre imagens, runtimes e ferramentas que implementam os padrões definidos.
 
 ---
 
-## 9. Imagens e Containers
+# 9. Imagens e Containers
 
-Uma distinção fundamental é:
+Uma imagem e um container representam conceitos diferentes:
 
 > **Uma imagem não é um container.**
 
-A imagem representa a base utilizada para criar uma ou várias instâncias de containers.
+A **imagem** representa a base utilizada para criar uma ou várias instâncias de containers.
 
 ```text
              Imagem
@@ -313,15 +223,13 @@ A imagem representa a base utilizada para criar uma ou várias instâncias de co
        A         B        C
 ```
 
-Uma mesma imagem pode, portanto, originar vários containers independentes.
+Uma mesma imagem pode originar vários containers independentes.
 
 ---
 
-## 10. Tags
+# 10. Tags
 
 As imagens podem ser identificadas através de **tags**.
-
-Conceptualmente:
 
 ```text
 nginx
@@ -329,17 +237,13 @@ nginx:1.27
 nginx:latest
 ```
 
-As tags permitem identificar diferentes referências de uma imagem.
-
-O seu aprofundamento, incluindo versionamento de imagens, será realizado posteriormente na formação.
+Uma tag permite distinguir referências associadas a uma imagem. Em ambientes controlados, a utilização de versões explícitas facilita a identificação da referência que está efetivamente a ser executada.
 
 ---
 
-## 11. Image Registries
+# 11. Image Registries
 
-Um **image registry** permite armazenar e disponibilizar imagens de containers.
-
-O fluxo conceptual é:
+Um **image registry** armazena e disponibiliza imagens de containers.
 
 ```text
 Construir imagem
@@ -353,18 +257,20 @@ Image Registry
 Executar container
 ```
 
+O registry funciona como ponto de distribuição das imagens utilizadas por developers, sistemas de CI/CD e plataformas de execução.
+
 ---
 
-## 12. Networking de Containers
+# 12. Networking de Containers
 
-Uma aplicação executada num container pode necessitar de comunicar:
+Uma aplicação num container pode necessitar de comunicar:
 
 - com outros containers;
 - com outros sistemas;
 - com serviços externos;
 - com utilizadores.
 
-Nesta sessão é introduzido apenas o conceito básico de networking e exposição de portas.
+Uma representação simples da exposição de uma aplicação é:
 
 ```text
 Utilizador
@@ -379,23 +285,23 @@ Container : Porta
 Aplicação
 ```
 
-A gestão avançada de networking não faz parte dos objetivos desta primeira sessão.
+A porta publicada no host permite encaminhar tráfego para a porta em que a aplicação está a escutar dentro do container.
 
 ---
 
-## 13. Armazenamento Efémero
+# 13. Armazenamento Efémero
 
-Os containers devem ser encarados como componentes que podem ser criados, destruídos e substituídos.
+Os containers podem ser criados, destruídos e substituídos. Dados guardados exclusivamente no sistema de ficheiros gravável do container ficam associados ao seu ciclo de vida.
 
-Isto levanta uma questão importante:
+Isto conduz a uma questão essencial:
 
-**O que acontece aos dados quando o container desaparece?**
+> **O que acontece aos dados quando o container desaparece?**
 
-Nem todos os dados de uma aplicação devem ter o mesmo ciclo de vida do container.
+Dados que necessitam de sobreviver à substituição de um container devem ser armazenados fora desse ciclo de vida.
 
 ---
 
-## 14. Volumes
+# 14. Volumes
 
 Um **volume** permite separar os dados do ciclo de vida do container que os utiliza.
 
@@ -409,29 +315,27 @@ Container A
 Container B
 ```
 
-A mensagem fundamental é:
-
 > **O ciclo de vida do container não deve ser confundido com o ciclo de vida dos dados.**
 
-### Criar um volume
+## Criar um volume
 
 ```bash
 docker volume create dados-demo
 ```
 
-### Consultar volumes
+## Consultar volumes
 
 ```bash
 docker volume ls
 ```
 
-Durante a componente prática deverá ser validado que os dados podem permanecer disponíveis após a recriação de um container.
+Um volume pode continuar disponível mesmo depois de o container que o utilizava ser removido, permitindo que outro container volte a montar os mesmos dados.
 
 ---
 
-## 15. Princípios Básicos de Segurança
+# 15. Princípios Básicos de Segurança
 
-Nesta primeira abordagem devem ser retidos alguns princípios:
+Alguns princípios fundamentais na utilização de containers são:
 
 - utilizar imagens de origem confiável;
 - minimizar componentes desnecessários;
@@ -440,83 +344,19 @@ Nesta primeira abordagem devem ser retidos alguns princípios:
 - não incluir credenciais nas imagens;
 - limitar a exposição desnecessária de serviços.
 
-A segurança será aprofundada nas sessões posteriores.
-
-### Exemplo de má prática
-
-Evite introduzir credenciais diretamente num comando, num ficheiro de imagem ou numa configuração que possa ficar exposta:
+## Exemplo de má prática
 
 ```bash
 docker run -e DB_PASSWORD=secret123 nginx
 ```
 
-Neste exemplo, a credencial foi escrita explicitamente no comando. Em ambientes reais, os segredos devem ser fornecidos através de mecanismos apropriados de gestão de credenciais e configuração segura. Em Kubernetes, os **Secrets** serão abordados numa sessão posterior.
+Neste exemplo, a credencial fica explicitamente presente no comando e pode ser exposta através de histórico, processos ou outros mecanismos de observação do sistema. Segredos devem ser fornecidos através de mecanismos apropriados de gestão de credenciais.
 
 ---
 
-# Síntese do Módulo 1
+# 16. Da Containerização à Orquestração
 
-No final deste módulo deverá conseguir estabelecer a seguinte relação:
-
-```text
-Imagem
-   ↓
-Container Runtime
-   ↓
-Container
-   ↓
-Aplicação
-```
-
-e compreender que:
-
-```text
-Container ≠ Imagem
-
-Container ≠ Máquina Virtual
-
-Dados ≠ Ciclo de vida do Container
-```
-
----
-
-# Exercício de Consolidação — Módulo 1
-
-Responda às seguintes questões:
-
-1. Qual é a principal diferença arquitetural entre uma VM e um container?
-2. O que distingue uma imagem de um container?
-3. Qual é a função de um container runtime?
-4. Para que serve um image registry?
-5. Porque podem ser necessários volumes?
-6. Que problema existe em guardar dados importantes exclusivamente dentro do container?
-7. Indique dois princípios básicos de segurança associados à utilização de containers.
-
----
-
-# Transição do Módulo 1 para o Módulo 2
-
-Até aqui trabalhámos sobretudo com **containers isolados** e com as ferramentas necessárias para os executar.
-
-Quando o número de containers aumenta para dezenas ou centenas, distribuídos por vários servidores, surgem novos desafios: decidir onde executar cada workload, manter réplicas, substituir instâncias que falham, expor serviços, gerir alterações e preservar o estado pretendido.
-
-É esta necessidade de **gestão coordenada em escala** que conduz ao conceito de **orquestração** e, nesta formação, ao Kubernetes.
-
----
-
-# Módulo 2 — Fundamentos e Arquitetura Kubernetes
-
-O segundo módulo introduz Kubernetes e estabelece a ligação entre a execução de containers individuais e a necessidade de gerir aplicações distribuídas.
-
-Abrange Kubernetes, princípios cloud-native, arquitetura do cluster, Control Plane, Worker Nodes, API, `kubectl`, contextos, `kubeconfig`, YAML, manifests, Namespaces, Pods, labels, selectors, annotations e principais objetos Kubernetes.
-
----
-
-## 16. Da Containerização à Orquestração
-
-Até este momento trabalhámos essencialmente com containers individuais.
-
-Considere agora um ambiente com vários servidores:
+Executar alguns containers num único servidor é relativamente simples. Quando o número de containers e servidores aumenta, surgem novos problemas operacionais.
 
 ```text
 Servidor 1 → 20 containers
@@ -525,7 +365,7 @@ Servidor 3 → 25 containers
 Servidor 4 → 40 containers
 ```
 
-Começam a surgir novas questões:
+É necessário responder a questões como:
 
 - onde deverá ser executada cada aplicação?
 - como manter várias instâncias?
@@ -533,43 +373,54 @@ Começam a surgir novas questões:
 - como substituir containers que deixam de funcionar?
 - como disponibilizar as aplicações?
 - como gerir alterações?
-- como controlar centenas ou milhares de recursos?
+- como manter o estado pretendido?
 
-A questão orientadora é:
-
-> **Já conseguimos executar containers. Como gerimos dezenas ou centenas de containers distribuídos por vários servidores?**
-
-É neste contexto que surge a **orquestração**.
+A **orquestração** coordena estas tarefas num conjunto de sistemas e workloads.
 
 ---
 
-## 17. Kubernetes
+# 17. Kubernetes
 
-Kubernetes é a plataforma de orquestração utilizada ao longo desta formação.
+**Kubernetes** é uma plataforma de orquestração de aplicações containerizadas.
 
-Nesta introdução devem ser compreendidos quatro conceitos particularmente importantes:
+Quatro conceitos ajudam a compreender o seu funcionamento:
 
-### Automatização
+## Automatização
 
-Determinadas tarefas de gestão podem ser realizadas automaticamente pela plataforma.
+Tarefas de gestão podem ser executadas automaticamente pela plataforma.
 
-### Configuração declarativa
+## Configuração declarativa
 
-O utilizador descreve o estado que pretende obter.
+O utilizador descreve o estado que pretende obter, em vez de definir apenas uma sequência de operações manuais.
 
-### Estado desejado
+## Estado desejado
 
 Representa a configuração que deverá existir no cluster.
 
-### Reconciliação
+## Reconciliação
 
-Kubernetes procura continuamente aproximar o estado real do estado pretendido.
+Kubernetes observa o estado real e procura continuamente aproximá-lo do estado desejado.
+
+Exemplo conceptual:
+
+```text
+Desejado: 3 Pods
+      │
+      ▼
+Estado atual: 2 Pods
+      │
+      ▼
+Kubernetes reconcilia
+      │
+      ▼
+Estado atual: 3 Pods
+```
 
 ---
 
-## 18. Arquitetura Geral de Kubernetes
+# 18. Arquitetura Geral de Kubernetes
 
-Um cluster pode ser inicialmente compreendido através de dois grandes conjuntos:
+Um cluster Kubernetes pode ser compreendido através de dois grandes conjuntos: **Control Plane** e **Worker Nodes**.
 
 ```text
              Kubernetes Cluster
@@ -586,17 +437,15 @@ Um cluster pode ser inicialmente compreendido através de dois grandes conjuntos
 
 ---
 
-## 19. Control Plane
+# 19. Control Plane
 
-O **Control Plane** representa a área de controlo do cluster.
+O **Control Plane** é responsável pela gestão global e controlo do estado do cluster.
 
-Nesta primeira sessão interessa compreender que é responsável pelas funções relacionadas com a gestão global e controlo do estado do ambiente Kubernetes.
-
-Os componentes internos serão aprofundados noutras fases da formação.
+Recebe pedidos através da API, mantém a visão do estado pretendido e coordena decisões necessárias para aproximar o estado real do estado declarado.
 
 ---
 
-## 20. Worker Nodes
+# 20. Worker Nodes
 
 Os **Worker Nodes** são os nodes onde são executados os workloads.
 
@@ -611,13 +460,13 @@ Control Plane
  └── Pod C
 ```
 
+O Control Plane coordena o cluster; os Worker Nodes disponibilizam capacidade para executar as aplicações.
+
 ---
 
-## 21. Kubernetes API
+# 21. Kubernetes API
 
-A interação com o cluster é realizada através da **Kubernetes API**.
-
-Nesta fase, o fluxo mais importante é:
+A **Kubernetes API** constitui o ponto central de interação com o cluster.
 
 ```text
 Utilizador
@@ -631,41 +480,45 @@ Kubernetes API
 Workloads
 ```
 
-O formando não deverá tentar memorizar todos os componentes internos nesta sessão. O objetivo é compreender este fluxo de interação.
+Ferramentas como `kubectl` enviam pedidos à API para consultar ou alterar recursos.
 
 ---
 
-## 22. kubectl
+# 22. kubectl
 
-`kubectl` é a ferramenta de linha de comandos que será utilizada ao longo da formação para interagir com Kubernetes.
+`kubectl` é a ferramenta de linha de comandos utilizada para interagir com Kubernetes.
 
-### Consultar informação do cluster
+## Consultar informação do cluster
 
 ```bash
 kubectl cluster-info
 ```
 
-### Consultar nodes
+## Consultar nodes
 
 ```bash
 kubectl get nodes
 ```
 
-### Consultar o contexto atual
+## Consultar Namespaces
+
+```bash
+kubectl get namespaces
+```
+
+## Consultar o contexto atual
 
 ```bash
 kubectl config current-context
 ```
 
-### Consultar os contextos disponíveis
+## Consultar contextos disponíveis
 
 ```bash
 kubectl config get-contexts
 ```
 
-### Alterar o contexto
-
-Quando aplicável:
+## Alterar o contexto
 
 ```bash
 kubectl config use-context <contexto>
@@ -673,11 +526,9 @@ kubectl config use-context <contexto>
 
 ---
 
-## 23. kubeconfig
+# 23. kubeconfig e Contextos
 
-Para que `kubectl` consiga saber com que ambiente Kubernetes deverá comunicar é utilizada informação presente no **kubeconfig**.
-
-Conceptualmente:
+O **kubeconfig** contém informação utilizada pelo `kubectl` para determinar como aceder a um ou mais clusters Kubernetes.
 
 ```text
 kubectl
@@ -692,25 +543,15 @@ Context
 Cluster / User / Namespace
 ```
 
-Nesta sessão pretende-se apenas compreender a finalidade desta configuração.
+Um **contexto** associa uma configuração de cluster, uma identidade de utilizador e, opcionalmente, um Namespace predefinido.
 
-Autenticação e autorização serão aprofundadas posteriormente.
-
----
-
-## 24. Contextos
-
-Um **contexto** permite definir a combinação de informações utilizada pelo `kubectl` para trabalhar com determinado ambiente.
-
-O comando:
+O contexto atual pode ser consultado com:
 
 ```bash
 kubectl config current-context
 ```
 
-permite verificar qual está atualmente selecionado.
-
-Para consultar todos:
+Todos os contextos podem ser listados com:
 
 ```bash
 kubectl config get-contexts
@@ -718,24 +559,22 @@ kubectl config get-contexts
 
 ---
 
-## 25. YAML
+# 24. YAML
 
-Kubernetes utiliza frequentemente documentos escritos em **YAML** para descrever recursos.
+**YAML** é um formato textual utilizado para representar dados estruturados. Kubernetes utiliza frequentemente YAML para descrever recursos.
 
-Um exemplo simples:
+Exemplo simples:
 
 ```yaml
 nome: exemplo
 tipo: demonstracao
 ```
 
-A indentação é relevante em YAML e representa a estrutura dos dados.
-
-Nesta sessão é necessária apenas a compreensão suficiente para interpretar manifests Kubernetes simples.
+A indentação representa a hierarquia dos dados e deve ser mantida de forma consistente.
 
 ---
 
-## 26. Manifests Kubernetes
+# 25. Manifests Kubernetes
 
 Um **manifest** descreve declarativamente um recurso que pretendemos criar ou configurar no cluster.
 
@@ -748,18 +587,14 @@ metadata:
 spec:
 ```
 
-| Campo | Significado introdutório |
+| Campo | Significado |
 |---|---|
 | `apiVersion` | Versão da API utilizada |
 | `kind` | Tipo de recurso |
 | `metadata` | Identificação e metadados |
 | `spec` | Estado ou configuração pretendida |
 
----
-
-## 27. Exemplo de Manifest
-
-O manifest de referência da sessão é:
+## Exemplo de manifest
 
 ```yaml
 apiVersion: v1
@@ -776,34 +611,23 @@ spec:
       image: nginx
 ```
 
-### Leitura guiada do manifest
+### Leitura do manifest
 
-| Campo | Exemplo | Pergunta orientadora |
+| Campo | Exemplo | Significado |
 |---|---|---|
-| `apiVersion` | `v1` | Que versão da API estou a utilizar? |
-| `kind` | `Pod` | Que tipo de recurso estou a criar? |
-| `metadata.name` | `web-demo` | Qual é o nome do recurso? |
-| `metadata.namespace` | `formacao` | Em que Namespace será criado? |
-| `metadata.labels` | `app: web` | Como posso identificar e selecionar este recurso? |
-| `spec.containers` | `name: web` | Que container será executado? |
-| `spec.containers[].image` | `nginx` | Que imagem será utilizada? |
-
-Ao analisar este manifest deverá conseguir responder:
-
-1. Que recurso está a ser criado?
-2. Qual é o nome do recurso?
-3. Em que Namespace será criado?
-4. Qual é a imagem utilizada?
-5. Que labels possui?
-6. Onde se encontra definido o estado pretendido?
+| `apiVersion` | `v1` | Versão da API utilizada |
+| `kind` | `Pod` | Tipo de recurso |
+| `metadata.name` | `web-demo` | Nome do recurso |
+| `metadata.namespace` | `formacao` | Namespace onde será criado |
+| `metadata.labels` | `app: web` | Metadados utilizados para identificação e seleção |
+| `spec.containers` | `name: web` | Container definido no Pod |
+| `spec.containers[].image` | `nginx` | Imagem utilizada pelo container |
 
 ---
 
-## 28. Pods
+# 26. Pods
 
-O **Pod** é um dos objetos fundamentais de Kubernetes.
-
-Nesta sessão basta compreender o Pod como a unidade onde são executados containers.
+Um **Pod** é a unidade básica onde Kubernetes executa containers.
 
 ```text
 Pod
@@ -813,13 +637,13 @@ Pod
        └── Aplicação
 ```
 
-O conceito será aprofundado posteriormente.
+Um Pod contém a definição dos containers que devem ser executados em conjunto e dos recursos associados a essa execução.
 
 ---
 
-## 29. Namespaces
+# 27. Namespaces
 
-Um **Namespace** permite organizar recursos dentro de um cluster.
+Um **Namespace** permite organizar logicamente recursos dentro de um cluster.
 
 ```text
 Cluster
@@ -832,13 +656,13 @@ Cluster
        └── Pod C
 ```
 
-### Criar um Namespace
+## Criar um Namespace
 
 ```bash
 kubectl create namespace formacao
 ```
 
-### Consultar Namespaces
+## Consultar Namespaces
 
 ```bash
 kubectl get ns
@@ -846,11 +670,11 @@ kubectl get ns
 
 ---
 
-## 30. Labels
+# 28. Labels, Selectors e Annotations
+
+## Labels
 
 As **labels** são pares chave/valor associados aos recursos.
-
-Exemplo:
 
 ```yaml
 labels:
@@ -858,21 +682,15 @@ labels:
   environment: formacao
 ```
 
-Podem ser utilizadas para identificar e organizar recursos.
+Permitem identificar, organizar e agrupar recursos.
 
----
+## Selectors
 
-## 31. Selectors
-
-Os **selectors** permitem selecionar recursos através das labels.
-
-Por exemplo:
+Os **selectors** selecionam recursos através das labels.
 
 ```bash
 kubectl get pods -n formacao -l app=web
 ```
-
-A relação é:
 
 ```text
 Recurso
@@ -883,23 +701,15 @@ Recurso
           Selector
 ```
 
----
+## Annotations
 
-## 32. Annotations
-
-As **annotations** permitem também associar metadados aos recursos.
-
-Nesta sessão pretende-se apenas introduzir o conceito.
-
-O seu aprofundamento não está previsto para esta fase inicial.
+As **annotations** são metadados adicionais associados aos recursos. Ao contrário das labels, não são normalmente utilizadas para selecionar conjuntos de objetos.
 
 ---
 
-## 33. Principais Objetos Kubernetes
+# 29. Principais Objetos Kubernetes
 
-Ao longo da formação serão utilizados vários objetos.
-
-Nesta sessão devem ser apresentados apenas como um **mapa de navegação**:
+Kubernetes disponibiliza diferentes tipos de objetos para representar workloads, configuração, rede, armazenamento e tarefas.
 
 ```text
 Kubernetes Objects
@@ -916,36 +726,41 @@ Kubernetes Objects
 └── CronJob
 ```
 
+O **Pod** é o objeto trabalhado diretamente nesta sessão; os restantes surgem aqui como referência para a estrutura global da plataforma.
+
 ---
 
-# Laboratório — Módulo 2
+# 30. Prática — Containers
 
-## Objetivo
-
-Consultar o ambiente Kubernetes, identificar o contexto ativo, criar recursos básicos através de YAML e utilizar labels e selectors.
-
-## Pré-requisitos
-
-Antes de iniciar o laboratório, confirme que:
-
-- `kubectl` está instalado e configurado;
-- existe acesso a um cluster Kubernetes funcional;
-- o contexto ativo é o contexto previsto para a formação;
-- o utilizador tem permissões para consultar nodes e criar Namespaces e Pods;
-- a imagem utilizada no exercício está acessível a partir do cluster.
-
-Valide inicialmente:
+## Executar e consultar um container
 
 ```bash
-kubectl get nodes
-kubectl config current-context
+docker run --name web-demo -d nginx
+docker ps
+docker logs web-demo
 ```
 
-O primeiro comando deverá devolver pelo menos um node acessível e o segundo deverá apresentar o contexto esperado.
+## Parar e remover
+
+```bash
+docker stop web-demo
+docker rm web-demo
+```
+
+## Criar e consultar um volume
+
+```bash
+docker volume create dados-demo
+docker volume ls
+```
+
+Valide que os dados armazenados no volume podem permanecer disponíveis após a substituição do container que o utiliza.
 
 ---
 
-## Tarefa 1 — Consultar o Cluster
+# 31. Prática — Kubernetes
+
+## 31.1. Consultar o ambiente
 
 ```bash
 kubectl get nodes
@@ -953,37 +768,18 @@ kubectl get namespaces
 kubectl config current-context
 ```
 
-Identifique:
+Identifique os nodes disponíveis, os Namespaces existentes e o contexto ativo.
 
-- os nodes existentes;
-- os Namespaces;
-- o contexto ativo.
-
----
-
-## Tarefa 2 — Criar um Namespace
+## 31.2. Criar um Namespace
 
 ```bash
 kubectl create namespace formacao
-```
-
-Confirmar:
-
-```bash
 kubectl get ns
 ```
 
----
+## 31.3. Criar um Pod através de YAML
 
-## Tarefa 3 — Criar um Pod através de YAML
-
-Crie o ficheiro:
-
-```text
-pod-demo.yaml
-```
-
-com:
+Crie `pod-demo.yaml`:
 
 ```yaml
 apiVersion: v1
@@ -1012,25 +808,19 @@ Consultar:
 kubectl get pods -n formacao
 ```
 
----
-
-## Tarefa 4 — Consultar Labels
+## 31.4. Consultar labels
 
 ```bash
 kubectl get pods -n formacao --show-labels
 ```
 
----
-
-## Tarefa 5 — Utilizar um Selector
+## 31.5. Utilizar um selector
 
 ```bash
 kubectl get pods -n formacao -l app=web
 ```
 
----
-
-## Tarefa 6 — Limpeza do Ambiente
+## 31.6. Limpar o ambiente
 
 ```bash
 kubectl delete namespace formacao
@@ -1038,58 +828,71 @@ kubectl delete namespace formacao
 
 ---
 
-# Checklist de Validação da Sessão
+# 32. Checklist de Validação
 
-| Competência | Evidência esperada | Critério de sucesso |
-|---|---|---|
-| Executar um container | Container em execução | `docker ps` apresenta o container `web-demo` com estado de execução |
-| Consultar logs | Logs identificados | `docker logs web-demo` devolve saída sem erro de acesso ao container |
-| Criar volume | Volume visível | `docker volume ls` apresenta `dados-demo` |
-| Validar persistência | Dados mantidos | Os dados continuam disponíveis depois de remover e recriar o container que utiliza o volume |
-| Consultar cluster | Nodes e Namespaces identificados | `kubectl get nodes` e `kubectl get namespaces` devolvem os recursos esperados |
-| Identificar contexto | Contexto atual reconhecido | `kubectl config current-context` apresenta o contexto previsto |
-| Criar Namespace | Namespace visível | `kubectl get ns` apresenta `formacao` |
-| Criar Pod por YAML | Pod no estado esperado | `kubectl get pods -n formacao` apresenta `web-demo` com `STATUS=Running` |
-| Consultar labels | Labels apresentadas | `kubectl get pods -n formacao --show-labels` apresenta `app=web` e `environment=formacao` |
-| Utilizar selector | Recurso corretamente filtrado | `kubectl get pods -n formacao -l app=web` devolve apenas o Pod correspondente |
+| Competência | Evidência esperada |
+|---|---|
+| Executar um container | `docker ps` apresenta `web-demo` em execução |
+| Consultar logs | `docker logs web-demo` devolve saída do container |
+| Criar volume | `docker volume ls` apresenta `dados-demo` |
+| Validar persistência | Os dados mantêm-se após substituir o container que utiliza o volume |
+| Consultar cluster | `kubectl get nodes` e `kubectl get namespaces` devolvem recursos |
+| Identificar contexto | `kubectl config current-context` apresenta o contexto esperado |
+| Criar Namespace | `kubectl get ns` apresenta `formacao` |
+| Criar Pod por YAML | `kubectl get pods -n formacao` apresenta `web-demo` |
+| Consultar labels | São apresentadas `app=web` e `environment=formacao` |
+| Utilizar selector | `-l app=web` devolve o Pod correspondente |
 
 ---
 
-# Resumo do Módulo 1
+# 33. Resumo da Sessão
 
-O formando deverá reter:
+```text
+Virtualização
+      ↓
+Máquinas Virtuais
+      ↓
+Containers
+      ↓
+Imagem + Runtime
+      ↓
+Networking + Volumes
+      ↓
+Orquestração
+      ↓
+Kubernetes
+      ↓
+Control Plane + Worker Nodes
+      ↓
+Kubernetes API
+      ↑
+   kubectl
+      ↑
+ kubeconfig
+      ↓
+YAML / Manifest
+      ↓
+Pod + Namespace + Labels + Selectors
+```
 
-- uma VM e um container possuem arquiteturas diferentes;
-- containers partilham o kernel do host;
-- uma imagem serve de base à criação de containers;
+Ideias essenciais:
+
+- uma VM inclui um sistema operativo convidado; um container partilha o kernel do host;
+- uma imagem é a base utilizada para criar containers;
 - o runtime participa na execução dos containers;
-- Docker e Podman são ferramentas do ecossistema;
-- registries permitem armazenar e disponibilizar imagens;
-- containers podem comunicar através de redes;
-- volumes permitem desacoplar os dados do ciclo de vida do container;
-- devem ser aplicados princípios básicos de segurança.
+- um registry armazena e distribui imagens;
+- volumes permitem separar dados do ciclo de vida do container;
+- Kubernetes coordena aplicações containerizadas em escala;
+- o Control Plane gere o cluster e os Worker Nodes executam workloads;
+- `kubectl` comunica com a Kubernetes API;
+- `kubeconfig` e contextos determinam como `kubectl` acede aos clusters;
+- manifests YAML descrevem recursos e o estado pretendido;
+- Pods executam containers e Namespaces organizam recursos;
+- labels identificam recursos e selectors permitem selecioná-los.
 
 ---
 
-# Resumo do Módulo 2
-
-O formando deverá reter:
-
-- Kubernetes permite gerir containers em escala;
-- um cluster possui Control Plane e Worker Nodes;
-- a Kubernetes API constitui o ponto central de interação;
-- `kubectl` permite interagir com essa API;
-- `kubeconfig` contém informação necessária à configuração de acesso;
-- contextos permitem selecionar ambientes;
-- manifests YAML descrevem recursos;
-- Pods são unidades fundamentais de execução;
-- Namespaces organizam recursos;
-- labels identificam recursos;
-- selectors permitem selecioná-los.
-
----
-
-# Exercício Final de Consolidação
+# 34. Exercício Final de Consolidação
 
 Analise o seguinte manifest:
 
@@ -1115,123 +918,11 @@ Responda:
 3. Em que Namespace será criado?
 4. Que imagem será utilizada?
 5. Que labels estão definidas?
-6. Qual seria o selector para selecionar apenas recursos com `app=api`?
-7. Que comando utilizaria para aplicar este manifest?
-8. Que comando utilizaria para consultar o Pod?
-9. Como apresentaria as labels?
-10. Qual seria uma forma de remover todos os recursos criados neste Namespace?
-11. **Bónus:** execute `kubectl describe pod api-demo -n formacao` e identifique uma secção que apresente o estado atual do container.
+6. Qual é o selector que seleciona recursos com `app=api`?
+7. Que comando aplica este manifest?
+8. Que comando consulta o Pod no Namespace `formacao`?
+9. Como pode apresentar as labels do Pod?
+10. Como pode remover todos os recursos criados no Namespace `formacao`?
+11. Execute `kubectl describe pod api-demo -n formacao` e identifique informação sobre o estado atual do container.
 
-Depois de responder, valide as soluções no ambiente Kubernetes.
-
-A questão bónus permite começar a distinguir, de forma introdutória, o **estado desejado** descrito no manifest do **estado observado** no cluster.
-
----
-
-# Questões de Revisão da Sessão 1
-
-## Módulo 1
-
-1. Qual é a principal diferença arquitetural entre uma VM e um container?
-2. Qual é a diferença entre imagem e container?
-3. Qual é a função de um container runtime?
-4. Para que serve um registry?
-5. Para que serve um volume?
-6. Porque não devemos incluir credenciais dentro das imagens?
-
-## Módulo 2
-
-7. Porque é necessário um orquestrador?
-8. Qual é o papel geral do Control Plane?
-9. Onde são executados os workloads?
-10. Para que serve `kubectl`?
-11. Para que serve o `kubeconfig`?
-12. O que representa `kind` num manifest?
-13. Para que serve um Namespace?
-14. Qual é a relação entre uma label e um selector?
-
----
-
-# Conceitos-Chave
-
-## Módulo 1
-
-```text
-Virtualização
-Máquina Virtual
-Hipervisor
-Container
-Container Runtime
-Docker
-Podman
-OCI
-Imagem
-Tag
-Image Registry
-Networking
-Volume
-Persistência
-```
-
-## Módulo 2
-
-```text
-Orquestração
-Kubernetes
-Cluster
-Control Plane
-Worker Node
-Kubernetes API
-kubectl
-kubeconfig
-Context
-YAML
-Manifest
-Namespace
-Pod
-Label
-Selector
-Annotation
-```
-
----
-
-# Continuidade da Formação
-
-Com esta organização, a separação pedagógica fica clara:
-
-```text
-SESSÃO 1
-│
-├── MÓDULO 1
-│   Fundamentos de Containers
-│
-│   Virtualização
-│        ↓
-│   Containers
-│        ↓
-│   Runtimes
-│        ↓
-│   Imagens
-│        ↓
-│   Networking / Volumes
-│
-└── MÓDULO 2
-    Fundamentos e Arquitetura Kubernetes
-
-    Necessidade de Orquestração
-             ↓
-         Kubernetes
-             ↓
-          Cluster
-             ↓
-      Control Plane / Workers
-             ↓
-        API / kubectl
-             ↓
-        YAML / Manifests
-             ↓
-    Pods / Namespaces / Labels
-```
-
-A Sessão 1 tem sobretudo o objetivo de **compreender** os fundamentos de Containers e Kubernetes, preparando a progressão para a Sessão 2, dedicada à construção, containerização e configuração de aplicações.
+Compare depois o estado declarado no manifest com o estado observado no cluster.
