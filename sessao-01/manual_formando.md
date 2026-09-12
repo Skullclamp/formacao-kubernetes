@@ -39,8 +39,7 @@
 4. [28. Guia rápido Docker e Podman](#28-guia-rápido-docker-e-podman)
 5. [29. Guia rápido kubectl](#29-guia-rápido-kubectl)
 6. [30. Glossário](#30-glossário)
-7. [31. Espaço para notas](#31-espaço-para-notas)
-8. [32. Recursos e leituras complementares](#32-recursos-e-leituras-complementares)
+7. [31. Recursos e leituras complementares](#31-recursos-e-leituras-complementares)
 
 ---
 
@@ -2834,45 +2833,9 @@ Não significa que esta ordem resolva todos os problemas, mas obriga a recolher 
 
 ---
 
-# 31. Espaço para notas
+# 31. Recursos e leituras complementares
 
-## Conceitos que quero rever
-
-........................................................................................................
-
-........................................................................................................
-
-........................................................................................................
-
-## Comandos que quero memorizar
-
-........................................................................................................
-
-........................................................................................................
-
-........................................................................................................
-
-## Dúvidas para colocar ao formador
-
-........................................................................................................
-
-........................................................................................................
-
-........................................................................................................
-
-## Ligações ao meu contexto profissional
-
-........................................................................................................
-
-........................................................................................................
-
-........................................................................................................
-
----
-
-# 32. Recursos e leituras complementares
-
-## 32.1. Livros de referência utilizados no projeto
+## 31.1. Livros de referência utilizados no projeto
 
 O desenvolvimento e aprofundamento deste manual teve como base conceptual os seguintes livros disponíveis nas fontes do projeto:
 
@@ -2884,7 +2847,7 @@ O desenvolvimento e aprofundamento deste manual teve como base conceptual os seg
 
 Este manual sintetiza e reorganiza estes conceitos como referência técnica estruturada. As obras indicadas permitem aprofundar fundamentos, exemplos e decisões de arquitetura.
 
-## 32.2. Documentação oficial Kubernetes
+## 31.2. Documentação oficial Kubernetes
 
 - Kubernetes Components: https://kubernetes.io/docs/concepts/overview/components/
 - Container Runtime Interface: https://kubernetes.io/docs/concepts/containers/cri/
@@ -2895,12 +2858,12 @@ Este manual sintetiza e reorganiza estes conceitos como referência técnica est
 - Annotations: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
 - kubectl reference: https://kubernetes.io/docs/reference/kubectl/
 
-## 32.3. Open Container Initiative
+## 31.3. Open Container Initiative
 
 - OCI overview: https://opencontainers.org/about/overview/
 - OCI specifications: https://specs.opencontainers.org/
 
-## 32.4. Docker documentation
+## 31.4. Docker documentation
 
 - Docker Engine security: https://docs.docker.com/engine/security/
 - Networking: https://docs.docker.com/engine/network/
