@@ -95,20 +95,28 @@ restore
 
 ## Laboratório único da sessão
 
-Tal como na Sessão 4, o formando segue um único percurso integrado:
+Existe um único laboratório integrado:
 
-[**Laboratório Integrado — Sessão 5**](formando/labs/laboratorio_integrado_sessao_5.md)
+[**Laboratório Integrado — Sessão 5**](labs/laboratorio_integrado_sessao_5.md)
 
 O laboratório é manual e organizado por checkpoints com explicação, comandos, outputs, observação e evidência. Os manifests usados nos checkpoints estão em [`manifests/`](manifests/).
+
+## Estrutura
+
+```text
+sessao-05/
+├── README.md
+├── manual_formando.md
+├── labs/
+│   └── laboratorio_integrado_sessao_5.md
+└── manifests/
+```
 
 ## Materiais
 
 - [`manual_formando.md`](manual_formando.md) — explicação conceptual e operacional progressiva;
-- [`formando/labs/laboratorio_integrado_sessao_5.md`](formando/labs/laboratorio_integrado_sessao_5.md) — laboratório manual completo;
-- [`labs/`](labs/) — pontos de entrada/compatibilidade do laboratório;
-- [`manifests/`](manifests/) — 17 manifests usados no laboratório;
-- [`formador/preparar_infra_sessao5.md`](formador/preparar_infra_sessao5.md) — preparação da infraestrutura antes da formação;
-- [`formador/validar_lab_sessao5.sh`](formador/validar_lab_sessao5.sh) — validador técnico do ambiente, reservado ao formador.
+- [`labs/laboratorio_integrado_sessao_5.md`](labs/laboratorio_integrado_sessao_5.md) — laboratório manual completo;
+- [`manifests/`](manifests/) — manifests usados no laboratório.
 
 ## Regras críticas
 
