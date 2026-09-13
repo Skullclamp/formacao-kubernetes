@@ -52,7 +52,7 @@ Evidência e validação
 
 ## Laboratório integrado
 
-O laboratório principal será organizado em:
+Existe um único laboratório para a Sessão 6:
 
 [**Laboratório Integrado — Sessão 6**](formando/labs/laboratorio_integrado_sessao_6.md)
 
@@ -79,12 +79,7 @@ sessao-06/
 ├── formando/
 │   └── labs/
 │       └── laboratorio_integrado_sessao_6.md
-├── labs/
-│   ├── README.md
-│   └── laboratorio_integrado_sessao_6.md
-├── manifests/
-│   └── README.md
-└── formador/
+└── manifests/
     └── README.md
 ```
 
@@ -111,4 +106,4 @@ Uma configuração aplicada com sucesso não é, por si só, evidência de que a
 
 ## Estado
 
-A estrutura base da Sessão 6 está criada. O manual, laboratório, manifests e recursos do formador serão preenchidos nas próximas etapas de desenvolvimento da formação.
+A estrutura base da Sessão 6 está criada. O manual, o laboratório integrado e os manifests serão preenchidos nas próximas etapas de desenvolvimento da formação.
