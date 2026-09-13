@@ -20,7 +20,8 @@ formacao-kubernetes/
 ├── sessao-02/
 ├── sessao-03/
 ├── sessao-04/
-└── sessao-05/
+├── sessao-05/
+└── sessao-06/
     ├── README.md
     ├── manual_formando.md
     ├── formando/
@@ -59,6 +60,7 @@ A variante de laboratório disponibiliza os endpoints pedagógicos:
 6. Para a Sessão 3, comece em [`sessao-03/README.md`](sessao-03/README.md).
 7. Para a Sessão 4, comece em [`sessao-04/README.md`](sessao-04/README.md).
 8. Para a Sessão 5, comece em [`sessao-05/README.md`](sessao-05/README.md).
+9. Para a Sessão 6, comece em [`sessao-06/README.md`](sessao-06/README.md).
 
 ## Progressão das sessões publicadas
 
@@ -88,6 +90,19 @@ Sessão 5 — ADMINISTRAR WORKLOADS, REDE E DADOS
              Ingress / Gateway API
                     ↓
              Job / CronJob / Backup / Restore
+        ↓
+Sessão 6 — GOVERNAR O CLUSTER
+             Requests / Limits
+                    ↓
+             ResourceQuota / LimitRange
+                    ↓
+             Scheduling / Affinity / Taints
+                    ↓
+             ServiceAccounts / RBAC
+                    ↓
+             SecurityContext / Secrets
+                    ↓
+             NetworkPolicy / Least privilege
 ```
 
 Na Sessão 1, o foco está nos fundamentos comuns: virtualização, containers, imagens, runtimes, volumes, princípios de Kubernetes, arquitetura do cluster, `kubectl`, `kubeconfig`, YAML, Pods, Namespaces, labels e selectors.
@@ -95,6 +110,8 @@ Na Sessão 1, o foco está nos fundamentos comuns: virtualização, containers, 
 Na Sessão 4, o laboratório é executado manualmente pelos formandos: preparar os nós, configurar `containerd`, instalar explicitamente Kubernetes 1.35.x, construir o cluster com `kubeadm`, instalar o CNI, integrar o Worker, praticar manutenção, preparar um ponto de recuperação e concluir com o upgrade controlado para Kubernetes 1.36.x.
 
 Na Sessão 5, o laboratório parte do cluster 1.36.4 já construído e trabalha workloads, identidade estável, storage local com dynamic provisioning, Services e DNS, Ingress e Gateway API com Traefik, PostgreSQL 16, backup lógico, perda controlada de dados e restore.
+
+Na Sessão 6, o foco passa para a governação: recursos, quotas, scheduling, ServiceAccounts, RBAC, SecurityContext, Secrets e NetworkPolicy com Calico, sempre com validação por evidência e aplicação do princípio de menor privilégio.
 
 ## Método de troubleshooting
 
