@@ -18,7 +18,7 @@ Worker 2:               k8s-wk-03 / 192.168.50.102
 Ubuntu:                 26.04.1 LTS
 Kubernetes:             1.36.4
 containerd:             2.2.6
-CNI:                    Calico
+CNI:                    Calico 3.32.2
 
 StorageClass:           local-path
 Provisioner:            rancher.io/local-path
@@ -37,9 +37,33 @@ Gateway listener HTTP:  8000
 Symfony Demo:           v3.1.0
 Imagem:                 ghcr.io/skullclamp/symfony-demo:1.1.0
 PostgreSQL:             16
+Namespace lab:          sessao5
 ```
 
 A baseline foi validada de ponta a ponta com 48 verificações obrigatórias: **48 OK, 0 avisos, 0 falhas**.
+
+## Continuidade da topologia — preparação do formador
+
+A Sessão 4 termina intencionalmente com:
+
+```text
+k8s-cp-01
++
+k8s-wk-01
+```
+
+O segundo Worker, `k8s-wk-03 / 192.168.50.102`, é acrescentado pelo formador **antes da Sessão 5 e fora dos 240 minutos da aula**. O procedimento reutiliza o mesmo `kubeadm join` já praticado na Sessão 4; não é introduzido um segundo exercício de join apenas para preencher a topologia.
+
+Antes de iniciar a Sessão 5, o formador valida obrigatoriamente:
+
+```text
+k8s-wk-03 Ready
+Kubernetes 1.36.4
+containerd 2.2.6
+Calico operacional
+```
+
+A designação `k8s-wk-03` corresponde ao inventário real das VMs do laboratório. Não representa um checkpoint omitido e não implica que exista um `k8s-wk-02` que o formando devesse ter criado.
 
 ## Regra pedagógica
 
@@ -50,12 +74,16 @@ EXECUTAR MANUALMENTE
     ↓
 OBSERVAR
     ↓
+PROVOCAR / TESTAR
+    ↓
 REGISTAR EVIDÊNCIA
     ↓
 EXPLICAR
     ↓
 AVANÇAR
 ```
+
+Cada `CPx` é um gate pedagógico: não se avança sem resultado esperado, evidência e interpretação. O molde comum das Sessões 4–8 está em [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md).
 
 ## Percurso
 
@@ -78,7 +106,7 @@ Ingress Traefik
         ↓
 GatewayClass → Gateway → HTTPRoute
         ↓
-Job + pg_dump
+Job + backup SQLite consistente
         ↓
 CronJob
         ↓
@@ -88,7 +116,9 @@ perda de Pod
         ↓
 persistência
         ↓
-eliminação da PVC
+health gate antes da operação destrutiva
+        ↓
+eliminação lógica da PVC
         ↓
 restore
 ```
@@ -101,12 +131,41 @@ Existe um único laboratório integrado:
 
 O laboratório é manual e organizado por checkpoints com explicação, comandos, outputs, observação e evidência. Os manifests usados nos checkpoints estão em [`manifests/`](manifests/).
 
+## Health gate obrigatório antes do CP17
+
+Antes de eliminar a PVC da aplicação, confirmar que a situação saudável e o backup estão provados. Não avançar enquanto faltar qualquer uma destas evidências:
+
+```text
+Deployment Symfony saudável antes de ser escalado para 0
++
+symfony-data Bound
++
+backup-pvc Bound
++
+Job de backup Complete
++
+MARKER_BACKUP=persistencia-sessao5-ok
++
+INTEGRITY_CHECK=ok
++
+database-online.sqlite copiado para fora do cluster e não vazio
++
+/health devolve HTTP 200
+```
+
+Esta regra impede atribuir ao exercício de perda lógica um problema que já existia antes da operação destrutiva. A checklist está também em [`folha_evidencias.md`](folha_evidencias.md).
+
+## Nota sobre o Namespace
+
+O Namespace `sessao5` é mantido porque este laboratório já foi validado de ponta a ponta com esse nome e vários FQDNs/evidências dependem dele. Para novos laboratórios, a convenção adotada é `s<sessão>-<slug>`, por exemplo `s6-governance`. A exceção da Sessão 5 está documentada no padrão comum e não deve ser reproduzida em novas sessões.
+
 ## Estrutura
 
 ```text
 sessao-05/
 ├── README.md
 ├── manual_formando.md
+├── folha_evidencias.md
 ├── labs/
 │   └── laboratorio_integrado_sessao_5.md
 └── manifests/
@@ -116,7 +175,9 @@ sessao-05/
 
 - [`manual_formando.md`](manual_formando.md) — explicação conceptual e operacional progressiva;
 - [`labs/laboratorio_integrado_sessao_5.md`](labs/laboratorio_integrado_sessao_5.md) — laboratório manual completo;
-- [`manifests/`](manifests/) — manifests usados no laboratório.
+- [`folha_evidencias.md`](folha_evidencias.md) — registo central dos checkpoints, health gate e evidência final;
+- [`manifests/`](manifests/) — manifests usados no laboratório;
+- [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md) — molde canónico dos laboratórios Kubernetes.
 
 ## Regras críticas
 
@@ -133,8 +194,9 @@ sessao-05/
 11. GatewayClass `traefik` é pré-instalada; o formando cria apenas Gateway + HTTPRoute.
 12. O listener HTTP do Gateway usa `8000`; o acesso externo usa NodePort `30080`.
 13. O backup deve ser retirado do cluster antes da eliminação controlada da PVC.
-14. O cenário de eliminação da PVC é “perda lógica dos dados”, não simulação de perda física do Worker.
-15. **Persistência ≠ Backup.**
+14. Não iniciar o CP17 sem validar o health gate documentado nesta sessão.
+15. O cenário de eliminação da PVC é “perda lógica dos dados”, não simulação de perda física do Worker.
+16. **Persistência ≠ Backup.**
 
 ## Resultado esperado
 
@@ -152,6 +214,8 @@ DNS e Service
 entrada HTTP
 +
 backup
++
+health gate
 +
 falha controlada
 +
