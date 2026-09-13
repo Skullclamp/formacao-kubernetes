@@ -26,9 +26,8 @@ formacao-kubernetes/
     ├── manual_formando.md
     ├── formando/
     │   └── labs/
-    ├── labs/
-    ├── manifests/
-    └── formador/
+    │       └── laboratorio_integrado_sessao_6.md
+    └── manifests/
 ```
 
 ## Aplicação transversal
