@@ -28,6 +28,8 @@ EVIDÊNCIA
 
 > Não avançar para o bloco seguinte enquanto o checkpoint atual não estiver validado.
 
+> Este laboratório foi validado de ponta a ponta no percurso Kubernetes `1.35.8 → 1.36.4`. A versão final de referência do cluster após o upgrade é `1.36.4`.
+
 ---
 
 # 0. Baseline validada
@@ -1450,6 +1452,69 @@ sem recorrência do problema AppArmor/runc observado no ensaio anterior
 ```
 
 **Evidência:** guardar a tabela final dos Nodes, `kubectl get tigerastatus`, filtro de Pods anómalos e `kubectl version`.
+
+---
+
+# Checklist final de autoavaliação
+
+- [ ] Consigo explicar por que a preparação Linux deve ser validada antes de instalar Kubernetes.
+- [ ] Consigo confirmar swap, cgroup v2, módulos `overlay`/`br_netfilter` e os `sysctl` necessários.
+- [ ] Consigo explicar a relação `Kubernetes → CRI → containerd → runc`.
+- [ ] Consigo validar que o CRI está disponível e que `SystemdCgroup = true`.
+- [ ] Sei por que as versões de `kubeadm`, `kubelet` e `kubectl` são instaladas de forma controlada e colocadas em `hold`.
+- [ ] Consigo explicar o papel de `kubeadm init`, do Pod CIDR e do socket CRI.
+- [ ] Consigo distinguir um Control Plane criado mas ainda `NotReady` por ausência de CNI de uma falha do bootstrap.
+- [ ] Consigo validar Calico, CoreDNS e o estado `Ready` do Control Plane antes de integrar Workers.
+- [ ] Consigo explicar token, hash da CA e `kubeadm join` sem expor/copiar credenciais fictícias.
+- [ ] Consigo distinguir `cordon`, `drain` e `uncordon` e justificar quando `--force` é ou não apropriado.
+- [ ] Consigo recolher um health gate antes de alterar o cluster e explicar por que isso reduz falsos diagnósticos.
+- [ ] Sei explicar por que um snapshot coordenado das VMs é um ponto de recuperação pedagógico e não uma política completa de backup.
+- [ ] Consigo explicar a ordem do upgrade: `kubeadm` → Control Plane → kubelet/kubectl → Worker.
+- [ ] Consigo interpretar a fase temporária em que API Server e kubelets apresentam versões diferentes.
+- [ ] Consigo colocar um Node em manutenção antes de atualizar o kubelet e voltar a torná-lo schedulable apenas depois de `Ready`.
+- [ ] Consigo validar `Ready`, `DiskPressure`, versão do kubelet, runtime e estado do Calico após o upgrade.
+- [ ] Sei distinguir warning transitório em logs de erro persistente através de recorrência e impacto.
+- [ ] Consigo provar que o cluster terminou a sessão com Client e Server em `v1.36.4` e sem Pods anómalos persistentes.
+
+# Regra de evidência da Sessão 4
+
+O laboratório fica concluído quando o formando consegue **apresentar e explicar**:
+
+```text
+pré-requisitos Linux validados nos dois Nodes
++
+containerd 2.2.6 ativo + CRI disponível + SystemdCgroup=true
++
+Kubernetes 1.35.8 instalado de forma controlada
++
+Control Plane criado por kubeadm
++
+Calico/CoreDNS saudáveis
++
+Worker integrado e Ready
++
+cordon/drain/uncordon demonstrados
++
+health gate limpo antes do upgrade
++
+ponto de recuperação criado antes da mudança
++
+Control Plane atualizado primeiro
++
+fase mista de versões observada e explicada
++
+Worker atualizado depois do Control Plane
++
+ambos os Nodes Ready em v1.36.4
++
+DiskPressure=False
++
+Calico core saudável
++
+Client e Server v1.36.4
++
+sem falhas persistentes relevantes no health gate final
+```
 
 ---
 
