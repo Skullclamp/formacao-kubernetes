@@ -54,7 +54,7 @@ Evidência e validação
 
 Existe um único laboratório para a Sessão 6:
 
-[**Laboratório Integrado — Sessão 6**](formando/labs/laboratorio_integrado_sessao_6.md)
+[**Laboratório Integrado — Sessão 6**](labs/laboratorio_integrado_sessao_6.md)
 
 A prática seguirá a regra:
 
@@ -76,9 +76,8 @@ EXPLICAR
 sessao-06/
 ├── README.md
 ├── manual_formando.md
-├── formando/
-│   └── labs/
-│       └── laboratorio_integrado_sessao_6.md
+├── labs/
+│   └── laboratorio_integrado_sessao_6.md
 └── manifests/
     └── README.md
 ```
