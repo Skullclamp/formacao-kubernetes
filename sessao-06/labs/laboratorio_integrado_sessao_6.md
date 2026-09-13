@@ -7,6 +7,7 @@
 **Nível:** intermédio  
 **Foco:** **GOVERNAR O CLUSTER**  
 **Topologia:** `k8s-cp-01` + `k8s-wk-01` + `k8s-wk-03`  
+**Runtime:** containerd  
 **CNI:** Calico  
 **Namespace:** `s6-governance`
 
@@ -62,6 +63,8 @@ EVIDÊNCIA
 
 > Nomes de Pods, UIDs, timestamps, IPs e algumas mensagens de Events podem variar entre execuções. Os outputs apresentados representam a evidência essencial e não texto para comparar carácter a carácter.
 
+> Este laboratório foi validado de ponta a ponta num cluster real com Kubernetes v1.36.4, containerd e Calico. Sempre que um Event variar entre versões, deve ser interpretada a causa e não comparado o texto literalmente.
+
 ---
 
 # 0. Baseline e diretoria de trabalho
@@ -81,31 +84,46 @@ Namespace do laboratório:  s6-governance
 
 O Control Plane deve permanecer fora dos workloads normais. Os exercícios de scheduling utilizam os dois Worker Nodes.
 
-## 0.1. Diretoria de trabalho
+## 0.1. Garantir o repositório e entrar na diretoria de trabalho
+
+Uma shell nova pode abrir em `$HOME` e não dentro do repositório Git. O bloco seguinte funciona tanto quando o repositório já existe como numa primeira utilização:
 
 ```bash
 clear
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT/sessao-06/labs"
+
+if [ -d "$HOME/formacao-kubernetes/.git" ]; then
+  cd "$HOME/formacao-kubernetes"
+  git pull --ff-only
+else
+  cd "$HOME"
+  git clone https://github.com/Skullclamp/formacao-kubernetes.git
+  cd "$HOME/formacao-kubernetes"
+fi
+
+git branch --show-current
+git status --short
+
+cd sessao-06/labs
 pwd
 ```
 
 ### O que faz este bloco
 
-- `git rev-parse --show-toplevel` devolve a raiz do repositório Git;
-- `$(...)` executa o comando e coloca o resultado na variável `REPO_ROOT`;
-- `cd` muda o terminal para a diretoria do laboratório;
-- `pwd` confirma a diretoria atual.
+- `-d` testa se a diretoria `.git` já existe;
+- `git pull --ff-only` atualiza o clone apenas quando é possível fazer fast-forward, evitando criar um merge inesperado;
+- `git branch --show-current` confirma a branch ativa;
+- `git status --short` evidencia alterações locais antes do laboratório;
+- `pwd` confirma a diretoria de trabalho.
 
 O final de `pwd` deve ser:
 
 ```text
-/sessao-06/labs
+/formacao-kubernetes/sessao-06/labs
 ```
 
 ---
 
-# CP1 — Pré-flight e Namespace
+# CP1 — Pré-flight, CNI e Namespace
 
 ## O que estamos a fazer
 
@@ -148,21 +166,97 @@ Calico     operacional
 CoreDNS    operacional
 ```
 
-Criar o Namespace:
+## 1.1. Criar o Namespace de forma repetível
 
 ```bash
-clear
-kubectl create namespace s6-governance
+kubectl create namespace s6-governance \
+  --dry-run=client \
+  -o yaml | kubectl apply -f -
+
 kubectl config set-context --current --namespace=s6-governance
 kubectl get namespace s6-governance
 ```
 
-### Flags e opções
+### Porque usamos `--dry-run=client -o yaml | kubectl apply -f -`?
 
-- `--current` altera apenas o contexto atualmente selecionado;
-- `--namespace=s6-governance` define o Namespace por omissão para os comandos seguintes.
+O comando produz o manifesto do Namespace e entrega-o a `kubectl apply`. Assim, uma segunda execução não falha apenas porque o Namespace já existe.
 
 > Mesmo com o Namespace configurado no contexto, vários comandos deste laboratório mantêm `-n s6-governance` para tornar o escopo explícito.
+
+## 1.2. Smoke-test do CNI em cada Worker
+
+Ver um DaemonSet `calico-node` em `Running` não prova, por si só, que um novo Pod consegue criar a respetiva sandbox de rede. Vamos criar um pequeno Pod em cada Worker e confirmar que ambos recebem IP.
+
+```bash
+cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cni-smoke-wk01
+  namespace: s6-governance
+spec:
+  nodeName: k8s-wk-01
+  containers:
+    - name: shell
+      image: busybox:1.36
+      command: ["sh", "-c", "sleep 300"]
+      resources:
+        requests:
+          cpu: "10m"
+          memory: "16Mi"
+        limits:
+          cpu: "50m"
+          memory: "64Mi"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cni-smoke-wk03
+  namespace: s6-governance
+spec:
+  nodeName: k8s-wk-03
+  containers:
+    - name: shell
+      image: busybox:1.36
+      command: ["sh", "-c", "sleep 300"]
+      resources:
+        requests:
+          cpu: "10m"
+          memory: "16Mi"
+        limits:
+          cpu: "50m"
+          memory: "64Mi"
+EOF
+
+kubectl wait --for=condition=Ready pod/cni-smoke-wk01 \
+  -n s6-governance --timeout=120s
+kubectl wait --for=condition=Ready pod/cni-smoke-wk03 \
+  -n s6-governance --timeout=120s
+
+kubectl get pods -n s6-governance \
+  -l '!does-not-exist' \
+  -o wide | grep cni-smoke
+```
+
+Esperado: ambos os Pods `Running`, cada um no Worker indicado, com um IP atribuído pelo CNI.
+
+> Aqui `nodeName` é deliberado: não estamos a testar o Scheduler; estamos a isolar a capacidade do kubelet/CNI para criar um novo Pod em cada Worker.
+
+Se um Pod tiver `NODE` atribuído mas ficar em `ContainerCreating`, inspecionar:
+
+```bash
+kubectl describe pod cni-smoke-wk03 -n s6-governance
+kubectl get pods -n kube-system -o wide | grep calico-node
+```
+
+Um `FailedCreatePodSandBox` é uma falha de runtime/CNI **depois** do placement e não um `FailedScheduling`.
+
+Limpar o smoke-test:
+
+```bash
+kubectl delete pod cni-smoke-wk01 cni-smoke-wk03 \
+  -n s6-governance
+```
 
 ---
 
@@ -174,7 +268,7 @@ Observar primeiro a capacidade dos Nodes e depois declarar os recursos de um Pod
 
 ## Porque é necessário
 
-O Scheduler necessita de `requests` para decidir se um Pod cabe num Node. Os `limits` definem o teto de utilização imposto ao container.
+O Scheduler **contabiliza os `requests` como necessidade declarada** para decidir se um Pod é elegível para um Node. Isto não significa que reserve antecipadamente esse valor como utilização instantânea. Os `limits` definem o teto de utilização imposto ao container.
 
 Consultar os Workers:
 
@@ -202,6 +296,10 @@ capacidade total reportada pelo Node
 Allocatable
    ↓
 capacidade que Kubernetes considera disponível para Pods
+
+Requests declarados
+   ↓
+necessidade contabilizada pelo Scheduler para elegibilidade
 ```
 
 Criar um Pod com `requests` e `limits`:
@@ -241,8 +339,15 @@ EOF
 Validar:
 
 ```bash
+kubectl wait --for=condition=Ready pod/resources-demo \
+  -n s6-governance --timeout=120s
+
 kubectl get pod resources-demo -n s6-governance -o wide
 kubectl describe pod resources-demo -n s6-governance
+
+kubectl get pod resources-demo \
+  -n s6-governance \
+  -o jsonpath='{.spec.containers[0].resources}{"\n"}'
 ```
 
 No `describe`, localizar:
@@ -278,15 +383,18 @@ EOF
 Observar:
 
 ```bash
-kubectl get pod resources-impossible -n s6-governance
+kubectl get pod resources-impossible -n s6-governance -o wide
 kubectl describe pod resources-impossible -n s6-governance
-kubectl get events -n s6-governance --sort-by=.lastTimestamp
+kubectl get events -n s6-governance \
+  --field-selector involvedObject.name=resources-impossible \
+  --sort-by=.lastTimestamp
 ```
 
 Esperado:
 
 ```text
 STATUS: Pending
+NODE:   <none>
 Event:  FailedScheduling
 ```
 
@@ -295,6 +403,8 @@ Event:  FailedScheduling
 > Porque é que o Pod existe na API mas continua `Pending`?
 
 Porque o pedido foi aceite pela API, mas o Scheduler não encontrou nenhum Node com recursos suficientes para satisfazer o `request` declarado.
+
+> O texto exato de `FailedScheduling` pode variar entre versões. A evidência essencial é a ausência de Node e a causa apresentada no Event.
 
 Limpar o teste:
 
@@ -361,7 +471,7 @@ kubectl describe limitrange container-policy -n s6-governance
 - `defaultRequest` é aplicado quando o container não declara request;
 - `default` define o limit por omissão.
 
-## 3.2. Confirmar defaults
+## 3.2. Confirmar defaults e ausência de retroatividade
 
 Criar um Pod sem `resources`:
 
@@ -372,22 +482,30 @@ kubectl run defaulted-resources \
   -n s6-governance
 ```
 
-### Flags
-
-- `--image` indica a imagem do container;
-- `--restart=Never` cria diretamente um Pod em vez de um controlador que o recrie;
-- `-n` define explicitamente o Namespace.
-
 Observar os valores efetivos:
 
 ```bash
 kubectl get pod defaulted-resources \
   -n s6-governance \
-  -o jsonpath='{.spec.containers[0].resources}'
-echo
+  -o jsonpath='{.spec.containers[0].resources}{"\n"}'
 ```
 
-Esperado: o Pod apresenta os defaults introduzidos pelo `LimitRange`.
+Esperado:
+
+```text
+defaultRequest → cpu 100m / memory 64Mi
+default        → cpu 500m / memory 256Mi
+```
+
+Comparar com o Pod criado antes do `LimitRange`:
+
+```bash
+kubectl get pod resources-demo \
+  -n s6-governance \
+  -o jsonpath='{.spec.containers[0].resources}{"\n"}'
+```
+
+O `LimitRange` atua em admission/criação e **não altera retroativamente** objetos já existentes.
 
 ## 3.3. Aplicar ResourceQuota
 
@@ -415,12 +533,7 @@ kubectl get resourcequota -n s6-governance
 kubectl describe resourcequota namespace-quota -n s6-governance
 ```
 
-Procurar:
-
-```text
-Used
-Hard
-```
+Procurar `Used` e `Hard`.
 
 ## Teste negativo — exceder a quota
 
@@ -447,13 +560,29 @@ spec:
 EOF
 ```
 
-Esperado: o pedido é rejeitado imediatamente.
+Esperado: `Forbidden`, com referência a `namespace-quota` e `requests.cpu`.
+
+Confirmar que o Pod não chegou a existir:
+
+```bash
+kubectl get pod quota-exceeded -n s6-governance
+```
 
 ### Pergunta
 
 > Esta falha ocorreu em admission ou no Scheduler?
 
-Neste caso, o objeto é rejeitado antes de chegar ao Scheduler, porque a criação faria ultrapassar a `ResourceQuota`.
+Neste caso, o objeto é rejeitado em admission antes de chegar ao Scheduler, porque a criação faria ultrapassar a `ResourceQuota`.
+
+Comparação essencial:
+
+```text
+resources-impossible
+API aceita → objeto existe → Scheduler não encontra Node → Pending
+
+quota-exceeded
+Admission rejeita → objeto não existe → Scheduler nunca o recebe
+```
 
 ---
 
@@ -484,11 +613,6 @@ Confirmar:
 kubectl get nodes -L training.goldconsulting/workload
 ```
 
-### Flags
-
-- `kubectl label` adiciona ou altera metadata de labels;
-- `-L <label>` acrescenta essa label como coluna no output.
-
 ## 4.1. nodeSelector
 
 ```bash
@@ -517,6 +641,8 @@ EOF
 Validar:
 
 ```bash
+kubectl wait --for=condition=Ready pod/node-selector-demo \
+  -n s6-governance --timeout=120s
 kubectl get pod node-selector-demo -n s6-governance -o wide
 ```
 
@@ -550,16 +676,19 @@ EOF
 Observar:
 
 ```bash
-kubectl get pod selector-impossible -n s6-governance
+kubectl get pod selector-impossible -n s6-governance -o wide
 kubectl describe pod selector-impossible -n s6-governance
 ```
 
 Esperado:
 
 ```text
-Pending
-FailedScheduling
+STATUS: Pending
+NODE:   <none>
+Event:  FailedScheduling
 ```
+
+O Event pode referir “node affinity/selector”; a redação varia por versão.
 
 Eliminar:
 
@@ -602,6 +731,8 @@ EOF
 Validar:
 
 ```bash
+kubectl wait --for=condition=Ready pod/node-affinity-demo \
+  -n s6-governance --timeout=120s
 kubectl get pod node-affinity-demo -n s6-governance -o wide
 ```
 
@@ -615,7 +746,26 @@ Node Affinity
 → expressões, operadores e regras obrigatórias ou preferenciais
 ```
 
-`requiredDuringSchedulingIgnoredDuringExecution` significa que a regra é obrigatória **no momento do scheduling**. Se a label mudar posteriormente, o Pod não é automaticamente expulso apenas por causa desta regra.
+`requiredDuringSchedulingIgnoredDuringExecution` significa que a regra é obrigatória **no momento do scheduling**. Vamos prová-lo, em vez de ficar apenas pela explicação.
+
+Remover temporariamente a label do Worker:
+
+```bash
+kubectl label node "$LAB_WORKER" \
+  training.goldconsulting/workload-
+
+kubectl get nodes -L training.goldconsulting/workload
+kubectl get pod node-affinity-demo -n s6-governance -o wide
+```
+
+Esperado: `node-affinity-demo` continua `Running` no mesmo Node. A alteração posterior da label não provoca expulsão automática por esta regra.
+
+Repor imediatamente a label para os checkpoints seguintes:
+
+```bash
+kubectl label node "$LAB_WORKER" \
+  training.goldconsulting/workload=apps
+```
 
 ---
 
@@ -623,11 +773,11 @@ Node Affinity
 
 ## O que estamos a fazer
 
-Criar duas réplicas que não podem coexistir no mesmo hostname.
+Criar duas réplicas que não podem coexistir no mesmo hostname e depois provocar uma terceira réplica impossível de colocar nos dois Workers disponíveis.
 
 ## Porque é necessário
 
-Queremos demonstrar uma regra de distribuição de réplicas pelos dois Worker Nodes.
+Queremos demonstrar simultaneamente distribuição e o custo de uma regra de Anti-Affinity obrigatória.
 
 ```bash
 cat <<'EOF' | kubectl apply -f -
@@ -666,7 +816,7 @@ spec:
 EOF
 ```
 
-Aguardar:
+Aguardar e observar:
 
 ```bash
 kubectl rollout status deployment/antiaffinity-demo \
@@ -678,12 +828,6 @@ kubectl get pods -n s6-governance \
   -o wide
 ```
 
-### Flags
-
-- `rollout status` acompanha o progresso do controlador;
-- `--timeout=180s` impede espera indefinida;
-- `-l app=...` filtra objetos pela label indicada.
-
 Esperado:
 
 ```text
@@ -691,11 +835,49 @@ Réplica 1 → um Worker
 Réplica 2 → outro Worker
 ```
 
-### Pergunta
+## 5.1. Teste negativo — escalar para três réplicas
 
-> O que aconteceria com 3 réplicas e apenas 2 Workers elegíveis usando esta Anti-Affinity obrigatória?
+```bash
+kubectl scale deployment/antiaffinity-demo \
+  -n s6-governance \
+  --replicas=3
 
-Uma das réplicas poderia permanecer `Pending`, porque a terceira não encontraria um hostname que satisfizesse a regra.
+sleep 5
+
+kubectl get pods -n s6-governance \
+  -l app=antiaffinity-demo \
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,NODE:.spec.nodeName'
+```
+
+Identificar a réplica com `NODE` vazio / `<none>` e descrevê-la:
+
+```bash
+kubectl describe pod <POD_SEM_NODE> -n s6-governance
+```
+
+Esperado: `PodScheduled=False` e `FailedScheduling`, com referência às regras de Pod Anti-Affinity.
+
+> Não identificar um problema de scheduling apenas por `status.phase=Pending`. Um Pod pode estar em fase `Pending`, já ter `spec.nodeName` atribuído e encontrar-se em `ContainerCreating`. Para provar que **não foi agendado**, a evidência principal é `NODE=<none>` / `spec.nodeName` vazio e `PodScheduled=False`.
+
+Repor o Deployment em duas réplicas:
+
+```bash
+kubectl scale deployment/antiaffinity-demo \
+  -n s6-governance \
+  --replicas=2
+
+kubectl rollout status deployment/antiaffinity-demo \
+  -n s6-governance \
+  --timeout=180s
+
+kubectl get pods -n s6-governance \
+  -l app=antiaffinity-demo \
+  -o wide
+```
+
+### Nota de troubleshooting para o formador
+
+Se uma réplica tiver `NODE` atribuído mas ficar em `ContainerCreating`, consultar `kubectl describe pod`. Um Event `FailedCreatePodSandBox` aponta para runtime/CNI, não para a Anti-Affinity. Durante a validação deste laboratório foi observado um caso real de autenticação do CNI Calico após o Scheduler ter feito placement corretamente.
 
 ---
 
@@ -716,15 +898,11 @@ Aplicar o taint ao Worker anteriormente marcado:
 ```bash
 kubectl taint node "$LAB_WORKER" \
   training.goldconsulting/dedicated=lab:NoSchedule
+
+kubectl describe node "$LAB_WORKER" | grep -i Taints
 ```
 
-### Sintaxe
-
-```text
-chave=valor:efeito
-```
-
-`NoSchedule` impede novo scheduling de Pods que não possuam toleration compatível.
+`NoSchedule` impede novo scheduling de Pods que não possuam toleration compatível; não expulsa automaticamente os Pods que já estavam em execução.
 
 ## 6.1. Pod sem toleration
 
@@ -754,11 +932,19 @@ EOF
 Observar:
 
 ```bash
-kubectl get pod no-toleration -n s6-governance
+kubectl get pod no-toleration -n s6-governance -o wide
 kubectl describe pod no-toleration -n s6-governance
 ```
 
-Esperado: `Pending`.
+Esperado: `Pending`, `NODE=<none>` e `FailedScheduling`.
+
+No cluster de referência, as causas podem mapear-se assim:
+
+```text
+k8s-wk-01 → corresponde ao nodeSelector, mas tem o taint do laboratório
+k8s-wk-03 → não corresponde ao nodeSelector
+k8s-cp-01 → tem o taint do Control Plane
+```
 
 ## 6.2. Pod com toleration
 
@@ -793,20 +979,35 @@ EOF
 Validar:
 
 ```bash
-kubectl get pod toleration-demo -n s6-governance -o wide
+kubectl wait --for=condition=Ready pod/toleration-demo \
+  -n s6-governance --timeout=120s
+kubectl get pod no-toleration toleration-demo \
+  -n s6-governance -o wide
 ```
 
-> A toleration não “atrai” o Pod para o Node. Neste exemplo, quem restringe o placement ao Node marcado é o `nodeSelector`; a toleration apenas permite ultrapassar o taint.
+Esperado:
 
-Remover o teste negativo e o taint:
+```text
+no-toleration    → Pending / NODE <none>
+toleration-demo  → Running / k8s-wk-01
+```
+
+> A toleration não “atrai” o Pod para o Node. Neste exemplo, quem restringe o placement ao Node marcado é o `nodeSelector`; a toleration apenas remove a barreira criada pelo taint.
+
+Remover os Pods de teste e o taint:
 
 ```bash
-kubectl delete pod no-toleration -n s6-governance
+kubectl delete pod no-toleration toleration-demo \
+  -n s6-governance \
+  --ignore-not-found
+
 kubectl taint node "$LAB_WORKER" \
   training.goldconsulting/dedicated-
+
+kubectl describe node "$LAB_WORKER" | grep -i Taints
 ```
 
-O sufixo `-` remove o taint com essa chave.
+Esperado: `Taints: <none>`.
 
 ---
 
@@ -837,6 +1038,7 @@ kind: ServiceAccount
 metadata:
   name: app-reader
   namespace: s6-governance
+automountServiceAccountToken: true
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -868,52 +1070,37 @@ roleRef:
 EOF
 ```
 
-Validar objetos:
+Validar objetos e regras:
 
 ```bash
-kubectl get serviceaccount,role,rolebinding -n s6-governance
+kubectl get serviceaccount app-reader -n s6-governance -o yaml
+kubectl describe role app-reader-role -n s6-governance
+kubectl describe rolebinding app-reader-binding -n s6-governance
 ```
 
-## 7.1. Provar uma permissão
+> `automountServiceAccountToken: true` fica explícito para tornar o comportamento pedagógico visível. Neste checkpoint não criamos um Pod com `app-reader`; o RBAC é testado por impersonation.
+
+## 7.1. Testar autorização
 
 ```bash
+SA_ID="system:serviceaccount:s6-governance:app-reader"
+
+echo "$SA_ID"
+
 kubectl auth can-i get pods \
   -n s6-governance \
-  --as=system:serviceaccount:s6-governance:app-reader
-```
+  --as="$SA_ID"
 
-Esperado:
-
-```text
-yes
-```
-
-## 7.2. Provar duas negações
-
-```bash
 kubectl auth can-i delete pods \
   -n s6-governance \
-  --as=system:serviceaccount:s6-governance:app-reader
+  --as="$SA_ID"
 
 kubectl auth can-i get secrets \
   -n s6-governance \
-  --as=system:serviceaccount:s6-governance:app-reader
+  --as="$SA_ID"
 ```
 
 Esperado:
-
-```text
-no
-no
-```
-
-### Flags
-
-- `kubectl auth can-i` pergunta ao API Server se uma ação seria autorizada;
-- `--as=<identidade>` usa impersonation para testar outra identidade;
-- a identidade administrativa que executa o comando necessita de permissão para impersonation.
-
-### Evidência
 
 ```text
 get pods      → yes
@@ -921,7 +1108,11 @@ delete pods   → no
 get secrets   → no
 ```
 
-> Neste checkpoint a ServiceAccount é testada por impersonation. Não precisamos de criar um Pod apenas para demonstrar RBAC.
+### Flags
+
+- `kubectl auth can-i` pergunta ao API Server se uma ação seria autorizada;
+- `--as=<identidade>` usa impersonation para testar outra identidade;
+- a identidade administrativa que executa o comando necessita de permissão para impersonation.
 
 ---
 
@@ -948,12 +1139,14 @@ spec:
     seccompProfile:
       type: RuntimeDefault
   containers:
-    - name: app
+    - name: shell
       image: busybox:1.36
       command:
         - sh
         - -c
-        - "id; sleep 3600"
+        - |
+          id
+          sleep 3600
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -980,59 +1173,74 @@ kubectl wait \
   --for=condition=Ready \
   pod/security-demo \
   -n s6-governance \
-  --timeout=90s
+  --timeout=120s
+
+kubectl get pod security-demo -n s6-governance -o wide
+kubectl describe pod security-demo -n s6-governance
 ```
 
-### Flags
-
-- `--for=condition=Ready` espera por uma condição do objeto;
-- `--timeout=90s` termina a espera após 90 segundos.
-
-Confirmar UID/GID:
+## 8.1. Confirmar execução non-root
 
 ```bash
 kubectl exec -n s6-governance security-demo -- id
 ```
 
-Esperado: UID/GID `10001`, não `0`.
-
-### Porque existe `--` em kubectl exec?
-
-O primeiro `--` termina as opções de `kubectl`; tudo o que aparece depois é o comando executado dentro do container.
-
-Confirmar que o token da ServiceAccount não foi montado:
-
-```bash
-kubectl exec -n s6-governance security-demo -- \
-  sh -c 'test ! -e /var/run/secrets/kubernetes.io/serviceaccount/token && echo "token ausente: OK"'
-```
-
-Testar o filesystem read-only:
-
-```bash
-kubectl exec -n s6-governance security-demo -- \
-  sh -c 'touch /probe'
-```
-
-Esperado: falha de escrita.
-
-Consultar o manifesto efetivo:
-
-```bash
-kubectl get pod security-demo -n s6-governance -o yaml
-```
-
-Identificar:
+Esperado:
 
 ```text
-runAsNonRoot
-runAsUser
-runAsGroup
-allowPrivilegeEscalation
-capabilities.drop
-seccompProfile
-readOnlyRootFilesystem
-automountServiceAccountToken
+uid=10001 gid=10001 groups=10001
+```
+
+## 8.2. Confirmar filesystem read-only
+
+```bash
+kubectl exec -n s6-governance security-demo -- \
+  sh -c 'touch /teste-escrita'
+```
+
+Esperado: `Read-only file system` e código de saída diferente de zero.
+
+> `readOnlyRootFilesystem: true` não deve ser aplicado cegamente a todas as aplicações. Workloads que necessitam de escrita devem receber volumes graváveis apenas nos caminhos necessários.
+
+## 8.3. Confirmar ausência de token automático
+
+```bash
+kubectl exec -n s6-governance security-demo -- \
+  sh -c 'ls -la /var/run/secrets/kubernetes.io/serviceaccount 2>&1 || true'
+
+kubectl get pod security-demo \
+  -n s6-governance \
+  -o jsonpath='automountServiceAccountToken: {.spec.automountServiceAccountToken}{"\n"}'
+```
+
+Esperado: o diretório não existe e `automountServiceAccountToken: false`.
+
+## 8.4. Inspecionar a configuração efetiva
+
+```bash
+kubectl get pod security-demo \
+  -n s6-governance \
+  -o jsonpath='
+runAsNonRoot: {.spec.containers[0].securityContext.runAsNonRoot}
+runAsUser: {.spec.containers[0].securityContext.runAsUser}
+runAsGroup: {.spec.containers[0].securityContext.runAsGroup}
+allowPrivilegeEscalation: {.spec.containers[0].securityContext.allowPrivilegeEscalation}
+readOnlyRootFilesystem: {.spec.containers[0].securityContext.readOnlyRootFilesystem}
+seccompProfile: {.spec.securityContext.seccompProfile.type}
+capabilities.drop: {.spec.containers[0].securityContext.capabilities.drop}
+'
+```
+
+Esperado:
+
+```text
+runAsNonRoot: true
+runAsUser: 10001
+runAsGroup: 10001
+allowPrivilegeEscalation: false
+readOnlyRootFilesystem: true
+seccompProfile: RuntimeDefault
+capabilities.drop: ["ALL"]
 ```
 
 ---
@@ -1063,11 +1271,19 @@ Consultar apenas metadata e chaves:
 kubectl describe secret db-demo -n s6-governance
 ```
 
+Opcionalmente, mostrar tipo e nomes das chaves sem imprimir os valores:
+
+```bash
+kubectl get secret db-demo \
+  -n s6-governance \
+  -o go-template='Type: {{.type}}{{"\n"}}Keys:{{range $k, $v := .data}} {{$k}}{{end}}{{"\n"}}'
+```
+
 ### Campo importante
 
 `stringData` permite fornecer texto aquando da criação. Kubernetes converte o conteúdo para a representação usada no campo `data`.
 
-> Base64 é codificação, não encriptação. Não utilizar credenciais reais no laboratório e não ensinar a leitura do Secret em YAML como operação normal de consumo.
+> Base64 é codificação, não encriptação. Um Secret não deve ser apresentado como “automaticamente seguro em repouso”. A proteção depende, entre outros controlos, de RBAC e da configuração de encriptação em repouso do cluster.
 
 Revalidar RBAC:
 
@@ -1098,7 +1314,7 @@ Tudo comunica
       ↓
 Default deny
       ↓
-Tudo bloqueado
+DNS + aplicação + PostgreSQL bloqueados
       ↓
 Permitir DNS
       ↓
@@ -1116,11 +1332,17 @@ clear
 kubectl get pods -A | grep -i calico
 kubectl get pods -n kube-system --show-labels
 kubectl get svc -n kube-system
+
+kubectl get pods \
+  -n kube-system \
+  -l k8s-app=kube-dns \
+  -o wide \
+  --show-labels
 ```
 
-Antes de aplicar a policy de DNS, identificar as labels reais dos Pods que prestam o serviço DNS.
+Antes de aplicar a policy de DNS, confirmar a label real dos Pods que prestam o serviço DNS.
 
-> Em muitos clusters kubeadm/CoreDNS encontra-se `k8s-app=kube-dns`, mas o laboratório deve confirmar o valor real em vez de o assumir.
+> No cluster de referência a label validada é `k8s-app=kube-dns`. Se o cluster usado na formação tiver outra label, adaptar a policy antes de aplicar.
 
 ## 10.2. Criar workloads de diagnóstico
 
@@ -1246,38 +1468,84 @@ EOF
 Aguardar:
 
 ```bash
-kubectl rollout status deployment/net-app -n s6-governance --timeout=180s
-kubectl rollout status deployment/net-db -n s6-governance --timeout=180s
-kubectl wait --for=condition=Ready pod/net-client -n s6-governance --timeout=120s
+kubectl rollout status deployment/net-app \
+  -n s6-governance --timeout=180s
+kubectl rollout status deployment/net-db \
+  -n s6-governance --timeout=180s
+kubectl wait --for=condition=Ready pod/net-client \
+  -n s6-governance --timeout=120s
+
+kubectl get pods -n s6-governance -o wide
+kubectl get svc -n s6-governance
 ```
 
 ## 10.3. Baseline — confirmar comunicação antes das policies
 
-Cliente → aplicação:
+Guardar os `ClusterIP` para podermos testar conectividade sem depender do DNS depois do `default deny`:
+
+```bash
+NET_APP_IP=$(kubectl get svc net-app \
+  -n s6-governance \
+  -o jsonpath='{.spec.clusterIP}')
+
+NET_DB_IP=$(kubectl get svc net-db \
+  -n s6-governance \
+  -o jsonpath='{.spec.clusterIP}')
+
+echo "net-app: $NET_APP_IP"
+echo "net-db:  $NET_DB_IP"
+```
+
+### DNS
+
+Usar o FQDN completo com ponto final. Isto evita resultados ambíguos provocados pela expansão dos search domains do cliente DNS do BusyBox.
+
+```bash
+kubectl exec -n s6-governance net-client -- \
+  nslookup net-app.s6-governance.svc.cluster.local.
+```
+
+Esperado: o nome resolve para o `ClusterIP` de `net-app`.
+
+### Cliente → aplicação
 
 ```bash
 kubectl exec -n s6-governance net-client -- \
   wget -T 3 -qO- http://net-app
 ```
 
-### Flags do wget
+Esperado: HTML da página padrão do nginx.
 
-- `-T 3` define timeout de 3 segundos;
-- `-q` reduz output adicional;
-- `-O-` envia o corpo da resposta para stdout.
-
-Cliente → PostgreSQL:
+### Cliente → PostgreSQL
 
 ```bash
 kubectl exec -n s6-governance net-client -- \
   sh -c 'nc -w 2 net-db 5432 </dev/null; echo "exit=$?"'
 ```
 
-`-w 2` limita a espera do `nc` a 2 segundos.
+Esperado:
 
-Antes das policies, ambos os caminhos devem ser alcançáveis ao nível de rede.
+```text
+exit=0
+```
+
+Baseline esperado:
+
+```text
+DNS                         → OK
+net-client → net-app:80     → OK
+net-client → net-db:5432    → OK
+```
 
 ## 10.4. Aplicar default deny
+
+Confirmar primeiro que ainda não existem policies no Namespace:
+
+```bash
+kubectl get networkpolicy -n s6-governance
+```
+
+Aplicar:
 
 ```bash
 cat <<'EOF' | kubectl apply -f -
@@ -1294,17 +1562,47 @@ spec:
 EOF
 ```
 
-`podSelector: {}` seleciona todos os Pods do Namespace.
+`podSelector: {}` seleciona todos os Pods do Namespace. Como não existem regras `ingress` nem `egress`, os Pods selecionados ficam isolados nas duas direções.
 
-Repetir os dois testes anteriores.
+Confirmar:
 
-Esperado: deixam de funcionar.
+```bash
+kubectl get networkpolicy -n s6-governance
+kubectl describe networkpolicy default-deny-all -n s6-governance
+```
 
-> O sucesso de `kubectl apply` prova apenas que a API aceitou o objeto. O bloqueio observado é a evidência de enforcement pelo CNI.
+### Provar bloqueio de DNS
 
-## 10.5. Permitir DNS
+```bash
+kubectl exec -n s6-governance net-client -- \
+  nslookup net-app.s6-governance.svc.cluster.local.
+```
 
-Depois de confirmar a label real do DNS, aplicar a policy seguinte. Se a label no cluster for diferente, alterar o `podSelector` antes de executar.
+Esperado: falha/timeout. Não usar `timeout` **dentro** do container para este teste; alguns utilitários BusyBox podem interferir com o processo principal do Pod.
+
+### Provar bloqueio HTTP sem depender de DNS
+
+```bash
+kubectl exec -n s6-governance net-client -- \
+  sh -c "wget -T 3 -qO- http://$NET_APP_IP; echo \"exit=\$?\""
+```
+
+Esperado: timeout e `exit` diferente de zero.
+
+### Provar bloqueio PostgreSQL sem depender de DNS
+
+```bash
+kubectl exec -n s6-governance net-client -- \
+  sh -c "nc -w 2 $NET_DB_IP 5432 </dev/null; echo \"exit=\$?\""
+```
+
+Esperado: `exit` diferente de zero.
+
+> O sucesso de `kubectl apply` prova apenas que a API aceitou a NetworkPolicy. O bloqueio observado é a evidência de enforcement pelo CNI.
+
+## 10.5. Permitir apenas DNS
+
+Aplicar a policy seguinte após confirmar a label real do CoreDNS:
 
 ```bash
 cat <<'EOF' | kubectl apply -f -
@@ -1333,15 +1631,38 @@ spec:
 EOF
 ```
 
+As NetworkPolicies são **aditivas**. `allow-dns` não substitui `default-deny-all`; acrescenta apenas egress UDP/TCP 53 para os Pods DNS selecionados.
+
 Validar resolução:
 
 ```bash
-kubectl exec -n s6-governance net-client -- nslookup net-app
+kubectl exec -n s6-governance net-client -- \
+  nslookup net-app.s6-governance.svc.cluster.local.
+```
+
+Esperado: DNS volta a funcionar.
+
+Confirmar que os restantes fluxos continuam bloqueados:
+
+```bash
+kubectl exec -n s6-governance net-client -- \
+  sh -c "wget -T 3 -qO- http://$NET_APP_IP; echo \"exit=\$?\""
+
+kubectl exec -n s6-governance net-client -- \
+  sh -c "nc -w 2 $NET_DB_IP 5432 </dev/null; echo \"exit=\$?\""
+```
+
+Esperado:
+
+```text
+DNS                         → OK
+net-client → net-app:80     → BLOQUEADO
+net-client → net-db:5432    → BLOQUEADO
 ```
 
 ## 10.6. Permitir cliente → aplicação
 
-Precisamos de duas permissões quando ambos os lados estão isolados:
+Quando ambos os lados estão isolados, precisamos das duas permissões:
 
 ```text
 egress do cliente
@@ -1393,14 +1714,23 @@ spec:
 EOF
 ```
 
-Testar:
+Testar HTTP:
 
 ```bash
 kubectl exec -n s6-governance net-client -- \
-  wget -T 3 -qO- http://net-app
+  sh -c 'wget -T 3 -qO- http://net-app >/dev/null; echo "exit=$?"'
 ```
 
-Esperado: funciona.
+Esperado: `exit=0`.
+
+Confirmar que cliente → PostgreSQL permanece bloqueado:
+
+```bash
+kubectl exec -n s6-governance net-client -- \
+  sh -c 'nc -w 2 net-db 5432 </dev/null; echo "exit=$?"'
+```
+
+Esperado: `exit` diferente de zero.
 
 ## 10.7. Permitir aplicação → PostgreSQL
 
@@ -1455,9 +1785,9 @@ kubectl exec -n s6-governance deploy/net-app -- \
   sh -c 'nc -w 2 net-db 5432 </dev/null; echo "exit=$?"'
 ```
 
-Esperado: ligação TCP possível.
+Esperado: `exit=0`.
 
-## 10.8. Provar um fluxo proibido
+## 10.8. Provar o fluxo que permanece proibido
 
 Cliente → PostgreSQL:
 
@@ -1466,7 +1796,16 @@ kubectl exec -n s6-governance net-client -- \
   sh -c 'nc -w 2 net-db 5432 </dev/null; echo "exit=$?"'
 ```
 
-Esperado: falha ou timeout.
+Esperado: `exit` diferente de zero.
+
+Confirmar que HTTP continua permitido:
+
+```bash
+kubectl exec -n s6-governance net-client -- \
+  sh -c 'wget -T 3 -qO- http://net-app >/dev/null; echo "exit=$?"'
+```
+
+Esperado: `exit=0`.
 
 Consultar as policies:
 
@@ -1478,10 +1817,10 @@ kubectl describe networkpolicy -n s6-governance
 ### Evidência final de rede
 
 ```text
+DNS                      PERMITIDO
 cliente → aplicação      PERMITIDO
 aplicação → PostgreSQL   PERMITIDO
 cliente → PostgreSQL     BLOQUEADO
-DNS                      PERMITIDO
 ```
 
 > Uma NetworkPolicy só está validada quando conseguimos demonstrar simultaneamente um caminho autorizado e um caminho que permanece bloqueado.
@@ -1489,8 +1828,6 @@ DNS                      PERMITIDO
 ---
 
 # CP11 — Síntese: mapear regra → camada → evidência
-
-Completar a tabela:
 
 | Controlo | Camada principal | Evidência |
 |---|---|---|
@@ -1505,11 +1842,65 @@ Completar a tabela:
 | Secret | Dados sensíveis | acesso limitado / metadata |
 | NetworkPolicy | Rede L3/L4 | fluxo permitido + fluxo bloqueado |
 
-Pergunta final:
+## 11.1. Recolher fotografia final antes da limpeza
+
+```bash
+clear
+
+echo "=== QUOTA ==="
+kubectl describe resourcequota namespace-quota -n s6-governance
+
+echo
+echo "=== PLACEMENT ==="
+kubectl get pods -n s6-governance -o wide
+
+echo
+echo "=== LABELS / TAINTS ==="
+kubectl get nodes -L training.goldconsulting/workload
+kubectl describe node k8s-wk-01 | grep -i Taints
+
+echo
+echo "=== RBAC ==="
+SA_ID="system:serviceaccount:s6-governance:app-reader"
+echo -n "get pods: "
+kubectl auth can-i get pods -n s6-governance --as="$SA_ID"
+echo -n "delete pods: "
+kubectl auth can-i delete pods -n s6-governance --as="$SA_ID"
+echo -n "get secrets: "
+kubectl auth can-i get secrets -n s6-governance --as="$SA_ID"
+
+echo
+echo "=== SECURITYCONTEXT ==="
+kubectl exec -n s6-governance security-demo -- id
+kubectl get pod security-demo \
+  -n s6-governance \
+  -o jsonpath='automountServiceAccountToken: {.spec.automountServiceAccountToken}{"\n"}seccompProfile: {.spec.securityContext.seccompProfile.type}{"\n"}allowPrivilegeEscalation: {.spec.containers[0].securityContext.allowPrivilegeEscalation}{"\n"}readOnlyRootFilesystem: {.spec.containers[0].securityContext.readOnlyRootFilesystem}{"\n"}'
+
+echo
+echo "=== SECRET ==="
+kubectl describe secret db-demo -n s6-governance
+
+echo
+echo "=== NETWORKPOLICIES ==="
+kubectl get networkpolicy -n s6-governance
+```
+
+### Pergunta final
 
 > Em que checkpoints a API aceitou o objeto, mas o efeito só ficou provado depois de observar o comportamento do cluster?
 
-Resposta esperada: scheduling, SecurityContext e NetworkPolicy são exemplos claros onde “objeto criado” não é sinónimo de “resultado validado”.
+Scheduling, SecurityContext e NetworkPolicy são exemplos claros onde “objeto criado” não é sinónimo de “resultado validado”. O teste da Anti-Affinity mostrou ainda que um Pod pode já ter sido agendado e falhar depois na criação da sandbox; é por isso que a camada da falha deve ser identificada pela evidência.
+
+### Nota sobre reinícios de Pods de diagnóstico
+
+Se um Pod de diagnóstico apresentar `RESTARTS > 0`, não assumir imediatamente crash. Inspecionar:
+
+```bash
+kubectl describe pod net-client -n s6-governance
+kubectl logs net-client -n s6-governance --previous
+```
+
+Distinguir, por exemplo, `Reason: Completed / Exit Code: 0` de `OOMKilled` ou de uma falha da aplicação.
 
 ---
 
@@ -1517,7 +1908,7 @@ Resposta esperada: scheduling, SecurityContext e NetworkPolicy são exemplos cla
 
 ## O que estamos a fazer
 
-Remover todos os recursos namespaced e desfazer alterações feitas diretamente nos Nodes.
+Remover todos os recursos namespaced, desfazer alterações feitas diretamente nos Nodes e repor o Namespace por omissão do contexto.
 
 Eliminar o Namespace:
 
@@ -1528,60 +1919,88 @@ kubectl delete namespace s6-governance --wait=true
 Remover a label de laboratório:
 
 ```bash
-kubectl label node "$LAB_WORKER" \
-  training.goldconsulting/workload-
+kubectl label node k8s-wk-01 \
+  training.goldconsulting/workload- \
+  2>/dev/null || true
 ```
 
 Garantir que o taint também não permanece:
 
 ```bash
-kubectl taint node "$LAB_WORKER" \
-  training.goldconsulting/dedicated- 2>/dev/null || true
+kubectl taint node k8s-wk-01 \
+  training.goldconsulting/dedicated- \
+  2>/dev/null || true
+```
+
+Repor o Namespace por omissão:
+
+```bash
+kubectl config set-context \
+  --current \
+  --namespace=default
 ```
 
 ### Porque usamos `|| true`?
 
-Se o taint já tiver sido removido no CP6, `kubectl taint ...-` pode devolver erro. `|| true` impede que essa situação interrompa um script ou sequência de limpeza.
+Se a label ou o taint já tiverem sido removidos, o comando pode devolver erro. `|| true` impede que essa situação inofensiva interrompa uma sequência de limpeza.
 
-Confirmar estado final:
+## 12.1. Confirmar estado final
 
 ```bash
-kubectl get ns s6-governance
+echo "=== CONTEXTO ==="
+kubectl config view \
+  --minify \
+  -o jsonpath='{..namespace}{"\n"}'
+
+echo
+echo "=== NAMESPACE ==="
+kubectl get namespace s6-governance
+
+echo
+echo "=== NODES ==="
 kubectl get nodes -L training.goldconsulting/workload
-kubectl get pods -A
-kubectl get events -A --sort-by=.lastTimestamp | tail -n 20
+
+echo
+echo "=== TAINT WK01 ==="
+kubectl describe node k8s-wk-01 | grep -i Taints
 ```
 
 Esperado:
 
 ```text
-Namespace s6-governance inexistente
-label de laboratório removida
-taint de laboratório removido
-cluster operacional
+namespace atual                 → default
+s6-governance                   → NotFound
+WORKLOAD em k8s-wk-01           → vazio
+Taints em k8s-wk-01             → <none>
 ```
 
 ---
 
 # Checklist final do formando
 
+- [ ] Confirmei que estava na diretoria correta do repositório.
+- [ ] Validei Nodes, Calico, CoreDNS e criação de rede em ambos os Workers.
 - [ ] Consultei `Capacity` e `Allocatable` antes de definir recursos.
-- [ ] Distingo `request` de `limit`.
-- [ ] Provo um `FailedScheduling` através de Events.
+- [ ] Distingo `request` de `limit` e sei que o Scheduler contabiliza requests declarados para elegibilidade.
+- [ ] Provo um `FailedScheduling` através de Events e da ausência de `spec.nodeName`.
 - [ ] Distingo `LimitRange` de `ResourceQuota`.
 - [ ] Consigo explicar por que uma rejeição por quota não é um problema do Scheduler.
 - [ ] Consigo controlar placement com labels e `nodeSelector`.
 - [ ] Distingo `nodeSelector` de Node Affinity.
-- [ ] Consigo explicar o efeito de Pod Anti-Affinity com dois Workers.
+- [ ] Demonstrei `IgnoredDuringExecution` removendo e repondo a label do Node.
+- [ ] Demonstrei Pod Anti-Affinity com duas réplicas distribuídas e uma terceira não agendável.
+- [ ] Sei distinguir `Pending` não agendado de `ContainerCreating` já associado a um Node.
 - [ ] Distingo taint de toleration.
 - [ ] Sei que toleration não implica placement obrigatório.
 - [ ] Criei uma ServiceAccount e RBAC namespaced mínimo.
 - [ ] Demonstrei pelo menos um `yes` e dois `no` com `kubectl auth can-i`.
-- [ ] Validei execução non-root e redução de privilégios.
+- [ ] Validei execução non-root, seccomp, filesystem read-only, capabilities e ausência de token automático.
 - [ ] Sei explicar porque Base64 não é encriptação.
 - [ ] Confirmei enforcement de NetworkPolicy com Calico.
-- [ ] Demonstrei um fluxo permitido e um fluxo bloqueado.
-- [ ] Removi alterações aplicadas aos Nodes no final.
+- [ ] Testei DNS com FQDN completo e distingui falha de DNS de falha de conectividade por ClusterIP.
+- [ ] Demonstrei cliente → aplicação e aplicação → PostgreSQL permitidos.
+- [ ] Demonstrei cliente → PostgreSQL bloqueado.
+- [ ] Removi recursos, labels e taints e repus o contexto em `default`.
 
 ---
 
@@ -1590,13 +2009,19 @@ cluster operacional
 O laboratório fica concluído quando o formando consegue apresentar e explicar:
 
 ```text
+preflight e CNI validados
++
 quota aplicada
 +
 requests/limits visíveis
 +
-Pending explicado por Event
+Pending explicado por Event e NODE <none>
 +
 placement justificado
++
+IgnoredDuringExecution demonstrado
++
+anti-affinity positiva e negativa demonstradas
 +
 taint/toleration demonstrados
 +
@@ -1608,9 +2033,13 @@ SecurityContext verificado
 +
 Secret tratado sem exposição desnecessária
 +
-fluxo de rede permitido
+DNS permitido de forma explícita
 +
-fluxo de rede bloqueado
+cliente → aplicação permitido
++
+aplicação → PostgreSQL permitido
++
+cliente → PostgreSQL bloqueado
 +
 cluster limpo no final
 ```
