@@ -9,16 +9,16 @@
 | Topologia | 2 VMs por formando |
 | Control Plane | `k8s-cp-01` |
 | Worker | `k8s-wk-01` |
-| SO | Ubuntu 26.04 LTS |
-| Kubernetes inicial | 1.35.x — baseline 1.35.8 |
-| Kubernetes final | 1.36.x — baseline 1.36.4 |
-| Runtime | containerd 2.2.x |
+| SO | Ubuntu 26.04.1 LTS |
+| Kubernetes inicial | **1.35.8** — série 1.35.x |
+| Kubernetes final | **1.36.4** — série 1.36.x |
+| Runtime | **containerd 2.2.6** |
 | CNI | Calico 3.32.2 |
 | Operator | Tigera Operator 1.42.6 |
-| Pod CIDR | 192.168.0.0/16 |
+| Pod CIDR | **10.244.0.0/16** |
 | Service CIDR | 10.96.0.0/12 |
 
-> Os patches devem ser reconfirmados antes de cada edição. A decisão pedagógica estável é trabalhar o upgrade `1.35.x → 1.36.x`.
+> **Baseline técnica validada:** Kubernetes `1.35.8 → 1.36.4`, `containerd 2.2.6`, Calico `3.32.2` e Tigera Operator `1.42.6`. Antes de cada nova edição, os patches devem ser reconfirmados; uma alteração de versão só deve ser feita depois de revalidar o laboratório de ponta a ponta.
 
 ---
 
@@ -30,7 +30,7 @@ No final da sessão, o formando deverá conseguir:
 2. interpretar a estrutura dos comandos `kubectl` e flags mais utilizadas;
 3. preparar Ubuntu para Kubernetes;
 4. configurar `containerd` com CRI e `SystemdCgroup = true`;
-5. instalar explicitamente Kubernetes 1.35.x, evitando seleção acidental de 1.37;
+5. instalar explicitamente Kubernetes `1.35.8`, evitando seleção acidental de outra minor ou patch não validado;
 6. inicializar o Control Plane com `kubeadm init` numa versão explicitamente definida;
 7. configurar e interpretar `kubeconfig` e contextos;
 8. instalar Calico 3.32.2 através do Tigera Operator;
@@ -38,28 +38,28 @@ No final da sessão, o formando deverá conseguir:
 10. validar Nodes, CoreDNS, CNI e API;
 11. aplicar `cordon`, `drain` e `uncordon`;
 12. preparar um ponto de recuperação antes do upgrade;
-13. executar um upgrade real Kubernetes 1.35.x → 1.36.x;
+13. executar um upgrade real Kubernetes `1.35.8 → 1.36.4`;
 14. compreender o version skew temporário durante a atualização;
 15. diagnosticar erros com base em evidências.
 
 ---
 
-# 2. Decisão de compatibilidade
+# 2. Decisão de compatibilidade e baseline oficial
 
-A baseline foi alterada de `1.36 → 1.37` para `1.35 → 1.36` por razões de compatibilidade e reprodutibilidade.
+A baseline oficial desta edição é o percurso **Kubernetes `1.35.8 → 1.36.4`**, escolhido por compatibilidade, reprodutibilidade e por ter sido validado de ponta a ponta no ambiente real da formação.
 
 ```text
-Kubernetes 1.35.x
+Kubernetes 1.35.8
         ↓
-Calico 3.32 testado oficialmente
-containerd 2.2.x recomendado
+Calico 3.32.2 validado
+containerd 2.2.6 validado
         ↓
-upgrade suportado kubeadm
+upgrade suportado por kubeadm
         ↓
-Kubernetes 1.36.x
+Kubernetes 1.36.4
         ↓
-Calico 3.32 continua dentro da matriz oficial
-containerd 2.2.x continua recomendado
+Calico 3.32.2 continua na matriz validada
+containerd 2.2.6 mantém-se
 ```
 
 Traefik não é instalado nesta sessão; a compatibilidade é registada para as sessões posteriores de Ingress/Gateway.
@@ -128,27 +128,27 @@ O formador alterna entre:
 - deteção de MicroK8s/k3s/Minikube ou cluster anterior;
 - inspeção de repositórios Kubernetes residuais.
 
-## 4.3. containerd
+## 4.3. containerd 2.2.6
 
 - cadeia `kubelet → CRI → containerd → runc → kernel`;
-- instalação da série 2.2.x;
+- instalação da baseline `2.2.6`;
 - CRI ativo;
 - `SystemdCgroup = true`;
 - validação da configuração efetiva.
 
-## 4.4. Kubernetes 1.35.x
+## 4.4. Kubernetes 1.35.8
 
 - repositório `pkgs.k8s.io` da série 1.35;
 - `apt-cache madison`;
-- instalação com versão de pacote explícita;
+- instalação do patch `1.35.8` com versão de pacote explícita;
 - `apt-mark hold`;
 - verificação antes do bootstrap.
 
 ## 4.5. Bootstrap do Control Plane
 
 - guarda de papel com `hostname`;
-- `kubeadm init --kubernetes-version=...`;
-- Pod CIDR;
+- `kubeadm init --kubernetes-version=v1.35.8`;
+- Pod CIDR `10.244.0.0/16`;
 - kubeconfig;
 - observação do `NotReady` antes do CNI.
 
@@ -178,14 +178,14 @@ O formador alterna entre:
 - uso deliberado de `--force` apenas no exercício;
 - `uncordon`.
 
-## 4.9. Recuperação e upgrade 1.35 → 1.36
+## 4.9. Recuperação e upgrade 1.35.8 → 1.36.4
 
 - validar cluster antes de atualizar;
-- snapshots `pre-upgrade-1.35`;
-- mudança do repositório para 1.36;
-- upgrade de `kubeadm`;
+- snapshots `pre-upgrade-1.35.8`;
+- mudança do repositório para a série 1.36;
+- upgrade de `kubeadm` para `1.36.4`;
 - `kubeadm upgrade plan`;
-- `kubeadm upgrade apply` no Control Plane;
+- `kubeadm upgrade apply v1.36.4` no Control Plane;
 - drain antes do upgrade minor do kubelet;
 - atualização de kubelet/kubectl;
 - `kubeadm upgrade node` no Worker;
@@ -201,14 +201,14 @@ O formador alterna entre:
 | 10 min | Refresh Kubernetes | síntese visual |
 | 10 min | Topologia, papéis e compatibilidade | conceito |
 | 20 min | Pré-requisitos Linux | prática |
-| 15 min | containerd 2.2.x / CRI / cgroups | prática guiada |
-| 15 min | Instalação Kubernetes 1.35.x com versão fixada | prática |
+| 15 min | containerd 2.2.6 / CRI / cgroups | prática guiada |
+| 15 min | Instalação Kubernetes 1.35.8 com versão fixada | prática |
 | 15 min | **Intervalo** | — |
 | 25 min | `kubeadm init` + kubeconfig + observação | prática |
 | 20 min | Calico/Tigera Operator | prática |
 | 20 min | token no CP + join do Worker + convergência | prática |
 | 15 min | `cordon` / `drain` / `uncordon` | prática |
-| 55 min | snapshot + upgrade 1.35.x → 1.36.x | prática orientada |
+| 55 min | snapshot + upgrade 1.35.8 → 1.36.4 | prática orientada |
 | 20 min | validação final + troubleshooting + síntese | consolidação |
 | **240 min** | **Total** | |
 
@@ -245,10 +245,10 @@ Resposta: **Control Plane**.
 Antes do `init`, cada formando deve demonstrar:
 
 ```text
-containerd 2.2.x
-kubeadm 1.35.x
-kubelet 1.35.x
-kubectl 1.35.x
+containerd 2.2.6
+kubeadm 1.35.8
+kubelet 1.35.8
+kubectl 1.35.8
 ```
 
 ## Atividade 4 — manutenção
@@ -260,11 +260,11 @@ Pod direto → `cordon` → `drain` → interpretar recusa → decisão explíci
 Cada formando executa:
 
 ```text
-cluster 1.35 saudável
+cluster 1.35.8 saudável
 → snapshot
-→ Control Plane 1.36
+→ Control Plane 1.36.4
 → observar version skew
-→ Worker 1.36
+→ Worker 1.36.4
 → validação final
 ```
 
@@ -278,15 +278,15 @@ Durante operações sensíveis, a turma avança por checkpoints comuns:
 
 ```text
 CP1 Linux
-CP2 runtime
-CP3 Kubernetes 1.35
+CP2 runtime 2.2.6
+CP3 Kubernetes 1.35.8
 CP4 Control Plane
 CP5 CNI
 CP6 Worker
 CP7 manutenção
 CP8 snapshot
-CP9 upgrade Control Plane
-CP10 upgrade Worker
+CP9 upgrade Control Plane 1.36.4
+CP10 upgrade Worker 1.36.4
 CP11 final
 ```
 
@@ -299,7 +299,7 @@ Se um formando ficar bloqueado durante demasiado tempo, recolhe evidência antes
 O formando demonstra competência quando consegue:
 
 - distinguir claramente Control Plane e Worker;
-- justificar a escolha 1.35 → 1.36;
+- justificar a escolha `1.35.8 → 1.36.4`;
 - provar que instalou a versão pretendida;
 - explicar CRI/CNI;
 - gerar o join no nó correto;
@@ -314,8 +314,8 @@ O formando demonstra competência quando consegue:
 # 9. Resultado esperado
 
 ```text
-k8s-cp-01   Ready   control-plane   v1.36.x
-k8s-wk-01   Ready   <none>          v1.36.x
+k8s-cp-01   Ready   control-plane   v1.36.4
+k8s-wk-01   Ready   <none>          v1.36.4
 ```
 
 Calico/Tigera e CoreDNS devem estar saudáveis e o Worker novamente schedulable.
