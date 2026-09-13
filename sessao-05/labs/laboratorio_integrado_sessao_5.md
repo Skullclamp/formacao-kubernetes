@@ -46,6 +46,8 @@ AVANÇAR
 
 > Nomes de Pods, ReplicaSets, UIDs, timestamps, PVs, PVCs e IPs de Pods variam entre execuções. Os outputs apresentados representam a evidência essencial e não texto para comparar carácter a carácter.
 
+> Este laboratório foi validado de ponta a ponta num cluster real com Kubernetes `1.36.4`. Sempre que Events ou nomes gerados variarem entre versões/execuções, deve ser interpretada a causa e não comparado o texto literalmente.
+
 ---
 
 # 0. Baseline e percurso
@@ -126,22 +128,45 @@ A infraestrutura seguinte deve existir antes do laboratório: Calico, CoreDNS, `
 
 > Nesta sessão a Symfony Demo usa **uma réplica** quando está ligada ao ficheiro SQLite persistente. SQLite é usado para simplificar o caso prático e concentrar a atenção nos mecanismos Kubernetes. O escalamento horizontal da aplicação com estado partilhado não é o objetivo deste exercício.
 
-## 0.1. Diretoria de trabalho
+## 0.1. Garantir o repositório e entrar na diretoria de trabalho
 
-Os comandos `kubectl apply -f ../manifests/...` assumem que o repositório foi clonado e que o terminal está na mesma diretoria deste guião.
+Os comandos `kubectl apply -f ../manifests/...` dependem dos recursos do repositório. Uma shell nova pode abrir em `$HOME`, por isso não assumimos que o terminal já se encontra dentro do clone.
 
 ```bash
 clear
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT/sessao-05/labs"
+
+REPO_DIR="$HOME/formacao-kubernetes"
+REPO_URL="https://github.com/Skullclamp/formacao-kubernetes.git"
+
+if [ -d "$REPO_DIR/.git" ]; then
+  git -C "$REPO_DIR" switch main
+  git -C "$REPO_DIR" pull --ff-only origin main
+elif [ -e "$REPO_DIR" ]; then
+  BACKUP_DIR="${REPO_DIR}.bak-$(date +%Y%m%d-%H%M%S)"
+  mv "$REPO_DIR" "$BACKUP_DIR"
+  echo "Diretoria anterior preservada em: $BACKUP_DIR"
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+else
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+fi
+
+git -C "$REPO_DIR" branch --show-current
+git -C "$REPO_DIR" status --short
+
+cd "$REPO_DIR/sessao-05/labs"
 pwd
 ls ../manifests/
 ```
 
-O final de `pwd` deve ser:
+### O que observar
+
+- a branch ativa deve ser `main`;
+- `pull --ff-only` evita criar merges locais inesperados;
+- se existir uma diretoria não-Git com o mesmo nome, ela é preservada antes do clone;
+- o final de `pwd` deve ser:
 
 ```text
-/sessao-05/labs
+/formacao-kubernetes/sessao-05/labs
 ```
 
 ---
@@ -181,12 +206,16 @@ GatewayClass traefik Accepted=True
 Traefik Service NodePort 80:30080 e 443:30443
 ```
 
-Criar o namespace e defini-lo no contexto atual:
+Criar o namespace de forma repetível e defini-lo no contexto atual:
 
 ```bash
 clear
-kubectl create namespace sessao5
+kubectl create namespace sessao5 \
+  --dry-run=client \
+  -o yaml | kubectl apply -f -
+
 kubectl config set-context --current --namespace=sessao5
+kubectl get namespace sessao5
 ```
 
 ---
@@ -408,6 +437,26 @@ Path: /opt/local-path-provisioner/...
 ```
 
 > `local-path-provisioner` é um **external provisioner**, não um driver CSI.
+
+### Troubleshooting — não confundir scheduling com storage
+
+Um Pod `Pending` não significa automaticamente “problema do Scheduler”, e uma PVC `Pending` também não significa automaticamente “provisioner avariado”. Identificar primeiro a camada que falhou:
+
+```text
+Pod Pending + NODE=<none> + FailedScheduling
+→ problema de elegibilidade/scheduling
+
+PVC Pending sem consumidor + WaitForFirstConsumer
+→ estado esperado antes de existir um consumidor elegível
+
+PVC continua Pending depois de existir consumidor
+→ kubectl describe pvc + Events + estado do provisioner
+
+Pod já tem NODE, mas fica ContainerCreating + FailedMount/FailedAttachVolume
+→ problema de volume/mount/attach, não de scheduling
+```
+
+Com `local-path-provisioner`, investigar sobretudo `kubectl describe pvc`, `kubectl describe pod`, Events e logs do provisioner. `FailedAttachVolume` é mais típico de storage que exige attach; não deve ser assumido neste laboratório.
 
 ---
 
@@ -1267,37 +1316,73 @@ BACKUP
 ALTA DISPONIBILIDADE
 ```
 
-Checklist final:
+## Checklist final de autoavaliação
+
+- [ ] Consigo explicar a relação `Deployment → ReplicaSet → Pod` e demonstrar reconciliação.
+- [ ] Consigo explicar por que um DaemonSet cria Pods apenas nos Nodes elegíveis.
+- [ ] Distingo identidade estável de StatefulSet de persistência de dados.
+- [ ] Consigo validar DNS individual de Pods através de um Headless Service.
+- [ ] Consigo explicar por que o nome `web-1` pode manter-se enquanto o UID do Pod muda.
+- [ ] Consigo explicar `WaitForFirstConsumer` e distinguir um `Pending` esperado de uma falha.
+- [ ] Consigo distinguir falha de scheduling de falha de provisionamento/mount de storage usando `describe` e Events.
+- [ ] Consigo identificar o PV criado dinamicamente e interpretar a respetiva `nodeAffinity`.
+- [ ] Consigo provar persistência sem criar um falso positivo no arranque do Pod.
+- [ ] Consigo explicar o papel do `initContainer` no seed da base SQLite.
+- [ ] Consigo diagnosticar um Service com selector incorreto através de labels e EndpointSlice.
+- [ ] Consigo validar Ingress Traefik e explicar o percurso até ao Pod.
+- [ ] Consigo distinguir a porta do listener Gateway da porta externa NodePort.
+- [ ] Consigo interpretar `Accepted=True` e `ResolvedRefs=True` num HTTPRoute.
+- [ ] Consigo executar e validar um backup SQLite online através de `SQLite3::backup()`.
+- [ ] Sei usar `PRAGMA integrity_check` como uma das evidências de consistência do backup/restore.
+- [ ] Consigo explicar a finalidade de um CronJob e criar uma execução manual a partir do seu template.
+- [ ] Sei explicar por que um backup mantido apenas noutro PVC local não protege contra perda física do Worker.
+- [ ] Consigo provar que a perda do Pod é recuperada por persistência sem recorrer ao backup.
+- [ ] Consigo explicar a diferença entre perda do Pod, perda lógica da PVC e perda física do Node/storage.
+- [ ] Consigo restaurar a aplicação para uma nova PVC/PV e validar marcador, integridade e health endpoint.
+- [ ] Distingo claramente **persistência**, **backup** e **Alta Disponibilidade**.
+
+## Regra de evidência da Sessão 5
+
+O laboratório fica concluído quando o formando consegue **apresentar e explicar**, e não apenas executar:
 
 ```text
-[ ] Deployment → ReplicaSet → Pod observado
-[ ] reconciliação demonstrada
-[ ] DaemonSet nos Nodes elegíveis
-[ ] StatefulSet e ordinais observados
-[ ] Headless Service e DNS por Pod validados
-[ ] PVC Pending antes do consumidor
-[ ] WaitForFirstConsumer compreendido
-[ ] PV criado dinamicamente
-[ ] nodeAffinity do PV observada
-[ ] persistência genérica validada sem falso positivo
-[ ] Symfony Demo ligada a SQLite numa PVC
-[ ] initContainer de seed compreendido
-[ ] marcador persistente criado na base SQLite
-[ ] Service com selector errado diagnosticado
-[ ] EndpointSlice usado como evidência
-[ ] Ingress responde via NodePort 30080
-[ ] Gateway listener 8000 compreendido
-[ ] HTTPRoute Accepted=True e ResolvedRefs=True
-[ ] Job de backup SQLite Complete
-[ ] SQLite3::backup() compreendido
-[ ] PRAGMA integrity_check = ok
-[ ] CronJob analisado e execução manual concluída
-[ ] backup copiado para fora do cluster
-[ ] perda do Pod recuperada por persistência
-[ ] perda lógica da PVC demonstrada
-[ ] nova PVC / novo PV observados
-[ ] restore SQLite concluído
-[ ] aplicação responde após restore
+Deployment reconciliado após perda de Pod
++
+DaemonSet apenas nos Nodes elegíveis
++
+StatefulSet com identidade nominal demonstrada
++
+Headless DNS validado
++
+PVC Pending antes do consumidor por WaitForFirstConsumer
++
+PVC Bound e PV dinamicamente criado depois do consumidor
++
+camada da falha identificada por NODE / PVC / Events / mount
++
+persistência comprovada sem falso positivo
++
+Service quebrado diagnosticado por selector + EndpointSlice
++
+Ingress funcional
++
+Gateway + HTTPRoute aceites e resolvidos
++
+backup SQLite online com integrity_check=ok
++
+CronJob compreendido e execução manual validada
++
+backup copiado para fora do storage Kubernetes da aplicação
++
+perda do Pod recuperada pela persistência
++
+eliminação lógica da PVC demonstrada
++
+nova PVC / novo PV após restore
++
+aplicação saudável e dados recuperados
++
+PERSISTÊNCIA ≠ BACKUP ≠ ALTA DISPONIBILIDADE
 ```
 
 Limpeza:
@@ -1338,11 +1423,29 @@ logs quando aplicável
   ↓
 selectors / EndpointSlices / PVC / conditions
   ↓
+CLASSIFICAR A CAMADA
+  ↓
 HIPÓTESE
   ↓
 CORREÇÃO
   ↓
 VALIDAÇÃO
+```
+
+Antes de corrigir, perguntar explicitamente:
+
+```text
+O Pod ainda não tem Node?
+→ scheduling
+
+O Pod tem Node mas não inicia e existem FailedMount/erros de volume?
+→ storage/mount
+
+A PVC continua Pending?
+→ validar WaitForFirstConsumer, consumidor, provisioner e Events
+
+O Service não tem endpoints?
+→ selector/labels/EndpointSlice
 ```
 
 Não acrescentar flags aleatórias, não apagar recursos indiscriminadamente e não confundir um estado transitório com uma falha persistente.
