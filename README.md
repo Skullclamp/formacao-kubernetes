@@ -24,9 +24,8 @@ formacao-kubernetes/
 └── sessao-06/
     ├── README.md
     ├── manual_formando.md
-    ├── formando/
-    │   └── labs/
-    │       └── laboratorio_integrado_sessao_6.md
+    ├── labs/
+    │   └── laboratorio_integrado_sessao_6.md
     └── manifests/
 ```
 
