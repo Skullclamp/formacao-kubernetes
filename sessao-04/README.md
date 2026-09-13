@@ -20,7 +20,7 @@ Kernel:              7.0.0-31-generic
 Kubernetes inicial:  1.35.8
 Kubernetes final:    1.36.4
 containerd:          2.2.6
-runc:                1.3.6
+runc:                 1.3.6
 Calico:              3.32.2
 Tigera Operator:     1.42.6
 Pod CIDR:            10.244.0.0/16
@@ -37,6 +37,22 @@ Os patches devem ser reconfirmados antes de cada nova edição da formação. A 
 Esta combinação permite ensinar um upgrade minor real mantendo o CNI dentro da matriz de testes adotada para Calico 3.32. Consulta [`compatibilidade.md`](compatibilidade.md).
 
 Traefik não é instalado na Sessão 4. É usado posteriormente para Ingress/Gateway.
+
+## Continuidade de topologia para a Sessão 5
+
+A Sessão 4 termina **deliberadamente** com dois Nodes:
+
+```text
+k8s-cp-01
++
+k8s-wk-01
+```
+
+Antes da Sessão 5, o formador adiciona um segundo Worker, `k8s-wk-03 / 192.168.50.102`, **fora dos 240 minutos da aula**, reutilizando o procedimento de `kubeadm join` já praticado no CP6 desta sessão. O objetivo não é repetir o mesmo exercício de join, mas disponibilizar dois Workers para os laboratórios de workloads, storage, scheduling e Anti-Affinity das sessões seguintes.
+
+A designação `k8s-wk-03` corresponde ao inventário real das VMs do laboratório. Não representa um checkpoint omitido e não implica que exista um `k8s-wk-02` que o formando devesse ter criado.
+
+Antes da Sessão 5, o formador deve validar que o novo Worker apresenta a mesma baseline operacional: Kubernetes `1.36.4`, containerd `2.2.6`, Calico operacional e estado `Ready`.
 
 ## Regra pedagógica
 
@@ -94,6 +110,8 @@ A Sessão 4 utiliza um único laboratório integrado:
 
 O laboratório concentra-se no percurso prático, nos outputs essenciais, nos checkpoints e nas evidências. As explicações detalhadas dos conceitos, argumentos, flags e decisões ficam no manual do formando.
 
+O molde pedagógico comum dos laboratórios Kubernetes está documentado em [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md).
+
 ## Materiais
 
 - [`plano_sessao_4.md`](plano_sessao_4.md) — plano pedagógico;
@@ -106,7 +124,8 @@ O laboratório concentra-se no percurso prático, nos outputs essenciais, nos ch
 - [`cheat_sheet.md`](cheat_sheet.md) — referência rápida;
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico orientado por evidências;
 - [`manifests/`](manifests/) — manifests usados no laboratório;
-- [`referencias.md`](referencias.md) — documentação e bibliografia.
+- [`referencias.md`](referencias.md) — documentação e bibliografia;
+- [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md) — molde canónico para as Sessões 4–8.
 
 ## Regras críticas
 
