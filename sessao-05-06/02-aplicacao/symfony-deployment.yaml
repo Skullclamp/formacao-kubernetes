@@ -28,7 +28,7 @@ spec:
               containerPort: 80
           env:
             - name: APP_ENV
-              value: dev
+              value: prod
             - name: APP_VERSION
               value: "1.0.0"
             - name: APP_SECRET
