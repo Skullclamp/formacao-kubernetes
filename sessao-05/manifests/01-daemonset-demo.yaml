@@ -1,17 +1,36 @@
+# Sessão 5 — DaemonSet de demonstração
+#
+# Objetivo: observar o comportamento "um Pod por Node elegível".
+# O Control Plane mantém o seu taint normal, pelo que o esperado no laboratório
+# é obter um Pod em cada Worker elegível, não necessariamente em todos os Nodes.
+
+# DaemonSet pertence ao grupo apps/v1.
 apiVersion: apps/v1
 kind: DaemonSet
+
 metadata:
+  # Nome utilizado pelos comandos kubectl do laboratório.
   name: daemon-demo
+
 spec:
+  # O selector define que Pods pertencem a este DaemonSet.
+  # Tem de corresponder às labels do template abaixo.
   selector:
     matchLabels:
       app: daemon-demo
+
+  # Template usado pelo controller para criar um Pod em cada Node elegível.
   template:
     metadata:
       labels:
+        # Esta label corresponde ao selector do DaemonSet.
         app: daemon-demo
     spec:
       containers:
         - name: daemon-demo
+
+          # BusyBox é suficiente porque queremos observar placement, não uma aplicação.
           image: busybox:1.36
+
+          # Mantém o processo ativo para o Pod permanecer Running durante a observação.
           command: ["sh", "-c", "sleep 3600"]
