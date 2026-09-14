@@ -387,11 +387,35 @@ ports                 → publicação no host
 
 ## Objetivo
 
-Demonstrar que os dados PostgreSQL não dependem da existência de uma instância concreta do container `db`.
+Demonstrar, com um marcador determinístico, que os dados PostgreSQL não dependem da existência de uma instância concreta do container `db`.
 
 ## O que estamos a fazer e porquê
 
-Crie ou altere um dado através da aplicação e **registe exatamente esse valor**. Esse marcador será a evidência a procurar depois da recriação.
+Em vez de depender de uma operação manual na interface da aplicação, criamos um pequeno marcador diretamente na base de dados. O objetivo deste checkpoint é testar o **named volume**, não a funcionalidade de edição da Symfony Demo.
+
+Criar uma tabela de laboratório e um valor conhecido, reutilizando as variáveis efetivas do próprio container PostgreSQL:
+
+```bash
+docker compose exec -T db \
+  sh -ec 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<"SQL"
+CREATE TABLE IF NOT EXISTS lab_marker (
+  id integer PRIMARY KEY,
+  note text NOT NULL
+);
+INSERT INTO lab_marker (id, note)
+VALUES (1, '\''sessao2-persistencia-ok'\'')
+ON CONFLICT (id) DO UPDATE SET note = EXCLUDED.note;
+SELECT id, note FROM lab_marker WHERE id = 1;
+SQL'
+```
+
+Esperado:
+
+```text
+1 | sessao2-persistencia-ok
+```
+
+> O valor é escrito **antes** de remover os containers. Depois do `down`, não voltamos a executar o `INSERT`; apenas consultamos o que já estava armazenado.
 
 Parar e remover os containers do projeto, preservando os volumes:
 
@@ -403,13 +427,13 @@ docker compose down
 
 Remove os containers e a rede criada pelo projeto. Por omissão, o named volume declarado **não é removido**.
 
-Confirmar:
+Confirmar que o volume continua disponível:
 
 ```bash
 docker volume ls
 ```
 
-Recriar:
+Recriar a stack:
 
 ```bash
 docker compose up -d
@@ -417,7 +441,34 @@ docker compose ps
 curl -i http://localhost:8080/ready
 ```
 
-Volte a consultar o dado criado antes do `down`.
+Agora **apenas consultar** o marcador, sem o recriar:
+
+```bash
+docker compose exec -T db \
+  sh -ec 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT id, note FROM lab_marker WHERE id = 1;"'
+```
+
+Esperado novamente:
+
+```text
+1 | sessao2-persistencia-ok
+```
+
+### Porque esta prova evita um falso positivo?
+
+```text
+antes do down  → escrever marcador
+        ↓
+down           → containers removidos
+        ↓
+volume         → permanece
+        ↓
+up             → novos containers
+        ↓
+depois do up   → apenas SELECT
+```
+
+Se o segundo `SELECT` encontra o mesmo valor, a evidência vem do volume persistente e não de um comando de inicialização que tenha recriado o marcador.
 
 ### Atenção: não usar `-v` nesta prova
 
@@ -430,14 +481,15 @@ docker compose down -v
 ### CHECKPOINT CP8
 
 ```text
+marcador criado antes do down
 containers antigos removidos
 named volume permaneceu
 a stack foi recriada
 /ready voltou a OK
-dado anterior continua presente
+SELECT posterior devolveu o mesmo marcador sem o recriar
 ```
 
-**Evidência:** guardar o dado antes e depois da recriação.
+**Evidência:** guardar o resultado do `SELECT` antes e depois da recriação.
 
 ---
 
@@ -458,9 +510,11 @@ PostgreSQL possui healthcheck
 +
 named volume montado na DB
 +
+marcador escrito antes do down
++
 containers recriados
 +
-dado preservado no volume
+mesmo marcador lido depois do up sem novo INSERT
 +
 Compose single-host ≠ orquestração de Alta Disponibilidade
 ```
