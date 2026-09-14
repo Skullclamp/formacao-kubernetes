@@ -1,0 +1,28 @@
+# Sessão 6 — NetworkPolicy default deny
+#
+# Objetivo: partir de comunicação livre e isolar todos os Pods do Namespace em
+# ingress e egress. As policies seguintes irão reabrir apenas fluxos necessários.
+#
+# IMPORTANTE: NetworkPolicy depende do CNI. Neste laboratório o Calico fornece
+# enforcement; `kubectl apply` bem-sucedido não prova, por si só, que o tráfego
+# está efetivamente bloqueado.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+
+metadata:
+  name: default-deny-all
+  namespace: s6-governance
+
+spec:
+  # Selector vazio seleciona todos os Pods do Namespace.
+  podSelector: {}
+
+  # Isola os Pods nas duas direções.
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Não existem regras `ingress` nem `egress`.
+  # Por isso, para os Pods selecionados, nenhum fluxo é permitido por esta
+  # policy; outras policies aditivas podem autorizar fluxos específicos.
