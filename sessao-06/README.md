@@ -36,6 +36,44 @@ k8s-wk-03
 
 A designação `wk-03` é a do inventário real das VMs e não representa uma etapa pedagógica omitida. O preflight da Sessão 6 volta a validar ambos os Workers e inclui um smoke-test do CNI em cada um antes de depender da topologia para Anti-Affinity e placement.
 
+## Antes de começar — garantir o repositório e a branch `main`
+
+Executar no `k8s-cp-01`:
+
+```bash
+clear
+
+REPO_DIR="$HOME/formacao-kubernetes"
+REPO_URL="https://github.com/Skullclamp/formacao-kubernetes.git"
+
+if [ -d "$REPO_DIR/.git" ]; then
+  git -C "$REPO_DIR" switch main
+  git -C "$REPO_DIR" pull --ff-only origin main
+elif [ -e "$REPO_DIR" ]; then
+  BACKUP_DIR="${REPO_DIR}.bak-$(date +%Y%m%d-%H%M%S)"
+  mv "$REPO_DIR" "$BACKUP_DIR"
+  echo "Diretoria anterior preservada em: $BACKUP_DIR"
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+else
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+fi
+
+git -C "$REPO_DIR" branch --show-current
+git -C "$REPO_DIR" status --short
+
+cd "$REPO_DIR/sessao-06/labs"
+pwd
+```
+
+Esperado:
+
+```text
+branch ativa: main
+.../formacao-kubernetes/sessao-06/labs
+```
+
+Este é o bootstrap canónico da formação. O preflight do laboratório volta a validar o cluster antes de criar qualquer regra de governação.
+
 ## Percurso da sessão
 
 ```text
@@ -86,7 +124,7 @@ RECOLHER EVIDÊNCIA
 EXPLICAR
 ```
 
-Cada `CPx` é um gate de validação. O padrão comum dos laboratórios Kubernetes — incluindo teste negativo quando fizer sentido, health gates, autoavaliação e evidências — está documentado em [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md).
+Cada `CPx` é um gate de validação. O padrão comum dos laboratórios — incluindo teste negativo quando fizer sentido, health gates, autoavaliação e evidências — está documentado em [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md).
 
 ## Estrutura
 
