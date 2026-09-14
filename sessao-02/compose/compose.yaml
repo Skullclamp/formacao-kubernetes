@@ -1,42 +1,106 @@
+# Docker Compose — Sessão 2
+#
+# Este ficheiro descreve uma aplicação com dois serviços:
+#   app → Symfony Demo (Web)
+#   db  → PostgreSQL 16
+#
+# A intenção pedagógica é mostrar como Compose transforma uma definição
+# declarativa em containers, rede e volume, evitando uma sequência manual
+# de comandos `docker run`, `docker network create` e `docker volume create`.
+
 services:
+  # Serviço Web da aplicação Symfony.
   app:
+    # A imagem é indicada através da variável SYMFONY_IMAGE definida no .env.
+    # Nesta sessão a imagem já existe: não fazemos build local.
     image: ${SYMFONY_IMAGE}
+
+    # Publicação no formato HOST:CONTAINER.
+    # APP_PORT pode ser definido no .env; se estiver ausente, usa 8080.
+    # A aplicação/Apache escuta na porta 80 dentro do container.
     ports:
       - "${APP_PORT:-8080}:80"
+
+    # Variáveis entregues ao processo da aplicação em runtime.
+    # A sintaxe ${VAR:-default} usa o valor da variável quando existe e,
+    # caso contrário, utiliza o valor indicado depois de `:-`.
     environment:
       APP_ENV: ${APP_ENV:-dev}
       APP_VERSION: ${APP_VERSION:-1.0.0}
       APP_SECRET: ${APP_SECRET}
+
+      # O hostname é `db`, e não localhost, porque PostgreSQL executa noutro
+      # container. Na rede Compose o nome do serviço funciona como nome DNS.
       DATABASE_URL: ${DATABASE_URL}
+
+    # Compose aguarda que o healthcheck de `db` reporte `healthy` antes de
+    # iniciar `app` neste fluxo de dependência.
+    # Isto ajuda a ordenar o arranque, mas aplicações reais devem continuar
+    # preparadas para indisponibilidade temporária/reconexão da base de dados.
     depends_on:
       db:
         condition: service_healthy
+
+    # Liga `app` à rede privada declarada no final do ficheiro.
     networks:
       - app-network
 
+  # Serviço de base de dados PostgreSQL.
   db:
+    # Versão explícita da imagem em vez de depender de `latest`.
     image: postgres:16
+
+    # Variáveis reconhecidas pela imagem oficial PostgreSQL durante a
+    # inicialização da base de dados.
+    # Os valores de laboratório são definidos no .env; não usar credenciais
+    # reais neste material. Um .env não é um secret manager.
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    # Named volume: os dados ficam fora da camada gravável do container.
+    # Se o container `db` for removido e recriado sem apagar o volume,
+    # /var/lib/postgresql/data volta a receber os dados persistentes.
     volumes:
       - db-data:/var/lib/postgresql/data
+
+    # Verifica se PostgreSQL já aceita ligações para o utilizador/base
+    # configurados. O estado deste healthcheck alimenta `service_healthy`
+    # usado por `app.depends_on`.
     healthcheck:
+      # CMD-SHELL executa o comando através de uma shell dentro do container,
+      # permitindo interpolar as variáveis já processadas pelo Compose.
       test:
         [
           "CMD-SHELL",
           "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
         ]
+
+      # Intervalo entre verificações de saúde.
       interval: 5s
+
+      # Tempo máximo permitido a cada verificação individual.
       timeout: 3s
+
+      # Número de falhas consecutivas toleradas antes de marcar unhealthy.
       retries: 10
+
+      # Período inicial durante o qual o PostgreSQL pode arrancar sem que
+      # falhas precoces contem imediatamente para o estado unhealthy.
       start_period: 5s
+
+    # A base de dados não publica a porta 5432 no host porque apenas a
+    # aplicação necessita de lhe aceder neste cenário. A comunicação é interna.
     networks:
       - app-network
 
+# Rede bridge definida pelo utilizador. Os serviços ligados a esta rede
+# beneficiam da resolução interna por nome de serviço (`app`, `db`).
 networks:
   app-network:
 
+# Named volume gerido pelo Docker. A declaração cria uma referência lógica;
+# o Docker gere a localização física dos dados no host.
 volumes:
   db-data:
