@@ -1,0 +1,39 @@
+# Sessão 6 — Pod com Node Affinity obrigatória
+#
+# Objetivo: demonstrar uma regra de placement mais expressiva do que
+# nodeSelector. O Pod só pode ser agendado num Node cuja label de workload
+# tenha um dos valores indicados.
+
+apiVersion: v1
+kind: Pod
+
+metadata:
+  name: node-affinity-demo
+  namespace: s6-governance
+
+spec:
+  affinity:
+    nodeAffinity:
+      # `required...` significa que a regra é obrigatória NO MOMENTO do
+      # scheduling. `IgnoredDuringExecution` significa que remover a label do
+      # Node depois do placement não expulsa automaticamente este Pod.
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: training.goldconsulting/workload
+
+                # In aceita qualquer valor presente na lista `values`.
+                operator: In
+                values:
+                  - apps
+
+  containers:
+    - name: web
+      image: nginx:stable-alpine
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "32Mi"
+        limits:
+          cpu: "200m"
+          memory: "128Mi"
