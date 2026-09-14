@@ -36,7 +36,8 @@ Gateway listener HTTP:  8000
 
 Symfony Demo:           v3.1.0
 Imagem:                 ghcr.io/skullclamp/symfony-demo:1.1.0
-PostgreSQL:             16
+Base de dados do lab:   SQLite
+Ficheiro SQLite:        /var/www/html/data/database.sqlite
 Namespace lab:          sessao5
 ```
 
@@ -88,7 +89,7 @@ Cada `CPx` é um gate pedagógico: não se avança sem resultado esperado, evid�
 ## Percurso
 
 ```text
-Deployment + reconciliação
+Deployment Symfony + reconciliação
         ↓
 DaemonSet
         ↓
@@ -98,7 +99,7 @@ PVC → StorageClass → provisioner → PV
         ↓
 WaitForFirstConsumer + afinidade ao Node
         ↓
-PostgreSQL StatefulSet
+Symfony + SQLite persistente em PVC
         ↓
 Service + DNS + EndpointSlice
         ↓
@@ -120,8 +121,10 @@ health gate antes da operação destrutiva
         ↓
 eliminação lógica da PVC
         ↓
-restore
+restore para nova PVC/PV
 ```
+
+> Nesta sessão, SQLite é deliberadamente usado para concentrar a prática nos mecanismos Kubernetes de workload, storage, Service, entrada HTTP, backup e recuperação. A integração completa Symfony → PostgreSQL fica para uma sessão posterior.
 
 ## Laboratório único da sessão
 
@@ -129,7 +132,7 @@ Existe um único laboratório integrado:
 
 [**Laboratório Integrado — Sessão 5**](labs/laboratorio_integrado_sessao_5.md)
 
-O laboratório é manual e organizado por checkpoints com explicação, comandos, outputs, observação e evidência. Os manifests usados nos checkpoints estão em [`manifests/`](manifests/).
+O laboratório é manual e organizado por checkpoints com explicação, comandos, outputs, observação e evidência. Os manifests efetivamente usados pelo percurso atual, bem como os ficheiros históricos mantidos apenas como apoio, estão identificados em [`manifests/README.md`](manifests/README.md).
 
 ## Health gate obrigatório antes do CP17
 
@@ -169,14 +172,28 @@ sessao-05/
 ├── labs/
 │   └── laboratorio_integrado_sessao_5.md
 └── manifests/
+    ├── README.md
+    ├── 01-daemonset-demo.yaml
+    ├── 02-web-headless.yaml
+    ├── 03-web-statefulset.yaml
+    ├── 04-test-pvc.yaml
+    ├── 05-test-pod.yaml
+    ├── 10-symfony-service-broken.yaml
+    ├── 11-symfony-ingress.yaml
+    ├── 12-symfony-gateway.yaml
+    ├── 13-symfony-httproute.yaml
+    └── 17-backup-reader.yaml
 ```
+
+A diretoria contém ainda manifests PostgreSQL de uma iteração anterior. Estes ficheiros estão assinalados no `manifests/README.md` como **apoio histórico / não usados no percurso atual** e não devem ser executados como parte dos checkpoints da versão SQLite do laboratório.
 
 ## Materiais
 
 - [`manual_formando.md`](manual_formando.md) — explicação conceptual e operacional progressiva;
 - [`labs/laboratorio_integrado_sessao_5.md`](labs/laboratorio_integrado_sessao_5.md) — laboratório manual completo;
 - [`folha_evidencias.md`](folha_evidencias.md) — registo central dos checkpoints, health gate e evidência final;
-- [`manifests/`](manifests/) — manifests usados no laboratório;
+- [`manifests/README.md`](manifests/README.md) — mapa dos manifests ativos e dos ficheiros históricos;
+- [`manifests/`](manifests/) — manifests de apoio da sessão;
 - [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md) — molde canónico dos laboratórios Kubernetes.
 
 ## Regras críticas
@@ -189,8 +206,8 @@ sessao-05/
 6. `WaitForFirstConsumer` pode manter uma PVC `Pending` até existir consumidor.
 7. Um PV local fica dependente do Node selecionado.
 8. `reclaimPolicy: Delete` é a configuração do laboratório, não uma recomendação universal de produção.
-9. O Deployment Symfony criado no início mantém-se até aos testes de Service, Ingress e Gateway.
-10. A integração completa Symfony → PostgreSQL fica para a Sessão 9.
+9. O Deployment Symfony criado no início é substituído no CP9 pela variante persistente com SQLite e mantém-se até aos testes de Service, Ingress e Gateway.
+10. A integração completa Symfony → PostgreSQL fica para uma sessão posterior; os manifests PostgreSQL históricos desta diretoria não fazem parte do percurso atual.
 11. GatewayClass `traefik` é pré-instalada; o formando cria apenas Gateway + HTTPRoute.
 12. O listener HTTP do Gateway usa `8000`; o acesso externo usa NodePort `30080`.
 13. O backup deve ser retirado do cluster antes da eliminação controlada da PVC.
