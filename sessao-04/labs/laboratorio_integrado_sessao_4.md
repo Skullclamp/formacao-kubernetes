@@ -679,6 +679,20 @@ Pod CIDR do Calico = 10.244.0.0/16
 
 **Evidência:** guardar `kubectl get tigerastatus` e `kubectl get nodes -o wide`.
 
+## 5.4. Execução automática opcional de CP4 + CP5
+
+Em alternativa à execução manual dos CP4 e CP5, é possível executar o script de apoio que automatiza a inicialização do Control Plane, a configuração do kubeconfig, a instalação do Calico e as validações finais destes dois checkpoints.
+
+**Executar apenas em:** `k8s-cp-01`, depois de concluídos CP0 a CP3.
+
+```bash
+cd ~/formacao-kubernetes
+git pull --ff-only origin main
+bash sessao-04/labs/scripts/cp4_cp5_control_plane_calico.sh
+```
+
+> Esta é uma alternativa à execução manual dos CP4 e CP5. O script não substitui a compreensão das operações descritas nestes dois blocos.
+
 ---
 
 # CP6 — Integrar o Worker
