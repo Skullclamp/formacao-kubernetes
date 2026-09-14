@@ -1,12 +1,31 @@
+# Sessão 5 — Service deliberadamente incorreto para troubleshooting
+#
+# IMPORTANTE: este manifesto contém um erro INTENCIONAL no selector.
+# O objetivo é provar a cadeia:
+#   Service selector → labels dos Pods → EndpointSlice
+# e diagnosticar a ausência de endpoints antes de corrigir o Service.
+
 apiVersion: v1
 kind: Service
+
 metadata:
   name: symfony-demo
+
 spec:
+  # ClusterIP cria um endereço virtual acessível dentro do cluster.
   type: ClusterIP
+
   selector:
+    # ERRO CONTROLADO: os Pods reais usam `app: symfony-demo`.
+    # Enquanto este valor tiver o sufixo `-ERRO`, o Service não seleciona
+    # os Pods e o EndpointSlice não terá endpoints funcionais da aplicação.
     app: symfony-demo-ERRO
+
   ports:
     - name: http
+
+      # Porta disponibilizada pelo Service dentro do cluster.
       port: 80
+
+      # Porta HTTP em que o container Symfony/Apache escuta no Pod.
       targetPort: 80
