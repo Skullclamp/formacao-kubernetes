@@ -1,0 +1,43 @@
+# Sessão 6 — Permitir apenas egress para DNS
+#
+# Aplicar depois de `default-deny-all`.
+# Objetivo: devolver aos Pods a capacidade de resolver nomes sem reabrir o
+# restante tráfego de aplicação.
+#
+# Antes de aplicar, confirmar que os Pods DNS do cluster usam realmente a label
+# `k8s-app=kube-dns`. O laboratório foi validado com essa label.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+
+metadata:
+  name: allow-dns
+  namespace: s6-governance
+
+spec:
+  # A autorização de DNS aplica-se a todos os Pods do Namespace do laboratório.
+  podSelector: {}
+
+  # Esta policy acrescenta apenas regras de saída.
+  policyTypes:
+    - Egress
+
+  egress:
+    - to:
+        - # Seleciona primeiro o Namespace onde corre CoreDNS.
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+
+          # Dentro desse Namespace, seleciona apenas os Pods de DNS.
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+
+      ports:
+        # DNS usa normalmente UDP 53; TCP 53 também é necessário em alguns casos
+        # (respostas grandes, fallback, transferências específicas).
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
