@@ -49,6 +49,7 @@ EXPLICAR O RESULTADO
 | `14-netpol-allow-dns.yaml` | reabertura explícita de DNS |
 | `15-netpol-allow-app.yaml` | cliente → aplicação |
 | `16-netpol-allow-db.yaml` | aplicação → PostgreSQL |
+| `17-networkpolicy-test-workloads.yaml` | cliente, aplicação e DB mínimos para os testes de rede |
 
 ## Regra importante
 
