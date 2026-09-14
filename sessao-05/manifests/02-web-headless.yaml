@@ -1,12 +1,29 @@
+# Sessão 5 — Headless Service para o StatefulSet `web`
+#
+# Objetivo: fornecer identidade DNS estável aos Pods do StatefulSet.
+# Com `clusterIP: None`, o Service não disponibiliza um único ClusterIP para
+# balanceamento; o DNS pode devolver os endpoints individuais dos Pods.
+
 apiVersion: v1
 kind: Service
+
 metadata:
+  # O StatefulSet refere este nome em `spec.serviceName`.
   name: web
+
 spec:
+  # `None` transforma o Service num Headless Service.
   clusterIP: None
+
+  # Seleciona os Pods cuja label `app` é `web`.
   selector:
     app: web
+
   ports:
     - name: http
+
+      # Porta lógica exposta pelo Service dentro do cluster.
       port: 80
+
+      # Porta para a qual o tráfego é encaminhado nos Pods selecionados.
       targetPort: 80
