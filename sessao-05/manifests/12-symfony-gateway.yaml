@@ -1,13 +1,30 @@
+# Sessão 5 — Gateway da Symfony Demo
+#
+# Objetivo: criar um ponto de entrada HTTP através da Gateway API.
+# A GatewayClass `traefik` já existe no cluster e indica o controller que
+# implementará este recurso.
+
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
+
 metadata:
   name: symfony-gateway
+
 spec:
+  # Associa o Gateway à implementação Traefik instalada no laboratório.
   gatewayClassName: traefik
+
   listeners:
     - name: http
+
+      # Este listener recebe tráfego HTTP.
       protocol: HTTP
+
+      # Porta do listener lógico do Gateway/entryPoint Traefik.
+      # Não confundir com o NodePort externo 30080 usado pelo cliente do lab.
       port: 8000
+
       allowedRoutes:
         namespaces:
+          # Só HTTPRoutes do mesmo Namespace podem anexar-se a este Gateway.
           from: Same
