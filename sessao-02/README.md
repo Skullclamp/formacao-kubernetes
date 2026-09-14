@@ -48,15 +48,43 @@ Troubleshooting
 - [`desafios/troubleshooting.md`](desafios/troubleshooting.md)
 - [`checklist.md`](checklist.md)
 
-## Antes de começar
+## Antes de começar — garantir a branch `main`
+
+Não assumir que a shell abriu dentro do repositório nem eliminar uma diretoria não-Git com o mesmo nome.
 
 ```bash
-cd formacao-kubernetes
-git pull
-cd sessao-02
+clear
+
+REPO_DIR="$HOME/formacao-kubernetes"
+REPO_URL="https://github.com/Skullclamp/formacao-kubernetes.git"
+
+if [ -d "$REPO_DIR/.git" ]; then
+  git -C "$REPO_DIR" switch main
+  git -C "$REPO_DIR" pull --ff-only origin main
+elif [ -e "$REPO_DIR" ]; then
+  BACKUP_DIR="${REPO_DIR}.bak-$(date +%Y%m%d-%H%M%S)"
+  mv "$REPO_DIR" "$BACKUP_DIR"
+  echo "Diretoria anterior preservada em: $BACKUP_DIR"
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+else
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+fi
+
+git -C "$REPO_DIR" branch --show-current
+git -C "$REPO_DIR" status --short
+
+cd "$REPO_DIR/sessao-02"
+pwd
 ```
 
-Confirme:
+Esperado:
+
+```text
+branch ativa: main
+.../formacao-kubernetes/sessao-02
+```
+
+Confirme o ambiente Docker:
 
 ```bash
 docker version
