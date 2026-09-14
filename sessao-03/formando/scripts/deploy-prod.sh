@@ -99,6 +99,11 @@ echo "==> PostgreSQL"
 # Obtém o ID do container da base de dados e aguarda pelo respetivo HEALTHCHECK.
 # Faz até 20 tentativas com intervalo de 3 segundos.
 DB_CID="$(${COMPOSE[@]} ps -q db)"
+if [[ -z "$DB_CID" ]]; then
+  echo "ERRO: container PostgreSQL não foi criado." >&2
+  exit 1
+fi
+
 for _ in $(seq 1 20); do
   STATUS="$(docker inspect "$DB_CID" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}')"
   [[ "$STATUS" == "healthy" ]] && break
@@ -112,10 +117,13 @@ if [[ "$(docker inspect "$DB_CID" --format '{{.State.Health.Status}}')" != "heal
 fi
 
 # Verifica se a tabela principal da Symfony Demo já existe.
+# A consulta reutiliza POSTGRES_USER e POSTGRES_DB existentes no próprio container,
+# evitando duplicar no script os valores definidos em .env.prod/compose.yaml.
 # -T desativa pseudo-TTY; -tA remove formatação extra; -c executa o SQL fornecido.
+SCHEMA_QUERY="SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='symfony_demo_post';"
 SCHEMA_EXISTS="$("${COMPOSE[@]}" exec -T db \
-  psql -U symfony -d symfony -tAc \
-  "SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='symfony_demo_post';")"
+  sh -ec 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "$1"' \
+  sh "$SCHEMA_QUERY")"
 
 # Só numa base de dados vazia cria o schema didático.
 # Em produção real, alterações de schema devem ser feitas por migrations explícitas.
