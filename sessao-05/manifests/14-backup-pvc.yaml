@@ -1,11 +1,24 @@
+# Sessão 5 — PVC dedicada a backups
+#
+# Objetivo: separar o armazenamento do backup do volume primário da aplicação.
+# Apesar dessa separação lógica, `local-path` continua dependente do Worker;
+# por isso o laboratório copia depois uma versão do backup para fora do cluster.
+
 apiVersion: v1
 kind: PersistentVolumeClaim
+
 metadata:
   name: backup-pvc
+
 spec:
+  # O volume pode ser montado com escrita por um Node de cada vez.
   accessModes:
     - ReadWriteOnce
+
+  # Usa a StorageClass local do laboratório para provisionamento dinâmico.
   storageClassName: local-path
+
   resources:
     requests:
+      # Capacidade solicitada para guardar os ficheiros de backup do exercício.
       storage: 1Gi
