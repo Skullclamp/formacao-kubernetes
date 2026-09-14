@@ -1,39 +1,71 @@
+# Sessão 5 — Job de backup lógico PostgreSQL
+#
+# Objetivo: executar uma tarefa finita (`pg_dump`) que grava o resultado na
+# PVC `backup-pvc`. O Job é considerado bem-sucedido apenas se o dump terminar
+# e o ficheiro criado não estiver vazio.
+
 apiVersion: batch/v1
 kind: Job
+
 metadata:
   name: postgres-backup
+
 spec:
+  # Kubernetes pode repetir uma execução falhada até duas vezes antes de marcar
+  # o Job como Failed.
   backoffLimit: 2
+
   template:
     spec:
+      # Jobs exigem Never ou OnFailure; aqui deixamos o controller do Job gerir
+      # novas tentativas em vez de reiniciar indefinidamente o mesmo container.
       restartPolicy: Never
+
       containers:
         - name: pg-dump
+
+          # A imagem PostgreSQL já contém o utilitário `pg_dump`.
           image: postgres:16
+
           env:
+            # `pg_dump`/libpq reconhece PGPASSWORD. O valor vem do Secret de
+            # laboratório, não é duplicado diretamente neste manifesto.
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
                   name: postgres-credentials
                   key: password
+
           command:
             - sh
             - -c
             - |
+              # -e: termina se um comando falhar.
+              # -u: considera erro usar uma variável não definida.
               set -eu
 
+              # Backup lógico da base `symfony_demo` para a PVC montada.
+              # -h define o hostname do Service PostgreSQL.
+              # -U define o utilizador.
+              # -d define a base de dados.
+              # -f define o ficheiro de saída.
               pg_dump \
                 -h postgres \
                 -U postgres \
                 -d symfony_demo \
                 -f /backup/dump.sql
 
+              # O Job só termina com sucesso se o ficheiro existir e tiver dados.
               test -s /backup/dump.sql
               echo "Backup criado com sucesso: /backup/dump.sql"
+
           volumeMounts:
             - name: backup
+              # Caminho onde o Job escreve o ficheiro de backup.
               mountPath: /backup
+
       volumes:
         - name: backup
           persistentVolumeClaim:
+            # PVC separada do storage primário da base de dados.
             claimName: backup-pvc
