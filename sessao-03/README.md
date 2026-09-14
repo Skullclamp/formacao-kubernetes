@@ -55,15 +55,46 @@ O laboratório integrado inclui, passo a passo:
 - validação com `hello-world`;
 - configuração do grupo `docker` com a respetiva nota de segurança;
 - instalação do Trivy;
-- clonagem do repositório da formação;
+- clonagem/atualização do repositório da formação;
 - preparação do source Symfony;
 - build, segurança, scan, registry, deployment, update, falha e rollback.
+
+## 1.1. Bootstrap recomendado do repositório
+
+Quando Git já estiver disponível, utilizar o padrão comum da formação. Não assumir que a shell abriu no clone e garantir explicitamente a branch `main`:
+
+```bash
+REPO_DIR="$HOME/formacao-kubernetes"
+REPO_URL="https://github.com/Skullclamp/formacao-kubernetes.git"
+
+if [ -d "$REPO_DIR/.git" ]; then
+  git -C "$REPO_DIR" switch main
+  git -C "$REPO_DIR" pull --ff-only origin main
+elif [ -e "$REPO_DIR" ]; then
+  BACKUP_DIR="${REPO_DIR}.bak-$(date +%Y%m%d-%H%M%S)"
+  mv "$REPO_DIR" "$BACKUP_DIR"
+  echo "Diretoria anterior preservada em: $BACKUP_DIR"
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+else
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+fi
+
+git -C "$REPO_DIR" branch --show-current
+git -C "$REPO_DIR" status --short
+cd "$REPO_DIR/sessao-03"
+```
+
+O laboratório mantém também os passos necessários para quem começa numa VM totalmente limpa.
 
 # 2. Laboratório único da sessão
 
 Os sete laboratórios anteriores foram substituídos por um único percurso integrado:
 
 [**Laboratório Integrado — da VM Ubuntu Server limpa ao deployment e rollback**](formando/labs/laboratorio_integrado_sessao_3.md)
+
+O mapa de checkpoints, checklist final e regra de evidência estão em:
+
+[**Estrutura canónica do laboratório da Sessão 3**](formando/labs/README.md)
 
 O laboratório segue sempre o mesmo modelo pedagógico:
 
@@ -141,6 +172,7 @@ docker pull ghcr.io/skullclamp/symfony-demo:1.2.0-rc1
 - [Manual do formando](manual_formando.md)
 - [Guia do formando](formando/guia_formando.md)
 - [Laboratório integrado](formando/labs/laboratorio_integrado_sessao_3.md)
+- [Mapa de checkpoints do laboratório](formando/labs/README.md)
 - [Cheat sheet](cheat_sheet.md)
 - [Checklist final](checklist.md)
 - [Referências](referencias.md)
