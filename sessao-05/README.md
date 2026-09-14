@@ -84,7 +84,7 @@ EXPLICAR
 AVANÇAR
 ```
 
-Cada `CPx` é um gate pedagógico: não se avança sem resultado esperado, evidência e interpretação. O molde comum das Sessões 4–8 está em [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md).
+Cada `CPx` é um gate pedagógico: não se avança sem resultado esperado, evidência e interpretação. O molde comum das Sessões 2–8 está em [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md).
 
 ## Percurso
 
@@ -111,7 +111,7 @@ Job + backup SQLite consistente
         ↓
 CronJob
         ↓
-backup fora do cluster
+backup fora do storage primário da aplicação
         ↓
 perda de Pod
         ↓
@@ -151,10 +151,12 @@ MARKER_BACKUP=persistencia-sessao5-ok
 +
 INTEGRITY_CHECK=ok
 +
-database-online.sqlite copiado para fora do cluster e não vazio
+database-online.sqlite copiado para fora do PVC/storage Kubernetes da aplicação e não vazio
 +
 /health devolve HTTP 200
 ```
+
+> Se `kubectl cp` for executado no próprio `k8s-cp-01`, o ficheiro fica fora do PVC/storage Kubernetes da aplicação, mas continua fisicamente numa máquina pertencente ao cluster. Uma política de backup contra perda total do cluster exige uma cópia adicional para um sistema externo independente.
 
 Esta regra impede atribuir ao exercício de perda lógica um problema que já existia antes da operação destrutiva. A checklist está também em [`folha_evidencias.md`](folha_evidencias.md).
 
@@ -194,7 +196,7 @@ A diretoria contém ainda manifests PostgreSQL de uma iteração anterior. Estes
 - [`folha_evidencias.md`](folha_evidencias.md) — registo central dos checkpoints, health gate e evidência final;
 - [`manifests/README.md`](manifests/README.md) — mapa dos manifests ativos e dos ficheiros históricos;
 - [`manifests/`](manifests/) — manifests de apoio da sessão;
-- [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md) — molde canónico dos laboratórios Kubernetes.
+- [`../docs/padrao-laboratorios-kubernetes.md`](../docs/padrao-laboratorios-kubernetes.md) — molde canónico dos laboratórios técnicos.
 
 ## Regras críticas
 
@@ -210,7 +212,7 @@ A diretoria contém ainda manifests PostgreSQL de uma iteração anterior. Estes
 10. A integração completa Symfony → PostgreSQL fica para uma sessão posterior; os manifests PostgreSQL históricos desta diretoria não fazem parte do percurso atual.
 11. GatewayClass `traefik` é pré-instalada; o formando cria apenas Gateway + HTTPRoute.
 12. O listener HTTP do Gateway usa `8000`; o acesso externo usa NodePort `30080`.
-13. O backup deve ser retirado do cluster antes da eliminação controlada da PVC.
+13. O backup deve ser retirado do storage primário da aplicação antes da eliminação controlada da PVC; para proteção contra perda total do cluster deve existir também uma cópia externa independente.
 14. Não iniciar o CP17 sem validar o health gate documentado nesta sessão.
 15. O cenário de eliminação da PVC é “perda lógica dos dados”, não simulação de perda física do Worker.
 16. **Persistência ≠ Backup.**
