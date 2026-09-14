@@ -1,0 +1,51 @@
+# Sessão 6 — Deployment com Pod Anti-Affinity obrigatória
+#
+# Objetivo: distribuir duas réplicas por hostnames diferentes e demonstrar que
+# uma terceira réplica pode ficar sem placement quando só existem dois Workers
+# elegíveis para satisfazer a regra.
+
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: antiaffinity-demo
+  namespace: s6-governance
+
+spec:
+  # Duas réplicas permitem observar uma em cada Worker no cluster do laboratório.
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: antiaffinity-demo
+
+  template:
+    metadata:
+      labels:
+        # Esta label é usada tanto pelo Deployment como pela própria regra de
+        # Pod Anti-Affinity.
+        app: antiaffinity-demo
+
+    spec:
+      affinity:
+        podAntiAffinity:
+          # Regra obrigatória: um Pod novo não pode ser colocado num domínio
+          # topológico que já contenha outro Pod selecionado abaixo.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: antiaffinity-demo
+
+              # O domínio é o hostname do Node; portanto, uma réplica por Node.
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: web
+          image: nginx:stable-alpine
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
