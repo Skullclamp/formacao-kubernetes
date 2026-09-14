@@ -1,0 +1,62 @@
+# Sessão 6 — Pod com SecurityContext de menor privilégio
+#
+# Objetivo: aplicar controlos concretos e depois provar o seu efeito com `id`,
+# tentativas de escrita e inspeção do token da ServiceAccount.
+# Estes controlos só devem ser aplicados a imagens compatíveis com o modelo.
+
+apiVersion: v1
+kind: Pod
+
+metadata:
+  name: security-demo
+  namespace: s6-governance
+
+spec:
+  # Este workload não precisa de comunicar com a Kubernetes API; por isso não
+  # montamos automaticamente um token de ServiceAccount dentro do Pod.
+  automountServiceAccountToken: false
+
+  # Seccomp ao nível do Pod. RuntimeDefault usa o perfil padrão do runtime em
+  # vez de executar sem filtragem de syscalls.
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+
+  containers:
+    - name: shell
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          id
+          sleep 3600
+
+      securityContext:
+        # Exige que o processo não seja executado como root.
+        runAsNonRoot: true
+
+        # UID/GID explícitos para tornar a evidência do laboratório previsível.
+        runAsUser: 10001
+        runAsGroup: 10001
+
+        # Impede processos de ganharem privilégios adicionais via exec/setuid.
+        allowPrivilegeEscalation: false
+
+        # Torna a camada raiz do container read-only. Workloads que precisem de
+        # escrita devem receber volumes apenas nos caminhos necessários.
+        readOnlyRootFilesystem: true
+
+        # Remove capabilities Linux adicionais. Adicionar de volta apenas as
+        # estritamente necessárias quando a aplicação o exigir.
+        capabilities:
+          drop:
+            - ALL
+
+      resources:
+        requests:
+          cpu: "25m"
+          memory: "16Mi"
+        limits:
+          cpu: "100m"
+          memory: "64Mi"
