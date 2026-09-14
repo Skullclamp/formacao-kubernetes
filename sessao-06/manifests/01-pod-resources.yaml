@@ -1,0 +1,32 @@
+# Sessão 6 — Pod com requests e limits
+#
+# Objetivo: distinguir a necessidade declarada ao Scheduler (`requests`) do
+# teto de utilização imposto ao container (`limits`).
+
+apiVersion: v1
+kind: Pod
+
+metadata:
+  name: resources-demo
+  namespace: s6-governance
+  labels:
+    app: resources-demo
+
+spec:
+  containers:
+    - name: web
+      image: nginx:stable-alpine
+
+      resources:
+        # Requests são contabilizados pelo Scheduler ao avaliar se um Node tem
+        # capacidade suficiente para receber o Pod.
+        requests:
+          # 100m = 0,1 CPU.
+          cpu: "100m"
+          # 64Mi = 64 MiB de memória binária.
+          memory: "64Mi"
+
+        # Limits definem os máximos permitidos ao container em runtime.
+        limits:
+          cpu: "250m"
+          memory: "128Mi"
