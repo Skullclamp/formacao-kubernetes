@@ -1,16 +1,45 @@
+# Sessão 4 — Pod usado no exercício cordon/drain/uncordon
+#
+# Este Pod é criado diretamente, sem Deployment/ReplicaSet, de propósito.
+# Assim, o primeiro `kubectl drain` consegue demonstrar a proteção do
+# Kubernetes contra a remoção de um Pod sem controller que o possa recriar.
+
+# v1 é a API core utilizada pelo objeto Pod.
 apiVersion: v1
+
+# Criamos diretamente um Pod, não um Deployment.
 kind: Pod
+
 metadata:
+  # Nome previsível usado pelos comandos do laboratório.
   name: cordon-test
+
+  # A label permite selecionar este Pod de forma segura no `kubectl drain`
+  # através de `--pod-selector=app=cordon-test`.
   labels:
     app: cordon-test
+
 spec:
+  # Força este Pod de laboratório para o Worker que será colocado em manutenção.
+  # `nodeSelector` usa labels do Node; kubernetes.io/hostname é uma label padrão.
   nodeSelector:
     kubernetes.io/hostname: k8s-wk-01
+
   containers:
     - name: web
+
+      # Versão explícita para tornar o exercício mais reproduzível.
       image: nginx:1.28.0-alpine
+
+      # Se a imagem já existir localmente não é descarregada novamente;
+      # se não existir, o kubelet faz pull do registry.
       imagePullPolicy: IfNotPresent
+
+      # Documenta que o processo Nginx escuta na porta 80 dentro do Pod.
+      # `containerPort` não publica por si só uma porta fora do cluster.
       ports:
         - containerPort: 80
+
+  # Para Pods normais, Always pede ao kubelet que reinicie o container se o
+  # processo terminar. Não recria o objeto Pod se este for eliminado pelo drain.
   restartPolicy: Always
