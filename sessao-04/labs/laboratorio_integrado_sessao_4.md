@@ -495,6 +495,39 @@ containerd.io, kubeadm, kubelet e kubectl em hold
 
 **Evidência:** guardar as três versões nos dois Nodes.
 
+## 3.3. Execução automática opcional de CP1 + CP2 + CP3
+
+Em alternativa à execução manual dos CP1, CP2 e CP3, pode ser utilizado o script de apoio que prepara o Linux, configura o runtime `containerd` e instala Kubernetes `1.35.8` com as versões e validações definidas para este laboratório.
+
+**Executar em:** `k8s-cp-01` **e** `k8s-wk-01`, uma vez em cada Node, antes de avançar para CP4.
+
+Como o Worker pode ainda não ter o repositório da formação, o bloco seguinte garante primeiro que o repositório existe e está atualizado:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+
+REPO_DIR="$HOME/formacao-kubernetes"
+REPO_URL="https://github.com/Skullclamp/formacao-kubernetes.git"
+
+if [ -d "$REPO_DIR/.git" ]; then
+  git -C "$REPO_DIR" switch main
+  git -C "$REPO_DIR" pull --ff-only origin main
+elif [ -e "$REPO_DIR" ]; then
+  BACKUP_DIR="${REPO_DIR}.bak-$(date +%Y%m%d-%H%M%S)"
+  mv "$REPO_DIR" "$BACKUP_DIR"
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+else
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+fi
+
+bash "$REPO_DIR/sessao-04/labs/scripts/cp1_cp3_preparar_nodes.sh"
+```
+
+O script valida o hostname e o IP do Node, prepara swap/módulos/sysctl e `/etc/hosts`, instala e valida `containerd 2.2.6`, garante CRI disponível e `SystemdCgroup=true`, instala `kubeadm`, `kubelet` e `kubectl` em `v1.35.8` e coloca os packages relevantes em `hold`.
+
+> Esta é uma alternativa à execução manual dos CP1 a CP3. Deve ser executada nos **dois Nodes**. O script recusa executar se detetar que o Node já foi inicializado ou integrado num cluster, evitando alterar a baseline depois de CP4/CP6.
+
 ---
 
 # CP4 — Inicializar o Control Plane
