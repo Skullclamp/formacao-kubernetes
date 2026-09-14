@@ -1,44 +1,75 @@
+# Sessão 5 — CronJob de backup lógico PostgreSQL
+#
+# Objetivo: mostrar como uma tarefa de backup pode ser descrita como execução
+# periódica. O CronJob fica `suspend: true` no laboratório para que a aula não
+# dependa da hora; pode ser testado criando manualmente um Job a partir dele.
+
 apiVersion: batch/v1
 kind: CronJob
+
 metadata:
   name: postgres-backup-daily
+
 spec:
+  # Expressão cron: minuto 0, hora 3, todos os dias.
   schedule: "0 3 * * *"
+
+  # A interpretação das 03:00 é feita no fuso horário indicado.
   timeZone: "Europe/Lisbon"
+
+  # Impede execuções automáticas durante a aula. O template continua disponível
+  # para `kubectl create job --from=cronjob/postgres-backup-daily ...`.
   suspend: true
+
   jobTemplate:
+    # Cada ocorrência do CronJob cria um Job com este template.
     spec:
       template:
         spec:
           restartPolicy: Never
+
           containers:
             - name: pg-dump
+
+              # Inclui o cliente `pg_dump` necessário ao backup.
               image: postgres:16
+
               env:
                 - name: PGPASSWORD
                   valueFrom:
                     secretKeyRef:
+                      # Password fictícia de laboratório guardada no Secret.
                       name: postgres-credentials
                       key: password
+
               command:
                 - sh
                 - -c
                 - |
                   set -eu
 
+                  # Inclui a data no nome do ficheiro para distinguir execuções.
                   FILE="/backup/dump-$(date +%F).sql"
 
+                  # -h: Service/hostname PostgreSQL
+                  # -U: utilizador
+                  # -d: base de dados
+                  # -f: ficheiro de destino
                   pg_dump \
                     -h postgres \
                     -U postgres \
                     -d symfony_demo \
                     -f "$FILE"
 
+                  # Faz a execução falhar se o ficheiro não existir ou estiver vazio.
                   test -s "$FILE"
+
               volumeMounts:
                 - name: backup
                   mountPath: /backup
+
           volumes:
             - name: backup
               persistentVolumeClaim:
+                # Todos os Jobs escrevem no armazenamento de backups do lab.
                 claimName: backup-pvc
