@@ -58,17 +58,24 @@ Criar a configuração local a partir do exemplo sem alterar o ficheiro modelo v
 
 ## O que estamos a fazer e porquê
 
-O ficheiro `.env.example` documenta as variáveis necessárias. Criamos `.env` como cópia local para preencher valores próprios do laboratório.
+O `README.md` da sessão deixa o terminal em `formacao-kubernetes/sessao-02`. A partir dessa diretoria entramos em `compose/`, onde se encontram `compose.yaml` e `.env.example`.
 
 ```bash
-cd sessao-02/compose
+cd compose
 cp .env.example .env
 ```
 
 ### Explicação
 
-- `cd` muda para a diretoria onde estão `compose.yaml` e `.env.example`;
+- `cd compose` entra na diretoria de configuração Compose da Sessão 2;
 - `cp ORIGEM DESTINO` cria a configuração local sem destruir o exemplo distribuído aos formandos.
+
+Confirme a localização:
+
+```bash
+pwd
+ls -la
+```
 
 Rever:
 
@@ -83,7 +90,7 @@ Substitua a referência de imagem indicada no ficheiro pelo valor fornecido pelo
 ### CHECKPOINT CP1
 
 ```text
-estamos em sessao-02/compose
+estamos em formacao-kubernetes/sessao-02/compose
 .env existe
 imagem da aplicação está definida
 ```
