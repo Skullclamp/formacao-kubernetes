@@ -566,6 +566,394 @@ CRDs Gateway e HTTPRoute instaladas
 Traefik Service com NodePorts 30080/30443
 ```
 
+## Se a baseline não estiver saudável
+
+Não avançar para o CP2 enquanto os componentes de base necessários ao laboratório não estiverem operacionais. A sequência de diagnóstico deve ser sempre:
+
+```text
+SINTOMA
+   ↓
+get
+   ↓
+describe
+   ↓
+Events
+   ↓
+logs quando aplicável
+   ↓
+CAUSA
+   ↓
+CORREÇÃO MÍNIMA
+   ↓
+REPETIR CP1
+```
+
+### Tabela rápida de recuperação
+
+| Sintoma | Diagnóstico inicial | Ação de recuperação |
+|---|---|---|
+| Node `NotReady` | `kubectl describe node <NODE>` e estado de `kubelet`/`containerd` no Node | corrigir/reiniciar apenas o serviço em falha e revalidar o Node |
+| Pod de infraestrutura `Pending`, `CrashLoopBackOff`, `ImagePullBackOff` ou `Error` | `kubectl describe pod` + `kubectl logs` | corrigir a causa indicada por Events/logs antes de eliminar recursos |
+| StorageClass `local-path` inexistente | `kubectl get storageclass` | instalar `local-path-provisioner` v0.0.37 e confirmar a StorageClass |
+| `local-path-provisioner` não está `Running` | `describe` + logs do Pod | corrigir a causa; se a falha for transitória, recriar apenas o Pod do provisioner |
+| CRDs Gateway API inexistentes | `kubectl get crd ...` | instalar Gateway API Standard Channel v1.6.1 |
+| Traefik inexistente | `kubectl get pods -n traefik` | instalar/reconciliar o chart Traefik 41.5.0 com a configuração da baseline |
+| `IngressClass traefik` inexistente | `kubectl get ingressclass` | reconciliar a configuração Helm do Traefik |
+| `GatewayClass traefik` inexistente ou não aceite | validar CRDs e `kubectl describe gatewayclass traefik` | ativar o provider Gateway e reconciliar a GatewayClass |
+| NodePorts diferentes de `30080/30443` | `kubectl get svc -n traefik` | reconciliar o Service Traefik com os NodePorts da baseline |
+
+### Caso 1 — Node `NotReady`
+
+No `k8s-cp-01`, identificar o Node e os Events:
+
+```bash
+clear
+kubectl get nodes -o wide
+kubectl describe node <NOME_DO_NODE>
+```
+
+No Node afetado:
+
+```bash
+clear
+sudo systemctl status kubelet --no-pager
+sudo systemctl status containerd --no-pager
+```
+
+Se algum serviço estiver parado ou em falha, reiniciar apenas os serviços necessários:
+
+```bash
+clear
+sudo systemctl restart containerd
+sudo systemctl restart kubelet
+
+sudo systemctl status containerd --no-pager
+sudo systemctl status kubelet --no-pager
+```
+
+Se o Node continuar `NotReady`, recolher evidência antes de alterar mais componentes:
+
+```bash
+clear
+sudo journalctl -u kubelet -n 100 --no-pager
+```
+
+> Não usar `kubeadm reset` como tentativa genérica de recuperação. Esse comando destrói configuração local do Node e não é uma ação de troubleshooting de primeira linha.
+
+### Caso 2 — Pods do sistema com problemas
+
+Identificar o Pod e o Namespace:
+
+```bash
+clear
+kubectl get pods -A
+```
+
+Depois:
+
+```bash
+clear
+kubectl describe pod <POD> -n <NAMESPACE>
+kubectl logs <POD> -n <NAMESPACE>
+```
+
+Para Pods com vários containers:
+
+```bash
+clear
+kubectl logs <POD> \
+  -n <NAMESPACE> \
+  -c <CONTAINER>
+```
+
+Não apagar Pods indiscriminadamente. Primeiro classificar a causa indicada por `Events`, estado do container e logs.
+
+### Caso 3 — StorageClass `local-path` inexistente
+
+Confirmar:
+
+```bash
+clear
+kubectl get storageclass
+kubectl get pods -n local-path-storage -o wide
+```
+
+Se o componente não estiver instalado, aplicar a versão usada na baseline:
+
+```bash
+clear
+kubectl apply -f \
+https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.37/deploy/local-path-storage.yaml
+
+kubectl wait \
+  -n local-path-storage \
+  --for=condition=Ready \
+  pod \
+  -l app=local-path-provisioner \
+  --timeout=180s
+```
+
+Confirmar:
+
+```bash
+clear
+kubectl get storageclass local-path
+kubectl get pods -n local-path-storage -o wide
+kubectl get storageclass local-path -o yaml
+```
+
+Procurar:
+
+```text
+provisioner: rancher.io/local-path
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+```
+
+### Caso 4 — `local-path-provisioner` existe mas não está operacional
+
+Diagnosticar antes de reinstalar:
+
+```bash
+clear
+kubectl get pods -n local-path-storage -o wide
+
+POD=$(kubectl get pods \
+  -n local-path-storage \
+  -l app=local-path-provisioner \
+  -o jsonpath='{.items[0].metadata.name}')
+
+kubectl describe pod \
+  -n local-path-storage \
+  "$POD"
+
+kubectl logs \
+  -n local-path-storage \
+  "$POD" \
+  --tail=100
+```
+
+Se a causa tiver sido transitória e o Deployment estiver saudável, pode ser recriado apenas o Pod:
+
+```bash
+clear
+kubectl delete pod \
+  -n local-path-storage \
+  -l app=local-path-provisioner
+
+kubectl wait \
+  -n local-path-storage \
+  --for=condition=Ready \
+  pod \
+  -l app=local-path-provisioner \
+  --timeout=180s
+```
+
+### Caso 5 — CRDs da Gateway API inexistentes
+
+Confirmar:
+
+```bash
+clear
+kubectl get crd gateways.gateway.networking.k8s.io
+kubectl get crd httproutes.gateway.networking.k8s.io
+kubectl get crd gatewayclasses.gateway.networking.k8s.io
+```
+
+Se devolver `NotFound`, instalar a versão usada no laboratório:
+
+```bash
+clear
+kubectl apply --server-side=true -f \
+https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml
+```
+
+Revalidar:
+
+```bash
+clear
+kubectl get crd \
+  gateways.gateway.networking.k8s.io \
+  httproutes.gateway.networking.k8s.io \
+  gatewayclasses.gateway.networking.k8s.io
+```
+
+### Caso 6 — Traefik inexistente
+
+Confirmar primeiro:
+
+```bash
+clear
+kubectl get namespace traefik
+kubectl get pods -n traefik -o wide
+kubectl get svc -n traefik
+```
+
+Se realmente não estiver instalado:
+
+```bash
+clear
+helm repo add traefik https://traefik.github.io/charts
+helm repo update
+
+helm upgrade --install traefik traefik/traefik \
+  --namespace traefik \
+  --create-namespace \
+  --version 41.5.0 \
+  --set service.spec.type=NodePort \
+  --set ports.web.nodePort=30080 \
+  --set ports.websecure.nodePort=30443 \
+  --set ingressClass.enabled=true \
+  --set ingressClass.isDefaultClass=false \
+  --set ingressClass.name=traefik \
+  --set providers.kubernetesIngress.enabled=true \
+  --set providers.kubernetesIngress.ingressClass=traefik \
+  --set providers.kubernetesGateway.enabled=true \
+  --set gateway.enabled=false \
+  --set gatewayClass.enabled=true \
+  --set gatewayClass.name=traefik
+
+kubectl wait \
+  -n traefik \
+  --for=condition=Available \
+  deployment/traefik \
+  --timeout=300s
+```
+
+### Caso 7 — Traefik existe mas não está disponível
+
+Diagnosticar:
+
+```bash
+clear
+kubectl get pods -n traefik -o wide
+kubectl describe deployment traefik -n traefik
+kubectl get events -n traefik \
+  --sort-by=.metadata.creationTimestamp
+```
+
+Obter o Pod e consultar logs:
+
+```bash
+clear
+POD=$(kubectl get pod \
+  -n traefik \
+  -l app.kubernetes.io/name=traefik \
+  -o jsonpath='{.items[0].metadata.name}')
+
+kubectl describe pod \
+  -n traefik \
+  "$POD"
+
+kubectl logs \
+  -n traefik \
+  "$POD" \
+  --tail=100
+```
+
+Só depois de identificar uma divergência de configuração deve ser reaplicado o `helm upgrade --install` com os valores da baseline.
+
+### Caso 8 — `IngressClass`, `GatewayClass` ou NodePorts incorretos
+
+Validar primeiro o estado observado:
+
+```bash
+clear
+kubectl get ingressclass
+kubectl get gatewayclass
+kubectl get svc traefik -n traefik
+```
+
+Se a infraestrutura existir mas estiver desalinhada da baseline, reconciliar o chart:
+
+```bash
+clear
+helm upgrade --install traefik traefik/traefik \
+  --namespace traefik \
+  --version 41.5.0 \
+  --reuse-values \
+  --set service.spec.type=NodePort \
+  --set ports.web.nodePort=30080 \
+  --set ports.websecure.nodePort=30443 \
+  --set ingressClass.enabled=true \
+  --set ingressClass.isDefaultClass=false \
+  --set ingressClass.name=traefik \
+  --set providers.kubernetesGateway.enabled=true \
+  --set gateway.enabled=false \
+  --set gatewayClass.enabled=true \
+  --set gatewayClass.name=traefik
+```
+
+Revalidar:
+
+```bash
+clear
+kubectl get pods -n traefik -o wide
+kubectl get svc traefik -n traefik
+kubectl get ingressclass traefik
+kubectl get gatewayclass traefik
+kubectl describe gatewayclass traefik
+```
+
+No `GatewayClass`, procurar:
+
+```text
+Controller:  traefik.io/gateway-controller
+Accepted:    True
+```
+
+### Repetir o pré-flight depois de qualquer correção
+
+```bash
+clear
+
+echo "=== NODES ==="
+kubectl get nodes -o wide
+
+echo
+echo "=== PODS DO CLUSTER ==="
+kubectl get pods -A
+
+echo
+echo "=== STORAGE ==="
+kubectl get storageclass local-path
+kubectl get pods -n local-path-storage -o wide
+
+echo
+echo "=== TRAEFIK ==="
+kubectl get pods -n traefik -o wide
+kubectl get svc -n traefik
+
+echo
+echo "=== INGRESSCLASS ==="
+kubectl get ingressclass traefik
+
+echo
+echo "=== GATEWAYCLASS ==="
+kubectl get gatewayclass traefik
+
+echo
+echo "=== GATEWAY API CRDs ==="
+kubectl get crd gateways.gateway.networking.k8s.io
+kubectl get crd httproutes.gateway.networking.k8s.io
+kubectl get crd gatewayclasses.gateway.networking.k8s.io
+```
+
+Só avançar quando a evidência voltar a mostrar aproximadamente:
+
+```text
+Nodes                  Ready
+Calico                 Running
+CoreDNS                Running
+local-path             disponível
+local-path-provisioner Running
+Traefik                Running
+Traefik Service        NodePort 30080/30443
+IngressClass           traefik
+GatewayClass           traefik / Accepted=True
+Gateway API CRDs       presentes
+```
+
 Criar o Namespace de forma repetível e defini-lo no contexto atual:
 
 ```bash
