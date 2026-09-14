@@ -1,0 +1,24 @@
+# Sessão 6 — RoleBinding para a ServiceAccount `app-reader`
+#
+# Objetivo: ligar a identidade (subject) às permissões definidas pela Role.
+# Criar uma Role, por si só, não concede permissões a ninguém.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+
+metadata:
+  name: app-reader-binding
+  namespace: s6-governance
+
+subjects:
+  - # Identidade que receberá as permissões.
+    kind: ServiceAccount
+    name: app-reader
+    namespace: s6-governance
+
+roleRef:
+  # A referência aponta para a Role namespaced criada no ficheiro anterior.
+  # `roleRef` é a ligação entre este binding e o conjunto de regras.
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: app-reader-role
