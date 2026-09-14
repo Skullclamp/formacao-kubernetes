@@ -1,26 +1,54 @@
+# Sessão 5 — StatefulSet para demonstrar identidade estável
+#
+# Objetivo: criar três Pods com nomes/ordinais previsíveis (`web-0`, `web-1`,
+# `web-2`) e associá-los ao Headless Service `web`.
+# Este exemplo NÃO usa volumeClaimTemplates: identidade estável e persistência
+# são conceitos diferentes e são trabalhados separadamente no laboratório.
+
 apiVersion: apps/v1
 kind: StatefulSet
+
 metadata:
   name: web
+
 spec:
+  # Nome do Headless Service que governa a identidade de rede do StatefulSet.
   serviceName: web
+
+  # Três réplicas permitem observar os ordinais 0, 1 e 2.
   replicas: 3
+
+  # O controller considera seus os Pods com esta label.
   selector:
     matchLabels:
       app: web
+
+  # Template utilizado para criar cada Pod do StatefulSet.
   template:
     metadata:
       labels:
+        # Tem de corresponder ao selector acima e ao selector do Service `web`.
         app: web
     spec:
       containers:
         - name: nginx
+
+          # Imagem usada apenas para manter um serviço HTTP simples e observável.
           image: nginx:1.27
+
+          # Documenta a porta HTTP escutada pelo Nginx dentro do Pod.
           ports:
             - containerPort: 80
+
+          # Readiness probe: o Pod só é considerado Ready quando o endpoint `/`
+          # responde com sucesso na porta 80.
           readinessProbe:
             httpGet:
               path: /
               port: 80
+
+            # Espera inicial curta antes da primeira verificação.
             initialDelaySeconds: 2
+
+            # Repete a verificação a cada 2 segundos.
             periodSeconds: 2
