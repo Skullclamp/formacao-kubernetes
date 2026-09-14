@@ -1,0 +1,36 @@
+# Sessão 6 — LimitRange do Namespace
+#
+# Objetivo: definir valores mínimos, máximos e defaults por container dentro
+# de `s6-governance`. LimitRange atua ao nível de objetos individuais; não deve
+# ser confundido com ResourceQuota, que limita o consumo agregado do Namespace.
+
+apiVersion: v1
+kind: LimitRange
+
+metadata:
+  name: container-policy
+  namespace: s6-governance
+
+spec:
+  limits:
+    - type: Container
+
+      # Valores mínimos aceites para cada container.
+      min:
+        cpu: "10m"
+        memory: "16Mi"
+
+      # Valores máximos aceites para cada container.
+      max:
+        cpu: "4"
+        memory: "2Gi"
+
+      # Requests aplicados quando o manifesto do container não os declara.
+      defaultRequest:
+        cpu: "100m"
+        memory: "64Mi"
+
+      # Limits aplicados quando o manifesto do container não os declara.
+      default:
+        cpu: "500m"
+        memory: "256Mi"
