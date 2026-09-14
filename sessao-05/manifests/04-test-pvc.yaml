@@ -1,11 +1,26 @@
+# Sessão 5 — PVC usada para demonstrar Dynamic Provisioning
+#
+# Objetivo: pedir armazenamento à StorageClass `local-path` e observar a
+# transição Pending → Bound quando existir um consumidor elegível.
+# A StorageClass do laboratório usa `WaitForFirstConsumer`, pelo que `Pending`
+# antes de criar o Pod consumidor é um estado esperado e não uma falha.
+
 apiVersion: v1
 kind: PersistentVolumeClaim
+
 metadata:
   name: test-pvc
+
 spec:
+  # ReadWriteOnce permite montagem com escrita por um único Node de cada vez.
+  # Não significa "apenas um Pod"; o ponto relevante é o modo de acesso ao volume.
   accessModes:
     - ReadWriteOnce
+
+  # Escolhe explicitamente a StorageClass que fará o provisionamento dinâmico.
   storageClassName: local-path
+
   resources:
     requests:
+      # Capacidade pedida pelo claim. É um pedido de storage, não RAM.
       storage: 1Gi
