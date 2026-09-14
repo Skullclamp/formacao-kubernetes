@@ -1,0 +1,30 @@
+# Sessão 6 — ResourceQuota do Namespace
+#
+# Objetivo: limitar o consumo agregado de recursos em `s6-governance`.
+# Ao contrário de LimitRange, esta política olha para o total do Namespace.
+# Se a criação de um novo objeto ultrapassar a quota, a API rejeita-o antes de
+# chegar ao Scheduler.
+
+apiVersion: v1
+kind: ResourceQuota
+
+metadata:
+  name: namespace-quota
+  namespace: s6-governance
+
+spec:
+  hard:
+    # Soma máxima dos requests de CPU dos workloads do Namespace.
+    requests.cpu: "2"
+
+    # Soma máxima dos requests de memória.
+    requests.memory: "2Gi"
+
+    # Soma máxima dos limits de CPU.
+    limits.cpu: "4"
+
+    # Soma máxima dos limits de memória.
+    limits.memory: "4Gi"
+
+    # Número máximo de Pods permitidos simultaneamente no Namespace.
+    pods: "20"
