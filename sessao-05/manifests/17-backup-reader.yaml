@@ -1,16 +1,33 @@
+# Sessão 5 — Pod temporário para ler a PVC de backups
+#
+# Objetivo: montar `backup-pvc` num Pod simples para inspecionar os ficheiros
+# e permitir `kubectl cp` para uma cópia fora do storage Kubernetes usado pela
+# aplicação. O Pod não cria o backup; apenas lê o volume onde ele já existe.
+
 apiVersion: v1
 kind: Pod
+
 metadata:
   name: backup-reader
+
 spec:
   containers:
     - name: reader
+
+      # BusyBox é suficiente para listar/copiar ficheiros no exercício.
       image: busybox:1.36
+
+      # Mantém o Pod vivo durante o tempo necessário para `kubectl exec/cp`.
       command: ["sh", "-c", "sleep 3600"]
+
       volumeMounts:
         - name: backup
+
+          # Caminho onde a PVC fica disponível dentro do container.
           mountPath: /backup
+
   volumes:
     - name: backup
       persistentVolumeClaim:
+        # Claim onde os Jobs/CronJobs guardaram os backups.
         claimName: backup-pvc
