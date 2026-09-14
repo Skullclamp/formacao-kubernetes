@@ -1,9 +1,31 @@
 # Lab 5 — Symfony Demo + PostgreSQL com Docker Compose
 
+**Sessão:** 2  
 **Duração prevista:** 40 minutos  
-**Objetivo:** interpretar e operar uma aplicação multi-container com Docker Compose.
+**Nível:** intermédio  
+**Objetivo:** interpretar, validar e operar uma aplicação multi-container com Docker Compose, compreendendo serviços, rede, variáveis, dependências e persistência.
 
-## Arquitetura
+A progressão deste laboratório é:
+
+```text
+LER
+  ↓
+VALIDAR
+  ↓
+EXECUTAR
+  ↓
+OBSERVAR
+  ↓
+PROVAR PERSISTÊNCIA
+  ↓
+EXPLICAR
+```
+
+> Nesta sessão consumimos uma imagem da aplicação já existente. **Não usamos `docker build`**; a construção de imagens é trabalhada na Sessão 3.
+
+---
+
+# 0. Arquitetura do cenário
 
 ```text
 Utilizador :8080
@@ -18,53 +40,234 @@ PostgreSQL 16
    db-data
 ```
 
-## 1. Preparar ficheiros
+Duas ideias devem ficar claras antes de executar:
+
+```text
+app → comunica com db pelo nome do serviço na rede Compose
+
+db-data → preserva os dados fora do ciclo de vida do container PostgreSQL
+```
+
+---
+
+# CP1 — Preparar a configuração do laboratório
+
+## Objetivo
+
+Criar a configuração local a partir do exemplo sem alterar o ficheiro modelo versionado no Git.
+
+## O que estamos a fazer e porquê
+
+O ficheiro `.env.example` documenta as variáveis necessárias. Criamos `.env` como cópia local para preencher valores próprios do laboratório.
 
 ```bash
 cd sessao-02/compose
 cp .env.example .env
 ```
 
-Edite `.env` e substitua `<registry>/formacao/symfony-demo:1.0` pela imagem indicada pelo formador.
+### Explicação
 
-> Não utilize `docker build` nesta sessão.
+- `cd` muda para a diretoria onde estão `compose.yaml` e `.env.example`;
+- `cp ORIGEM DESTINO` cria a configuração local sem destruir o exemplo distribuído aos formandos.
 
-## 2. Interpretar antes de executar
+Rever:
 
-Identifique no `compose.yaml`:
+```bash
+cat .env
+```
 
-1. serviços;
-2. imagens;
-3. porta publicada;
-4. rede;
-5. volume;
-6. hostname utilizado pela aplicação para chegar à BD;
-7. variáveis PostgreSQL.
+Substitua a referência de imagem indicada no ficheiro pelo valor fornecido pelo formador quando necessário.
 
-Explique por que `DATABASE_URL` utiliza `@db:5432` em vez de `localhost:5432`.
+> Os valores deste laboratório são didáticos. Um ficheiro `.env` é uma conveniência de configuração; **não é um secret manager**.
 
-## 3. Validar configuração
+### CHECKPOINT CP1
+
+```text
+estamos em sessao-02/compose
+.env existe
+imagem da aplicação está definida
+```
+
+**Evidência:** mostrar apenas variáveis não sensíveis necessárias ao exercício; não copiar passwords reais para evidências.
+
+---
+
+# CP2 — Ler o `compose.yaml` antes de o executar
+
+## Objetivo
+
+Interpretar a definição declarativa da stack e antecipar que recursos serão criados.
+
+## O que estamos a fazer e porquê
+
+Compose substitui uma sequência longa de `docker run`, `docker network create` e `docker volume create` por uma definição declarativa reproduzível.
+
+Abra o ficheiro:
+
+```bash
+less compose.yaml
+```
+
+Identifique:
+
+1. serviços `app` e `db`;
+2. imagem de cada serviço;
+3. publicação `HOST:CONTAINER` da aplicação;
+4. variáveis de ambiente;
+5. `depends_on`;
+6. rede `app-network`;
+7. volume `db-data`;
+8. healthcheck do PostgreSQL.
+
+### Porque `DATABASE_URL` usa `db:5432` e não `localhost:5432`?
+
+Dentro do container `app`, `localhost` significa **o próprio container da aplicação**. O serviço PostgreSQL vive noutro container. Na rede Compose, o nome do serviço `db` é resolvido internamente para o container da base de dados.
+
+```text
+app container
+localhost → app container
+
+db → serviço PostgreSQL através do DNS da rede Compose
+```
+
+### Sobre `depends_on`
+
+Neste laboratório, a aplicação depende de:
+
+```yaml
+condition: service_healthy
+```
+
+Isto faz Compose aguardar que o healthcheck do PostgreSQL reporte `healthy` antes de iniciar a dependência `app` no fluxo de `up`. Ainda assim, aplicações reais devem ser tolerantes a indisponibilidade temporária e implementar retry/reconexão quando adequado.
+
+### CHECKPOINT CP2
+
+O formando consegue explicar, antes de executar:
+
+```text
+2 serviços
+1 rede
+1 volume
+1 porta publicada
+healthcheck da DB
+app encontra DB pelo nome db
+```
+
+---
+
+# CP3 — Renderizar e validar a configuração final
+
+## Objetivo
+
+Detetar erros de sintaxe, variáveis em falta e perceber o resultado efetivo depois da interpolação.
 
 ```bash
 docker compose config
 ```
 
-Não prossiga enquanto existirem erros.
+### Explicação
 
-## 4. Iniciar
+`docker compose config` não inicia containers. O comando:
+
+- lê os ficheiros Compose;
+- aplica variáveis de ambiente e defaults;
+- valida a estrutura;
+- apresenta a configuração efetiva.
+
+Isto é um **gate**: não avançar para `up` enquanto houver erro de configuração.
+
+Pode confirmar apenas os serviços reconhecidos:
+
+```bash
+docker compose config --services
+```
+
+Esperado:
+
+```text
+app
+db
+```
+
+### CHECKPOINT CP3
+
+```text
+config termina sem erro
+serviços app e db reconhecidos
+variáveis interpoladas como esperado
+```
+
+**Evidência:** guardar `docker compose config --services` e qualquer trecho relevante da configuração final, sem expor credenciais.
+
+---
+
+# CP4 — Iniciar a stack e observar a convergência
+
+## Objetivo
+
+Criar os recursos declarados e verificar o estado dos dois serviços.
 
 ```bash
 docker compose up -d
+```
+
+### Flags
+
+- `up` cria/recria os recursos necessários e inicia os serviços;
+- `-d` executa a stack em background, devolvendo o terminal ao operador.
+
+Observar:
+
+```bash
 docker compose ps
 docker compose logs db
 docker compose logs app
 ```
 
-## 5. Inicialização da BD
+### Explicação
 
-O formador indicará se a imagem já contém o estado inicial necessário.
+- `docker compose ps` mostra o estado dos containers que pertencem ao projeto atual;
+- `docker compose logs SERVIÇO` agrega os logs do serviço indicado;
+- começamos por `db` porque a aplicação depende da base de dados.
 
-Quando for necessário criar o esquema numa BD vazia:
+Se quiser acompanhar a inicialização:
+
+```bash
+docker compose logs -f db
+```
+
+`-f` mantém o acompanhamento em tempo real. Termine com `Ctrl+C` quando a base estiver pronta.
+
+### O que observar
+
+Procure no `ps`:
+
+```text
+db  → Up / healthy
+app → Up
+```
+
+Se `app` falhar, não execute repetidamente `up`. Leia primeiro `docker compose logs app` e o estado de `db`.
+
+### CHECKPOINT CP4
+
+```text
+PostgreSQL healthy
+aplicação em execução
+rede e volume criados pelo projeto
+```
+
+---
+
+# CP5 — Inicializar a base de dados apenas quando necessário
+
+## Objetivo
+
+Preparar o schema numa base vazia sem transformar uma operação de inicialização num comando repetido indiscriminadamente.
+
+O formador indicará se a imagem e a base já contêm o estado necessário.
+
+Quando for necessário criar o schema:
 
 ```bash
 docker compose exec app \
@@ -72,7 +275,14 @@ docker compose exec app \
   --no-interaction
 ```
 
-Se a imagem de laboratório disponibilizar as fixtures necessárias:
+### Explicação
+
+- `docker compose exec app` executa o comando num container **já em execução** do serviço `app`;
+- `php bin/console` executa a CLI Symfony;
+- `doctrine:schema:create` cria o schema numa base vazia;
+- `--no-interaction` evita perguntas interativas, tornando o passo reproduzível.
+
+Se a imagem disponibilizar fixtures e o formador indicar a sua utilização:
 
 ```bash
 docker compose exec app \
@@ -80,19 +290,50 @@ docker compose exec app \
   --no-interaction
 ```
 
-Não repita a carga de fixtures durante o teste de persistência.
+> Não volte a carregar fixtures durante a prova de persistência, porque isso poderia recriar dados e produzir uma conclusão errada.
 
-## 6. Validar a aplicação
+---
+
+# CP6 — Validar saúde, prontidão e identidade da aplicação
+
+## Objetivo
+
+Confirmar que processo a correr, aplicação saudável e aplicação pronta não são conceitos equivalentes.
 
 ```bash
-curl http://localhost:8080/health
-curl http://localhost:8080/ready
-curl http://localhost:8080/info
+curl -i http://localhost:8080/health
+curl -i http://localhost:8080/ready
+curl -i http://localhost:8080/info
 ```
 
-Registe aplicação, versão, ambiente, hostname e estado dos endpoints.
+### O que cada endpoint demonstra
 
-## 7. Inspecionar recursos
+```text
+/health → saúde básica da aplicação
+/ready  → capacidade para servir pedidos que dependem da DB
+/info   → versão/ambiente/identidade pedagógica
+```
+
+- `curl -i` inclui os cabeçalhos HTTP e facilita confirmar o código de resposta;
+- um `/health` bem-sucedido não prova, por si só, que PostgreSQL está acessível.
+
+### CHECKPOINT CP6
+
+```text
+/health OK
+/ready OK
+/info devolve versão/ambiente esperado
+```
+
+**Evidência:** guardar código HTTP e campos relevantes dos endpoints.
+
+---
+
+# CP7 — Inspecionar os recursos criados por Compose
+
+## Objetivo
+
+Relacionar o YAML declarado com os objetos efetivamente criados pelo Docker.
 
 ```bash
 docker compose ps
@@ -100,29 +341,121 @@ docker network ls
 docker volume ls
 ```
 
-Inspecione a rede e o volume do projeto.
+Localize a rede e o volume associados ao projeto. O nome físico pode incluir o nome do projeto como prefixo.
 
-## 8. Provar persistência
+Para obter os nomes diretamente através de Compose:
 
-Crie ou altere um dado através da aplicação e registe-o.
+```bash
+docker compose config --services
+docker compose ps -q db
+docker compose ps -q app
+```
 
-Depois:
+- `-q` (*quiet*) devolve apenas o ID do container do serviço.
+
+Inspecionar mounts da base de dados:
+
+```bash
+DB_CID=$(docker compose ps -q db)
+docker inspect "$DB_CID" \
+  --format '{{range .Mounts}}{{.Type}} {{.Name}} -> {{.Destination}}{{"\n"}}{{end}}'
+```
+
+Esperado: um volume montado em `/var/lib/postgresql/data`.
+
+### CHECKPOINT CP7
+
+O formando consegue mapear:
+
+```text
+compose.yaml service → container
+network declaration  → rede Docker
+volume declaration   → named volume
+ports                 → publicação no host
+```
+
+---
+
+# CP8 — Provar persistência após recriação dos containers
+
+## Objetivo
+
+Demonstrar que os dados PostgreSQL não dependem da existência de uma instância concreta do container `db`.
+
+## O que estamos a fazer e porquê
+
+Crie ou altere um dado através da aplicação e **registe exatamente esse valor**. Esse marcador será a evidência a procurar depois da recriação.
+
+Parar e remover os containers do projeto, preservando os volumes:
 
 ```bash
 docker compose down
-docker volume ls
-docker compose up -d
-curl http://localhost:8080/ready
 ```
 
-Confirme que o dado continua disponível.
+### O que faz `down`?
 
-### Atenção
+Remove os containers e a rede criada pelo projeto. Por omissão, o named volume declarado **não é removido**.
 
-Durante esta prova não execute:
+Confirmar:
+
+```bash
+docker volume ls
+```
+
+Recriar:
+
+```bash
+docker compose up -d
+docker compose ps
+curl -i http://localhost:8080/ready
+```
+
+Volte a consultar o dado criado antes do `down`.
+
+### Atenção: não usar `-v` nesta prova
 
 ```bash
 docker compose down -v
 ```
 
-A opção `-v` remove os volumes declarados pelo projeto.
+`-v` pede a remoção dos volumes declarados pelo projeto. Usá-lo destruiria precisamente o objeto de persistência que estamos a testar.
+
+### CHECKPOINT CP8
+
+```text
+containers antigos removidos
+named volume permaneceu
+a stack foi recriada
+/ready voltou a OK
+dado anterior continua presente
+```
+
+**Evidência:** guardar o dado antes e depois da recriação.
+
+---
+
+# CP9 — Fecho e regra de evidência
+
+O laboratório fica concluído quando o formando consegue explicar e provar:
+
+```text
+compose.yaml validado antes de executar
++
+app e db criados como serviços separados
++
+app encontra db pelo DNS da rede Compose
++
+PostgreSQL possui healthcheck
++
+/health ≠ /ready
++
+named volume montado na DB
++
+containers recriados
++
+dado preservado no volume
++
+Compose single-host ≠ orquestração de Alta Disponibilidade
+```
+
+Para terminar a sessão mantendo os dados disponíveis para o laboratório de troubleshooting, deixe a stack operacional salvo indicação contrária do formador.
