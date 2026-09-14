@@ -1,0 +1,26 @@
+# Sessão 6 — Role de menor privilégio
+#
+# Objetivo: permitir apenas leitura (`get` e `list`) de Pods e ConfigMaps no
+# Namespace `s6-governance`. Não são concedidas permissões de escrita nem acesso
+# a Secrets.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+
+metadata:
+  name: app-reader-role
+  namespace: s6-governance
+
+rules:
+  - # String vazia representa o core API group, onde vivem Pods e ConfigMaps.
+    apiGroups: [""]
+
+    # Recursos sobre os quais a regra é válida.
+    resources:
+      - pods
+      - configmaps
+
+    # Operações autorizadas. `create`, `update`, `patch` e `delete` ficam fora.
+    verbs:
+      - get
+      - list
