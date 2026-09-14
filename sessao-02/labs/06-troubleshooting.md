@@ -31,6 +31,29 @@ VALIDAÇÃO
 
 ---
 
+# CP0 — Confirmar a diretoria do projeto Compose
+
+Todos os comandos `docker compose` deste laboratório dependem do `compose.yaml` e do `.env` preparados no Lab 5. Se abriu uma nova shell, volte explicitamente à diretoria correta:
+
+```bash
+cd "$HOME/formacao-kubernetes/sessao-02/compose"
+pwd
+test -f compose.yaml && echo 'OK: compose.yaml disponível'
+test -f .env && echo 'OK: .env disponível'
+```
+
+Esperado:
+
+```text
+.../formacao-kubernetes/sessao-02/compose
+OK: compose.yaml disponível
+OK: .env disponível
+```
+
+**Não avançar** se o ficheiro `.env` não existir: volte ao Lab 5 e copie `.env.example` para `.env` antes de continuar.
+
+---
+
 # CP1 — Criar uma baseline saudável
 
 ## Objetivo
@@ -106,17 +129,18 @@ docker compose ps -a
 
 ### Explicação
 
-- `docker compose ps` mostra os containers associados à stack;
+- `docker compose ps` mostra os containers em execução associados à stack;
 - `-a` inclui também containers parados quando aplicável.
 
-Para obter apenas IDs:
+Para obter IDs sem perder containers que possam estar em `Exited`:
 
 ```bash
-docker compose ps -q app
-docker compose ps -q db
+docker compose ps -a -q app
+docker compose ps -a -q db
 ```
 
-- `-q` devolve apenas o ID, útil para passar o container a `docker inspect`.
+- `-a` inclui containers parados;
+- `-q` devolve apenas o ID, útil para passar o objeto a `docker inspect`.
 
 ### O que observar
 
@@ -191,31 +215,38 @@ Primeiro renderize Compose:
 docker compose config
 ```
 
-Depois obtenha os IDs:
+Depois obtenha os IDs, incluindo containers parados:
 
 ```bash
-APP_CID=$(docker compose ps -q app)
-DB_CID=$(docker compose ps -q db)
+APP_CID=$(docker compose ps -a -q app)
+DB_CID=$(docker compose ps -a -q db)
+
+printf 'APP_CID=%s\n' "$APP_CID"
+printf 'DB_CID=%s\n' "$DB_CID"
 ```
 
-Inspecionar:
+Se um ID estiver vazio, isso é já uma evidência: o objeto container correspondente não existe e não deve ser passado a `docker inspect`.
+
+Quando o ID existir, inspecionar:
 
 ```bash
-docker inspect "$APP_CID"
-docker inspect "$DB_CID"
+[ -n "$APP_CID" ] && docker inspect "$APP_CID"
+[ -n "$DB_CID" ] && docker inspect "$DB_CID"
 ```
 
-Extrair informação específica da aplicação:
+Extrair informação específica da aplicação, apenas se `APP_CID` existir:
 
 ```bash
-docker inspect "$APP_CID" \
-  --format 'Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}}'
+if [ -n "$APP_CID" ]; then
+  docker inspect "$APP_CID" \
+    --format 'Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}}'
 
-docker inspect "$APP_CID" \
-  --format '{{range .Config.Env}}{{println .}}{{end}}'
+  docker inspect "$APP_CID" \
+    --format '{{range .Config.Env}}{{println .}}{{end}}'
 
-docker inspect "$APP_CID" \
-  --format '{{json .NetworkSettings.Ports}}'
+  docker inspect "$APP_CID" \
+    --format '{{json .NetworkSettings.Ports}}'
+fi
 ```
 
 ### Porque usamos `--format`?
@@ -226,7 +257,7 @@ docker inspect "$APP_CID" \
 
 ### CHECKPOINT CP5
 
-O formando consegue indicar:
+O formando consegue indicar, quando o objeto existe:
 
 ```text
 estado efetivo
@@ -237,6 +268,8 @@ portas
 mounts
 redes
 ```
+
+Se o objeto não existir, consegue explicar que **ausência do container** é a evidência relevante e não um erro do `docker inspect`.
 
 ---
 
@@ -252,19 +285,23 @@ Listar redes:
 docker network ls
 ```
 
-Descobrir as redes da aplicação:
+Descobrir as redes dos containers que existam:
 
 ```bash
-docker inspect "$APP_CID" \
-  --format '{{range $name, $cfg := .NetworkSettings.Networks}}{{$name}} {{"\n"}}{{end}}'
+if [ -n "$APP_CID" ]; then
+  docker inspect "$APP_CID" \
+    --format '{{range $name, $cfg := .NetworkSettings.Networks}}{{$name}} {{"\n"}}{{end}}'
+fi
 
-docker inspect "$DB_CID" \
-  --format '{{range $name, $cfg := .NetworkSettings.Networks}}{{$name}} {{"\n"}}{{end}}'
+if [ -n "$DB_CID" ]; then
+  docker inspect "$DB_CID" \
+    --format '{{range $name, $cfg := .NetworkSettings.Networks}}{{$name}} {{"\n"}}{{end}}'
+fi
 ```
 
-Os dois serviços devem partilhar a rede prevista no Compose.
+Quando ambos existem, os dois serviços devem partilhar a rede prevista no Compose.
 
-Testar a partir da aplicação quando o container está operacional:
+Testar a partir da aplicação **apenas quando o serviço `app` está em execução**:
 
 ```bash
 docker compose exec app getent hosts db
@@ -276,16 +313,21 @@ docker compose exec app getent hosts db
 - `getent hosts db` pede ao resolver do container para localizar o nome `db`;
 - sucesso demonstra resolução de nome, mas não garante que PostgreSQL aceite ligações.
 
-Consultar o health da DB:
+Consultar o health da DB quando `DB_CID` existir:
 
 ```bash
-docker inspect "$DB_CID" \
-  --format '{{if .State.Health}}{{json .State.Health}}{{else}}sem-healthcheck{{end}}'
+if [ -n "$DB_CID" ]; then
+  docker inspect "$DB_CID" \
+    --format '{{if .State.Health}}{{json .State.Health}}{{else}}sem-healthcheck{{end}}'
+fi
 ```
 
 ### Camadas a distinguir
 
 ```text
+container app/db não existe
+→ ciclo de vida / criação Compose
+
 nome db não resolve
 → rede/DNS interno/configuração de rede
 
@@ -300,17 +342,19 @@ DB healthy, /ready falha
 
 # CP7 — Testar portas e mounts apenas quando relevantes para a hipótese
 
-Portas da aplicação:
+Portas da aplicação, quando `APP_CID` existir:
 
 ```bash
-docker port "$APP_CID"
+[ -n "$APP_CID" ] && docker port "$APP_CID"
 ```
 
-Mounts da DB:
+Mounts da DB, quando `DB_CID` existir:
 
 ```bash
-docker inspect "$DB_CID" \
-  --format '{{range .Mounts}}{{.Type}} {{.Name}} {{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'
+if [ -n "$DB_CID" ]; then
+  docker inspect "$DB_CID" \
+    --format '{{range .Mounts}}{{.Type}} {{.Name}} {{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'
+fi
 ```
 
 ### O que observar
