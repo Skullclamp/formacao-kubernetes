@@ -1,9 +1,14 @@
 # Sessão 4 — instalação Calico mínima para o laboratório
 #
-# Nesta sessão pretendemos validar o CNI e a conectividade do cluster.
+# Objetivo deste manifesto:
+# declarar ao Tigera Operator COMO queremos que a rede Calico seja configurada.
+# Os CRDs e o Operator são instalados antes deste ficheiro; este recurso
+# `Installation` representa a configuração desejada que o Operator irá reconciliar.
+#
+# Nesta sessão pretendemos validar sobretudo CNI e conectividade do cluster.
 # Componentes opcionais de observabilidade/API (APIServer, Goldmane e Whisker)
 # ficam fora deste manifesto para reduzir ruído e consumo de recursos no cluster
-# pedagógico de apenas dois nós.
+# pedagógico.
 #
 # Baseline validada:
 # - Kubernetes 1.35.8 -> 1.36.4
@@ -11,16 +16,39 @@
 # - rede física dos hosts: 192.168.50.0/24
 # - Pod CIDR: 10.244.0.0/16 (sem sobreposição com a rede física)
 
+# API disponibilizada pelos CRDs do Tigera Operator.
 apiVersion: operator.tigera.io/v1
+
+# Installation é o recurso de alto nível que descreve a instalação Calico.
 kind: Installation
+
 metadata:
+  # O Operator espera a instalação principal com o nome `default`.
   name: default
+
 spec:
+  # Configuração da rede gerida pelo Calico.
   calicoNetwork:
+    # Pools de endereços IP a atribuir aos Pods.
     ipPools:
       - name: default-ipv4-ippool
+
+        # Cada Node recebe blocos menores (/26) retirados do pool principal.
+        # Isto influencia a forma como os endereços são distribuídos internamente
+        # pelo IPAM do Calico; não altera o Pod CIDR global do cluster.
         blockSize: 26
+
+        # Tem de corresponder à rede de Pods definida no `kubeadm init`.
+        # Não deve sobrepor a rede física 192.168.50.0/24.
         cidr: 10.244.0.0/16
+
+        # VXLAN é usado apenas quando o tráfego precisa de atravessar sub-redes.
+        # No laboratório mantém a configuração explícita e reproduzível.
         encapsulation: VXLANCrossSubnet
+
+        # Faz SNAT do tráfego dos Pods quando estes comunicam para fora do
+        # respetivo pool, permitindo acesso a redes externas através dos Nodes.
         natOutgoing: Enabled
+
+        # `all()` torna todos os Nodes elegíveis para receber endereços deste pool.
         nodeSelector: all()
