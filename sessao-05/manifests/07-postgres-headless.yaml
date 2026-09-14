@@ -1,12 +1,28 @@
+# Sessão 5 — Headless Service para PostgreSQL StatefulSet
+#
+# Objetivo: fornecer identidade DNS estável ao Pod do StatefulSet `postgres`.
+# `clusterIP: None` evita um ClusterIP virtual e permite descoberta direta dos
+# endpoints associados ao StatefulSet.
+
 apiVersion: v1
 kind: Service
+
 metadata:
   name: postgres
+
 spec:
+  # Torna o Service headless.
   clusterIP: None
+
+  # Seleciona os Pods PostgreSQL criados pelo StatefulSet.
   selector:
     app: postgres
+
   ports:
     - name: postgres
+
+      # Porta lógica do Service dentro do cluster.
       port: 5432
+
+      # Porta em que PostgreSQL escuta dentro do container.
       targetPort: 5432
