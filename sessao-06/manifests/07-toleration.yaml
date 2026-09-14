@@ -1,0 +1,66 @@
+# Sessão 6 — Comparação sem e com toleration
+#
+# Pré-requisitos:
+# - k8s-wk-01 tem label `training.goldconsulting/workload=apps`;
+# - k8s-wk-01 tem taint `training.goldconsulting/dedicated=lab:NoSchedule`.
+#
+# Objetivo: provar que a toleration apenas remove a barreira do taint.
+# O `nodeSelector` é que restringe estes Pods ao Node marcado.
+
+# ---------------------------------------------------------------------------
+# Pod 1 — sem toleration: deve ficar sem placement por causa do taint.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-toleration
+  namespace: s6-governance
+spec:
+  nodeSelector:
+    training.goldconsulting/workload: apps
+  containers:
+    - name: web
+      image: nginx:stable-alpine
+      resources:
+        requests:
+          cpu: "25m"
+          memory: "32Mi"
+        limits:
+          cpu: "100m"
+          memory: "96Mi"
+
+---
+
+# ---------------------------------------------------------------------------
+# Pod 2 — com toleration: torna-se elegível para o Node com o taint.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: toleration-demo
+  namespace: s6-governance
+spec:
+  # Continua a ser o nodeSelector que atrai/restringe o Pod ao Worker `apps`.
+  nodeSelector:
+    training.goldconsulting/workload: apps
+
+  tolerations:
+    - key: training.goldconsulting/dedicated
+
+      # Equal exige correspondência entre key + value + effect.
+      operator: Equal
+      value: lab
+
+      # Tolera exatamente o efeito usado pelo taint do laboratório.
+      effect: NoSchedule
+
+  containers:
+    - name: web
+      image: nginx:stable-alpine
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "32Mi"
+        limits:
+          cpu: "200m"
+          memory: "128Mi"
