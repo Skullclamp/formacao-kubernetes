@@ -98,8 +98,28 @@ sessao-06/
 ├── labs/
 │   └── laboratorio_integrado_sessao_6.md
 └── manifests/
-    └── README.md
+    ├── README.md
+    ├── 00-namespace.yaml
+    ├── 01-pod-resources.yaml
+    ├── 02-limitrange.yaml
+    ├── 03-resourcequota.yaml
+    ├── 04-node-selector.yaml
+    ├── 05-node-affinity.yaml
+    ├── 06-pod-antiaffinity.yaml
+    ├── 07-toleration.yaml
+    ├── 08-serviceaccount.yaml
+    ├── 09-role.yaml
+    ├── 10-rolebinding.yaml
+    ├── 11-security-context.yaml
+    ├── 12-secret-demo.yaml
+    ├── 13-netpol-default-deny.yaml
+    ├── 14-netpol-allow-dns.yaml
+    ├── 15-netpol-allow-app.yaml
+    ├── 16-netpol-allow-db.yaml
+    └── 17-networkpolicy-test-workloads.yaml
 ```
+
+O laboratório integrado mantém os YAML **inline** nos checkpoints para que a explicação e o objeto fiquem juntos. Os ficheiros em [`manifests/`](manifests/) são versões comentadas de apoio e consolidação; não constituem uma segunda sequência alternativa do laboratório. O mapa detalhado está em [`manifests/README.md`](manifests/README.md).
 
 ## Conteúdos
 
@@ -117,6 +137,8 @@ A sessão trabalha de forma integrada:
 - proteção e utilização prudente de Secrets;
 - `NetworkPolicy` com enforcement através do Calico;
 - validação objetiva através de estado, Events, permissões e testes de conectividade.
+
+> O laboratório prático da edição atual usa `Role`/`RoleBinding` namespaced. `ClusterRole`/`ClusterRoleBinding` são tratados conceptualmente e só devem ser introduzidos num exercício quando existir uma necessidade cluster-wide real.
 
 ## Evidência
 
@@ -150,4 +172,4 @@ A Sessão 5 mantém `sessao5` como exceção documentada porque esse laboratóri
 
 ## Estado
 
-O manual e o laboratório integrado estão desenvolvidos, e o laboratório foi validado de ponta a ponta no cluster real de referência com Kubernetes `1.36.4`, containerd `2.2.6` e Calico `3.32.2`. As correções descobertas durante o ensaio prático foram incorporadas no laboratório.
+O laboratório integrado foi validado de ponta a ponta no cluster real de referência com Kubernetes `1.36.4`, containerd `2.2.6` e Calico `3.32.2`. Os manifests comentados foram alinhados com os objetos demonstrados nos checkpoints para facilitar revisão, comparação e exercícios de consolidação.
