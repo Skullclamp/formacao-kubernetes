@@ -1,16 +1,32 @@
+# Sessão 5 — Pod cliente PostgreSQL
+#
+# Objetivo: manter disponível um cliente `psql` dentro do cluster para testar
+# resolução DNS e conectividade até ao serviço PostgreSQL.
+
 apiVersion: v1
 kind: Pod
+
 metadata:
   name: pg-client
+
 spec:
   containers:
     - name: psql
+
+      # Reutiliza a imagem PostgreSQL porque já contém as ferramentas cliente.
       image: postgres:16
+
+      # Mantém o Pod em execução para permitir vários `kubectl exec` durante o lab.
       command: ["sh", "-c", "sleep 3600"]
+
       env:
+        # `psql` reconhece PGPASSWORD. O valor vem do Secret, evitando repetir
+        # a password diretamente neste manifesto de Pod.
         - name: PGPASSWORD
           valueFrom:
             secretKeyRef:
               name: postgres-credentials
               key: password
+
+  # Se o processo terminar, não queremos um reinício infinito deste Pod de teste.
   restartPolicy: Never
