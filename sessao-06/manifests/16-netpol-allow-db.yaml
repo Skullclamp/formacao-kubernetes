@@ -1,0 +1,59 @@
+# Sessão 6 — Permitir aplicação → PostgreSQL
+#
+# Objetivo: autorizar apenas o fluxo TCP/5432 da camada de aplicação para a
+# camada de base de dados. O cliente de diagnóstico continua sem autorização
+# direta para PostgreSQL, permitindo testar simultaneamente um fluxo permitido
+# e um fluxo proibido.
+
+# ---------------------------------------------------------------------------
+# Policy A — egress dos Pods da aplicação para Pods da base de dados.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-egress-to-db
+  namespace: s6-governance
+spec:
+  podSelector:
+    # Origem selecionada: camada de aplicação.
+    matchLabels:
+      component: app
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            # Destino autorizado: camada de base de dados.
+            matchLabels:
+              component: db
+      ports:
+        # Apenas PostgreSQL/TCP.
+        - protocol: TCP
+          port: 5432
+
+---
+
+# ---------------------------------------------------------------------------
+# Policy B — ingress da base de dados apenas a partir da aplicação.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-ingress-to-db
+  namespace: s6-governance
+spec:
+  podSelector:
+    # A policy aplica-se aos Pods PostgreSQL.
+    matchLabels:
+      component: db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            # Apenas Pods da aplicação podem iniciar este fluxo.
+            matchLabels:
+              component: app
+      ports:
+        - protocol: TCP
+          port: 5432
