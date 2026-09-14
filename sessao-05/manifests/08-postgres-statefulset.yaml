@@ -1,13 +1,26 @@
+# Sessão 5 — PostgreSQL StatefulSet com armazenamento persistente
+#
+# Objetivo: relacionar identidade estável, Secret, readiness e PVC por réplica.
+# Este recurso é um exemplo pedagógico separado do percurso principal com SQLite.
+
 apiVersion: apps/v1
 kind: StatefulSet
+
 metadata:
   name: postgres
+
 spec:
+  # Headless Service que suporta a identidade de rede do StatefulSet.
   serviceName: postgres
+
+  # Uma réplica é suficiente para este exercício de base de dados.
   replicas: 1
+
   selector:
     matchLabels:
+      # Tem de corresponder às labels do template abaixo.
       app: postgres
+
   template:
     metadata:
       labels:
@@ -15,19 +28,33 @@ spec:
     spec:
       containers:
         - name: postgres
+
+          # Versão explícita da imagem usada no laboratório.
           image: postgres:16
+
+          # Porta TCP em que PostgreSQL escuta dentro do Pod.
           ports:
             - containerPort: 5432
+
           env:
+            # Nome da base de dados a criar/inicializar.
             - name: POSTGRES_DB
               value: symfony_demo
+
+            # Utilizador de laboratório.
             - name: POSTGRES_USER
               value: postgres
+
+            # A password não é escrita diretamente no StatefulSet.
+            # É lida da chave `password` do Secret `postgres-credentials`.
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: postgres-credentials
                   key: password
+
+          # Readiness probe: só consideramos o container pronto quando
+          # `pg_isready` confirma que PostgreSQL aceita ligações à DB indicada.
           readinessProbe:
             exec:
               command:
@@ -40,16 +67,26 @@ spec:
             periodSeconds: 2
             timeoutSeconds: 2
             failureThreshold: 30
+
           volumeMounts:
             - name: data
+
+              # Caminho oficial onde a imagem PostgreSQL guarda os dados.
               mountPath: /var/lib/postgresql/data
+
+  # O StatefulSet cria uma PVC própria para cada réplica usando este template.
+  # Com uma réplica, será criada uma claim com identidade associada ao ordinal 0.
   volumeClaimTemplates:
     - metadata:
         name: data
       spec:
         accessModes:
           - ReadWriteOnce
+
+        # StorageClass de Dynamic Provisioning disponível no laboratório.
         storageClassName: local-path
+
         resources:
           requests:
+            # Capacidade solicitada por cada PVC gerada pelo StatefulSet.
             storage: 2Gi
