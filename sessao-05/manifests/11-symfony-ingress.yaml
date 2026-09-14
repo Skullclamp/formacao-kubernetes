@@ -1,17 +1,33 @@
+# Sessão 5 — Ingress da Symfony Demo
+#
+# Objetivo: encaminhar pedidos HTTP recebidos pelo Ingress Controller Traefik
+# para o Service `symfony-demo`. O Ingress descreve regras; quem as implementa
+# é o controller associado à IngressClass `traefik`.
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
+
 metadata:
   name: symfony-demo
+
 spec:
+  # Seleciona explicitamente o controller Traefik instalado no laboratório.
   ingressClassName: traefik
+
   rules:
+    # O pedido só corresponde a esta regra quando o cabeçalho Host usa este nome.
     - host: symfony-ingress.lab
       http:
         paths:
+          # Prefix significa que `/`, `/health`, `/info`, etc. correspondem à regra.
           - path: /
             pathType: Prefix
+
+            # Backend para onde o controller encaminha os pedidos correspondentes.
             backend:
               service:
+                # Service interno criado/corrigido no checkpoint anterior.
                 name: symfony-demo
                 port:
+                  # Porta do Service, não NodePort nem containerPort diretamente.
                   number: 80
