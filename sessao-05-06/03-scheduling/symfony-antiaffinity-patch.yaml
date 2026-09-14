@@ -1,0 +1,10 @@
+spec:
+  template:
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: symfony
+              topologyKey: kubernetes.io/hostname

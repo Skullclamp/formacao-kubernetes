@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-lab
+  namespace: lab-admin
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 3Gi
+    limits.cpu: "4"
+    limits.memory: 6Gi
+    pods: "15"
+    persistentvolumeclaims: "5"
+    requests.storage: 10Gi

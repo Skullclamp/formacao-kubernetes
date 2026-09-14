@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-egress-to-symfony
+  namespace: lab-admin
+spec:
+  podSelector:
+    matchLabels:
+      role: client
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: symfony
+      ports:
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-symfony-ingress-from-client
+  namespace: lab-admin
+spec:
+  podSelector:
+    matchLabels:
+      app: symfony
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: client
+      ports:
+        - protocol: TCP
+          port: 80

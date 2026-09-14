@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-acima-da-quota
+  namespace: lab-admin
+spec:
+  restartPolicy: Never
+  containers:
+    - name: teste
+      image: busybox:1.36
+      command: ["sh", "-c", "sleep 3600"]
+      resources:
+        requests:
+          cpu: "3"
+          memory: 64Mi
+        limits:
+          cpu: "3"
+          memory: 128Mi
