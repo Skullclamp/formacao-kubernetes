@@ -1,0 +1,31 @@
+# Sessão 6 — Pod com nodeSelector
+#
+# Pré-requisito do laboratório:
+# `k8s-wk-01` recebe a label `training.goldconsulting/workload=apps`.
+#
+# Objetivo: restringir o Pod a Nodes que tenham exatamente essa label.
+
+apiVersion: v1
+kind: Pod
+
+metadata:
+  name: node-selector-demo
+  namespace: s6-governance
+
+spec:
+  # nodeSelector é a forma simples de exigir correspondência exata por labels.
+  # Se nenhum Node elegível tiver esta label, o Pod permanece sem Node e o
+  # Scheduler emite FailedScheduling.
+  nodeSelector:
+    training.goldconsulting/workload: apps
+
+  containers:
+    - name: web
+      image: nginx:stable-alpine
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "32Mi"
+        limits:
+          cpu: "200m"
+          memory: "128Mi"
