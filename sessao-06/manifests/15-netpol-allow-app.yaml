@@ -1,0 +1,58 @@
+# Sessão 6 — Permitir cliente → aplicação
+#
+# Com default deny em ingress e egress, autorizar um fluxo entre dois Pods
+# isolados exige normalmente trabalhar as duas extremidades:
+#   1) egress do cliente;
+#   2) ingress da aplicação.
+
+# ---------------------------------------------------------------------------
+# Policy A — autoriza o cliente a sair para Pods `component=app` na porta 80.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-egress-to-app
+  namespace: s6-governance
+spec:
+  # Esta policy aplica-se apenas ao Pod/Pods cliente.
+  podSelector:
+    matchLabels:
+      role: client
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            # Destino permitido: Pods da aplicação no mesmo Namespace.
+            matchLabels:
+              component: app
+      ports:
+        - protocol: TCP
+          port: 80
+
+---
+
+# ---------------------------------------------------------------------------
+# Policy B — autoriza a aplicação a receber tráfego do cliente na porta 80.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-ingress-to-app
+  namespace: s6-governance
+spec:
+  # Seleciona os Pods da aplicação como destinos desta regra de ingress.
+  podSelector:
+    matchLabels:
+      component: app
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            # Única origem autorizada por esta regra: Pods com role=client.
+            matchLabels:
+              role: client
+      ports:
+        - protocol: TCP
+          port: 80
