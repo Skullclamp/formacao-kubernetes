@@ -1,0 +1,12 @@
+# Sessão 6 — Namespace de isolamento do laboratório
+#
+# Objetivo: concentrar os recursos namespaced da sessão num único espaço lógico.
+# A limpeza final pode assim remover a maioria dos objetos com um único
+# `kubectl delete namespace s6-governance`.
+
+apiVersion: v1
+kind: Namespace
+
+metadata:
+  # Nome usado explicitamente nos manifests e comandos da Sessão 6.
+  name: s6-governance
