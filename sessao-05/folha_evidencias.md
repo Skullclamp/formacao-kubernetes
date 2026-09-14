@@ -40,7 +40,7 @@ Esta folha acompanha o laboratório integrado. O objetivo não é copiar outputs
 | CP12 | Gateway/HTTPRoute `Accepted=True` e `ResolvedRefs=True` | | ☐ |
 | CP13 | backup online com `INTEGRITY_CHECK=ok` e hash | | ☐ |
 | CP14 | execução manual do CronJob validada | | ☐ |
-| CP15 | backup copiado para fora do storage Kubernetes | | ☐ |
+| CP15 | backup copiado para fora do PVC/storage Kubernetes da aplicação | | ☐ |
 | CP16 | perda do Pod recuperada pela persistência | | ☐ |
 | CP17 | eliminação lógica da PVC/PV antigo demonstrada | | ☐ |
 | CP18 | nova PVC/PV + restore + integridade + HTTP 200 | | ☐ |
@@ -55,8 +55,10 @@ Não iniciar a eliminação controlada da PVC enquanto os pontos seguintes não 
 - [ ] `sqlite-online-backup` terminou com `Complete`.
 - [ ] `MARKER_BACKUP=persistencia-sessao5-ok`.
 - [ ] `INTEGRITY_CHECK=ok`.
-- [ ] `database-online.sqlite` foi copiado para fora do cluster e `test -s` teve sucesso.
+- [ ] `database-online.sqlite` foi copiado para fora do PVC/storage Kubernetes da aplicação e `test -s` teve sucesso.
 - [ ] o endpoint `/health` devolveu HTTP 200 antes da operação destrutiva.
+
+> Se o comando `kubectl cp` for executado no próprio `k8s-cp-01`, a cópia fica fora do PVC da aplicação, mas **não** fora da infraestrutura física do cluster. Para proteção contra perda total do cluster/hosts, a cópia deve ainda ser transferida para um sistema externo independente.
 
 Se algum destes pontos falhar, parar e diagnosticar antes de apagar a PVC.
 
@@ -90,7 +92,7 @@ persistência
 +
 backup consistente
 +
-backup fora do cluster
+backup fora do storage primário da aplicação
 +
 falha controlada
 +
