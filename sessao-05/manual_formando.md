@@ -63,7 +63,7 @@ No final da sessão deverás ser capaz de:
 - executar um backup consistente de SQLite com a aplicação online;
 - validar um backup com marcador, hash e `PRAGMA integrity_check`;
 - compreender a finalidade de um CronJob;
-- copiar um backup para fora do storage Kubernetes da aplicação;
+- copiar um backup para fora do PVC/storage Kubernetes da aplicação;
 - distinguir perda de Pod de perda lógica da PVC;
 - restaurar uma base SQLite para uma nova PVC/PV;
 - justificar, com evidência, **Persistência ≠ Backup ≠ Alta Disponibilidade**.
@@ -594,7 +594,7 @@ Para não depender da hora da formação, é criado manualmente um Job a partir 
 
 ---
 
-# 18. Retirar o backup para fora do cluster
+# 18. Retirar o backup do storage primário da aplicação
 
 `backup-pvc` continua a ser storage `local-path`. Se a cópia existir apenas noutro PVC do mesmo Node, continua exposta a um domínio de falha comum.
 
@@ -605,7 +605,7 @@ backup-pvc
     ↓
 backup-reader
     ↓ kubectl cp
-máquina de administração
+filesystem da máquina onde kubectl é executado
     ↓
 database-online.sqlite
 ```
@@ -616,7 +616,9 @@ A validação mínima inclui:
 test -s ./database-online.sqlite
 ```
 
-Isto prova que existe uma cópia não vazia fora do storage Kubernetes utilizado pela aplicação.
+Isto prova que existe uma cópia não vazia fora do PVC/storage Kubernetes da aplicação.
+
+> Se o comando for executado em `k8s-cp-01`, a cópia continua fisicamente num Node do cluster. Para proteção contra perda total do cluster ou dos hosts, deve existir ainda uma cópia num sistema externo independente. O exercício principal prova separação do storage primário e capacidade de restore; não simula, por si só, uma política empresarial completa de backup externo.
 
 ---
 
@@ -633,7 +635,7 @@ backup-pvc Bound
 Job de backup Complete
 MARKER_BACKUP=persistencia-sessao5-ok
 INTEGRITY_CHECK=ok
-database-online.sqlite copiado para fora do cluster
+database-online.sqlite copiado para fora do PVC/storage Kubernetes da aplicação
 /health = HTTP 200
 ```
 
@@ -872,7 +874,7 @@ Gateway + HTTPRoute aceites/resolvidos
 +
 backup SQLite com marcador + integrity_check
 +
-backup copiado para fora do cluster
+backup separado do storage primário da aplicação
 +
 perda de Pod recuperada sem restore
 +
