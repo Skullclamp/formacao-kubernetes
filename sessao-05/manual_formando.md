@@ -10,60 +10,36 @@
 | **Duração** | 4 horas / 240 minutos |
 | **Nível** | Intermédio |
 | **Módulo** | M8 |
-| **Foco pedagógico** | Administrar workloads, networking, storage e recuperação no cluster |
+| **Foco pedagógico** | Administrar workloads, networking, storage, backup e recuperação |
 | **Topologia** | 1 Control Plane + 2 Workers |
-| **Ambiente validado** | Ubuntu 26.04.1 LTS on-premises |
 | **Kubernetes** | 1.36.4 |
-| **Laboratório** | `formando/labs/laboratorio_integrado_sessao_5.md` |
-| **Mensagem central** | **Persistência ≠ Backup** |
+| **Laboratório** | `labs/laboratorio_integrado_sessao_5.md` |
+| **Namespace** | `sessao5` |
+| **Mensagem central** | **Persistência ≠ Backup ≠ Alta Disponibilidade** |
 
 ---
 
 # 1. Como utilizar este manual
 
-Este manual foi concebido para funcionar como **guia de acompanhamento, estudo autónomo e consulta futura**. Não substitui o laboratório integrado e não deve ser lido como uma lista de comandos a memorizar.
+Este manual acompanha o laboratório integrado e explica os conceitos necessários para interpretar o que o cluster está a fazer. Não substitui o laboratório nem deve ser usado como uma lista de comandos a memorizar.
 
-Tal como na Sessão 4, cada conceito importante é trabalhado segundo uma sequência coerente:
+A regra de trabalho é:
 
 ```text
 CONCEITO
    ↓
 PORQUE É NECESSÁRIO
    ↓
-OBJETO / MANIFESTO / COMANDO
-   ↓
-CAMPOS / FLAGS
+OBJETO / COMANDO
    ↓
 ESTADO ESPERADO
    ↓
-O QUE OBSERVAR
+EVIDÊNCIA
    ↓
-ERRO FREQUENTE
-   ↓
-BOA PRÁTICA
-```
-
-No laboratório, a regra mantém-se:
-
-```text
-COMPREENDER
-    ↓
-EXECUTAR MANUALMENTE
-    ↓
-OBSERVAR
-    ↓
-REGISTAR EVIDÊNCIA
-    ↓
 EXPLICAR
-    ↓
-AVANÇAR
 ```
 
-O objetivo é conseguir responder a três perguntas em cada exercício:
-
-1. **Qual era o estado antes da alteração?**
-2. **Que objeto ou controlador provocou a alteração?**
-3. **Que evidência demonstra que o resultado corresponde ao pretendido?**
+Uma operação `kubectl apply` bem-sucedida prova apenas que a API aceitou o objeto. O resultado pedagógico exige observar o comportamento real do cluster.
 
 ---
 
@@ -71,319 +47,151 @@ O objetivo é conseguir responder a três perguntas em cada exercício:
 
 No final da sessão deverás ser capaz de:
 
-- escolher entre `Deployment`, `DaemonSet`, `StatefulSet`, `Job` e `CronJob`;
-- explicar a cadeia `Deployment → ReplicaSet → Pods`;
-- observar a reconciliação de um Deployment após perda de um Pod;
-- explicar o comportamento de um DaemonSet em Nodes elegíveis;
-- explicar identidade estável, ordinais e ordenação num StatefulSet;
-- explicar por que um StatefulSet **não garante distribuição dos Pods por Nodes**;
-- compreender o papel de um Headless Service na identidade de rede de um StatefulSet;
-- distinguir a identidade do StatefulSet da persistência dos seus dados;
+- explicar a cadeia `Deployment → ReplicaSet → Pod` e demonstrar reconciliação;
+- distinguir `Deployment`, `DaemonSet`, `StatefulSet`, `Job` e `CronJob`;
+- explicar identidade estável e ordinais num StatefulSet;
+- utilizar um Headless Service para DNS individual de Pods;
+- distinguir identidade de StatefulSet de persistência de dados;
 - explicar `PV`, `PVC`, `StorageClass` e dynamic provisioning;
 - interpretar `WaitForFirstConsumer`;
-- explicar a afinidade do PV local ao Node escolhido;
-- distinguir o `local-path-provisioner` de um driver CSI;
-- executar PostgreSQL 16 num StatefulSet com storage persistente;
-- validar persistência após recriação do Pod;
-- explicar `ClusterIP`, DNS de Service e `EndpointSlice`;
-- diagnosticar uma falha de Service causada por um selector incorreto;
-- criar e validar um Ingress processado pelo Traefik;
-- interpretar uma `GatewayClass` existente;
-- criar `Gateway` e `HTTPRoute`;
-- distinguir a porta do listener do Gateway da porta externa NodePort;
-- executar um backup lógico de PostgreSQL através de um Job;
-- explicar o papel de um CronJob;
-- retirar uma cópia do backup para fora do cluster;
-- distinguir perda de Pod de perda lógica dos dados;
-- executar um restore PostgreSQL por streaming;
-- justificar, com evidências, a afirmação **Persistência ≠ Backup**.
+- identificar a afinidade ao Node de um PV local;
+- explicar por que `local-path-provisioner` é um external provisioner e não um driver CSI;
+- executar a Symfony Demo com uma base SQLite persistente numa PVC;
+- diagnosticar um Service através de selectors, labels e EndpointSlices;
+- validar entrada HTTP através de Ingress Traefik;
+- interpretar `GatewayClass`, `Gateway` e `HTTPRoute`;
+- executar um backup consistente de SQLite com a aplicação online;
+- validar um backup com marcador, hash e `PRAGMA integrity_check`;
+- compreender a finalidade de um CronJob;
+- copiar um backup para fora do storage Kubernetes da aplicação;
+- distinguir perda de Pod de perda lógica da PVC;
+- restaurar uma base SQLite para uma nova PVC/PV;
+- justificar, com evidência, **Persistência ≠ Backup ≠ Alta Disponibilidade**.
 
 ---
 
-# 3. Baseline técnica validada
-
-O percurso da Sessão 5 foi validado num cluster real com a seguinte baseline:
+# 3. Baseline técnica
 
 ```text
-Sistema operativo:       Ubuntu 26.04.1 LTS
-Kernel:                   7.0.0-31-generic
+Control Plane:             k8s-cp-01 / 192.168.50.46
+Worker 1:                  k8s-wk-01 / 192.168.50.65
+Worker 2:                  k8s-wk-03 / 192.168.50.102
+Kubernetes:                1.36.4
+containerd:                2.2.6
+CNI:                       Calico
 
-Control Plane:            k8s-cp-01 / 192.168.50.46
-Worker 1:                 k8s-wk-01 / 192.168.50.65
-Worker 2:                 k8s-wk-03 / 192.168.50.102
+StorageClass:              local-path
+Provisioner:               rancher.io/local-path
+volumeBindingMode:         WaitForFirstConsumer
+reclaimPolicy:             Delete
 
-Kubernetes:               1.36.4
-containerd:               2.2.6
-CNI:                      Calico
+Gateway API:               v1.6.1
+Traefik Chart:             41.5.0
+Traefik Proxy:             v3.7.13
+IngressClass:              traefik
+GatewayClass:              traefik
+entryPoint web:            8000
+HTTP NodePort:             30080
+HTTPS NodePort:            30443
 
-StorageClass:             local-path
-Provisioner:              rancher.io/local-path
-volumeBindingMode:        WaitForFirstConsumer
-reclaimPolicy:            Delete
-
-local-path-provisioner:   v0.0.37
-
-Gateway API:              v1.6.1 — Standard Channel
-
-Helm:                     v3.22.0
-Traefik Helm Chart:       41.5.0
-Traefik Proxy:            v3.7.13
-Namespace Traefik:        traefik
-IngressClass:             traefik
-GatewayClass:             traefik
-
-Traefik entryPoint web:   8000
-Traefik entryPoint TLS:   8443
-Service HTTP:             80 → NodePort 30080
-Service HTTPS:            443 → NodePort 30443
-
-Symfony Demo:             v3.1.0
-Symfony:                  8.1
-PHP:                      8.4
-Imagem de laboratório:    ghcr.io/skullclamp/symfony-demo:1.1.0
-PostgreSQL:               16
+Symfony Demo:              v3.1.0
+Symfony:                   8.1
+PHP:                       8.4
+Imagem:                    ghcr.io/skullclamp/symfony-demo:1.1.0
+Base de dados do lab:      SQLite
+Ficheiro SQLite:           /var/www/html/data/database.sqlite
+Namespace:                 sessao5
 ```
 
-> As versões patch representam a baseline efetivamente validada nesta edição. Antes de reutilizar o laboratório noutra edição, devem ser reconfirmadas.
-
-A validação automática final executou **48 verificações obrigatórias, com 48 OK, 0 avisos e 0 falhas**.
+> A Sessão 5 usa SQLite deliberadamente para concentrar o exercício nos mecanismos Kubernetes. A integração completa da Symfony Demo com PostgreSQL não faz parte do percurso atual desta sessão.
 
 ---
 
-# 4. Continuidade da Sessão 4 para a Sessão 5
+# 4. Continuidade da topologia
 
-A Sessão 4 terminou com um cluster Kubernetes funcional e atualizado:
-
-```text
-Sessão 4
-Kubernetes 1.35.x
-      ↓
-upgrade controlado
-      ↓
-Kubernetes 1.36.4
-      ↓
-cluster saudável
-```
-
-A Sessão 5 não volta a instalar o cluster. Parte desse estado e responde a outra pergunta:
-
-> Como administramos workloads, networking e dados **dentro** do cluster já construído?
-
-A progressão é:
+A Sessão 4 termina com:
 
 ```text
-CLUSTER PRONTO
-     ↓
-WORKLOADS
-     ↓
-IDENTIDADE
-     ↓
-STORAGE
-     ↓
-SERVICES / DNS
-     ↓
-INGRESS / GATEWAY API
-     ↓
-BACKUP
-     ↓
-FALHA CONTROLADA
-     ↓
-RESTORE
+k8s-cp-01
++
+k8s-wk-01
 ```
+
+Antes da Sessão 5, o formador adiciona `k8s-wk-03` fora dos 240 minutos, reutilizando o procedimento de `kubeadm join` já demonstrado. O preflight da Sessão 5 deve provar que os três Nodes estão `Ready` antes de depender desta topologia.
 
 ---
 
-# 5. Modelo mental: objeto, controlador e reconciliação
+# 5. Controladores e reconciliação
 
-A maior parte dos workloads desta sessão é gerida por controladores.
+Kubernetes trabalha continuamente para aproximar o estado observado do estado desejado.
 
 ```text
-Manifesto
-   ↓
+manifesto / comando
+      ↓
 API Server
-   ↓
+      ↓
 estado desejado
-   ↓
-controller observa
-   ↓
-compara desejado vs observado
-   ↓
-atua
-   ↓
-novo estado observado
+      ↓
+controller
+      ↓
+estado observado
+      ↓
+reconciliação
 ```
 
-Se declararmos:
+## 5.1. Deployment
 
-```text
-replicas: 2
-```
-
-e apenas existir um Pod saudável, o controlador tenta repor a diferença.
-
-A pergunta correta não é apenas:
-
-> “O Pod está a correr?”
-
-É também:
-
-> “Quem é responsável por garantir que este Pod existe?”
-
----
-
-# 6. Escolher o controlador de workload
-
-| Objeto | Quando usar | Característica principal |
-|---|---|---|
-| `Deployment` | aplicações stateless e réplicas substituíveis | rollout e reconciliação de réplicas |
-| `DaemonSet` | um agente por Node elegível | cobertura dos Nodes |
-| `StatefulSet` | workloads que precisam de identidade estável e/ou storage por réplica | nome/ordinal estável e gestão ordenada |
-| `Job` | tarefa finita | termina com sucesso ou falha |
-| `CronJob` | tarefa finita recorrente | cria Jobs segundo um calendário |
-
-Um critério simples:
-
-```text
-Serviço stateless contínuo?      → Deployment
-Agente em cada Node elegível?    → DaemonSet
-Identidade estável por réplica?  → StatefulSet
-Tarefa que termina?              → Job
-Tarefa que termina e repete?     → CronJob
-```
-
----
-
-# 7. Deployment
-
-Um Deployment não executa diretamente os Pods. A relação principal é:
+A relação principal é:
 
 ```text
 Deployment
-    ↓ gere
+    ↓
 ReplicaSet
-    ↓ gere
-Pods
+    ↓
+Pod
 ```
 
-No laboratório criamos duas réplicas da aplicação Symfony:
+Na edição atual do laboratório, a Symfony Demo começa com **uma réplica**. Isto é suficiente para demonstrar reconciliação e mantém o percurso coerente com a utilização posterior de um ficheiro SQLite persistente.
 
-```bash
-kubectl create deployment symfony-demo \
-  --image=ghcr.io/skullclamp/symfony-demo:1.1.0 \
-  --replicas=2
-```
-
-## 7.1. O que observar
-
-```bash
-kubectl get deployment symfony-demo
-kubectl get replicasets
-kubectl get pods -l app=symfony-demo -o wide
-```
-
-O Deployment deve convergir para:
+Se o Pod for eliminado:
 
 ```text
-READY   UP-TO-DATE   AVAILABLE
-2/2     2            2
+Pod antigo desaparece
+      ↓
+ReplicaSet observa défice
+      ↓
+novo Pod é criado
+      ↓
+UID é diferente
+      ↓
+número de réplicas volta ao desejado
 ```
 
-Os nomes exatos dos Pods e o hash do ReplicaSet podem variar.
-
-## 7.2. Reconciliação
-
-Quando eliminamos um Pod:
-
-```bash
-kubectl delete pod <POD>
-```
-
-o Deployment não “recupera aquele Pod”. O ReplicaSet cria **outro Pod** para repor o número de réplicas.
-
-```text
-2 desejados
-2 observados
-     ↓
-eliminar 1 Pod
-     ↓
-1 observado
-     ↓
-controller deteta diferença
-     ↓
-cria Pod substituto
-     ↓
-2 observados
-```
-
-### Boa prática
-
-Validar o controlador e não apenas o Pod individual:
-
-```bash
-kubectl rollout status deployment/symfony-demo
-```
+O controlador não recupera o mesmo objeto Pod; cria outro objeto para repor o estado desejado.
 
 ---
 
-# 8. DaemonSet
+# 6. DaemonSet
 
 Um DaemonSet procura manter um Pod em cada **Node elegível**.
 
 No laboratório:
 
 ```text
-k8s-cp-01 → taint NoSchedule
+k8s-cp-01 → Control Plane com taint NoSchedule
 k8s-wk-01 → elegível
 k8s-wk-03 → elegível
 ```
 
-Por isso o resultado esperado é um Pod no `k8s-wk-01` e outro no `k8s-wk-03`.
+Logo, o resultado esperado é um Pod do DaemonSet em cada Worker.
 
-> Não memorizar “DaemonSet = exatamente um Pod em todos os Nodes”. Taints, selectors, affinity e outras restrições podem tornar um Node não elegível.
-
-## 8.1. Exemplo
-
-```yaml
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: daemon-demo
-spec:
-  selector:
-    matchLabels:
-      app: daemon-demo
-  template:
-    metadata:
-      labels:
-        app: daemon-demo
-    spec:
-      containers:
-        - name: daemon-demo
-          image: busybox:1.36
-          command: ["sh", "-c", "sleep 3600"]
-```
-
-Observar:
-
-```bash
-kubectl get daemonset daemon-demo
-kubectl get pods -l app=daemon-demo -o wide
-```
+> “DaemonSet = um Pod em todos os Nodes” é uma simplificação. O comportamento real depende de taints, selectors, affinity e outras regras de elegibilidade.
 
 ---
 
-# 9. StatefulSet: identidade estável
+# 7. StatefulSet: identidade estável
 
-StatefulSet resolve problemas diferentes de Deployment.
-
-Num Deployment, as réplicas são normalmente substituíveis:
-
-```text
-pod-x7m2q
-pod-p9v8b
-```
-
-Num StatefulSet existem ordinais:
+StatefulSet é usado primeiro para isolar o conceito de identidade.
 
 ```text
 web-0
@@ -391,71 +199,40 @@ web-1
 web-2
 ```
 
-Os nomes fazem parte da identidade do workload.
-
-## 9.1. O que o StatefulSet oferece
-
-- nome estável por réplica;
-- ordinal estável;
-- criação e terminação ordenadas por omissão;
-- integração com um Service governante;
-- possibilidade de criar uma PVC por réplica através de `volumeClaimTemplates`.
-
-## 9.2. O que não oferece automaticamente
-
-StatefulSet **não significa**:
+Cada réplica possui um ordinal estável. Se `web-1` for eliminado, o controlador volta a criar um Pod chamado `web-1`, mas com um novo UID.
 
 ```text
-alta disponibilidade
-distribuição automática entre Nodes
-backup
-storage distribuído
+nome nominal estável
+        ≠
+mesmo objeto Pod
 ```
 
-Duas réplicas podem ser colocadas no mesmo Node se não existirem regras adicionais de scheduling.
+## 7.1. StatefulSet não implica storage
 
-Affinity e topology spread são aprofundados na Sessão 6.
-
----
-
-# 10. StatefulSet pode existir sem storage próprio
-
-É importante separar duas ideias:
+O StatefulSet `web` do laboratório não precisa de `volumeClaimTemplates` para demonstrar ordinais e identidade.
 
 ```text
 StatefulSet
-→ identidade e ordenação
-```
+→ identidade / ordenação
 
-e:
-
-```text
 PVC / PV
 → persistência
 ```
 
-O primeiro StatefulSet do laboratório, `web`, é usado para observar `web-0`, `web-1` e DNS individual. Pode existir sem `volumeClaimTemplates`.
-
-Só depois introduzimos storage.
-
-Isto evita a associação incorreta:
-
-> “StatefulSet é simplesmente um Deployment com disco.”
+Separar estes conceitos evita a ideia incorreta de que StatefulSet é apenas “um Deployment com disco”.
 
 ---
 
-# 11. Headless Service e DNS por Pod
+# 8. Headless Service e DNS individual
 
-Um Service normal recebe um `ClusterIP`. Um Headless Service usa:
+Um Headless Service usa:
 
 ```yaml
 spec:
   clusterIP: None
 ```
 
-Neste caso, o objetivo não é fornecer um único IP virtual para balanceamento. O DNS pode expor diretamente a identidade das réplicas.
-
-Exemplo:
+Com StatefulSet, permite resolver identidades individuais:
 
 ```text
 web-0.web.sessao5.svc.cluster.local
@@ -465,140 +242,66 @@ web-1.web.sessao5.svc.cluster.local
 Estrutura:
 
 ```text
-<nome-do-pod>.<service>.<namespace>.svc.cluster.local
+<pod>.<service>.<namespace>.svc.cluster.local
 ```
 
-## 11.1. Porque é importante para workloads stateful?
-
-Alguns sistemas precisam de encontrar instâncias específicas, e não apenas “qualquer réplica”.
-
-```text
-Service normal
-cliente → nome Service → backend disponível
-```
-
-```text
-Headless + StatefulSet
-cliente → identidade concreta → web-1
-```
+O objetivo é chegar a uma réplica específica, em vez de obter um único IP virtual de Service para balanceamento.
 
 ---
 
-# 12. Persistência: PV, PVC e StorageClass
+# 9. PV, PVC e StorageClass
 
-Os três objetos não são equivalentes.
+Os três conceitos têm funções diferentes:
 
 ```text
 Pod
- ↓ pede
+ ↓ consome
 PVC
- ↓ usa
+ ↓ solicita storage através de
 StorageClass
- ↓ chama
+ ↓ usa
 Provisioner
  ↓ cria
 PV
- ↓ fica ligado
-PVC
 ```
 
-## 12.1. PersistentVolumeClaim
+## 9.1. PVC
 
-Uma PVC exprime a necessidade do consumidor.
-
-Exemplo:
+A PVC expressa uma necessidade:
 
 ```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: test-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 1Gi
+accessModes:
+  - ReadWriteOnce
+storageClassName: local-path
+resources:
+  requests:
+    storage: 1Gi
 ```
 
-A PVC diz:
+A aplicação não precisa de conhecer o caminho físico do volume no Node.
 
-```text
-quero armazenamento
-classe = local-path
-modo = ReadWriteOnce
-capacidade solicitada = 1Gi
-```
+## 9.2. PV
 
-Não indica diretamente o diretório no Node.
+O PV representa o armazenamento disponibilizado ao cluster. No caso `local-path`, o PV fica associado ao Node onde o volume foi criado.
 
-## 12.2. PersistentVolume
+## 9.3. StorageClass
 
-O PV representa o volume disponibilizado ao cluster.
-
-No laboratório, o PV gerado apresentou:
-
-```text
-provisioned-by: rancher.io/local-path
-Node Affinity: kubernetes.io/hostname in [k8s-wk-03]
-Path: /opt/local-path-provisioner/...
-```
-
-O nome, UID e caminho final variam entre execuções.
-
----
-
-# 13. StorageClass e dynamic provisioning
-
-A StorageClass utilizada é:
+A classe do laboratório usa:
 
 ```text
 name:               local-path
 provisioner:        rancher.io/local-path
-reclaimPolicy:      Delete
 volumeBindingMode:  WaitForFirstConsumer
+reclaimPolicy:      Delete
 ```
 
-Dynamic provisioning evita criar manualmente cada PV antes da PVC.
-
-```text
-PVC criada
-   ↓
-provisioner observa
-   ↓
-PV criado quando necessário
-   ↓
-PVC Bound
-```
-
-## 13.1. O `local-path-provisioner` não é CSI
-
-Neste laboratório utilizamos o Rancher Local Path Provisioner. É um **external provisioner** que participa no mecanismo de StorageClass e provisioning dinâmico.
-
-Não deve ser apresentado como um driver CSI.
-
-Esta distinção é importante porque:
-
-```text
-dynamic provisioning
-      ≠
-CSI obrigatoriamente
-```
+O `local-path-provisioner` é um **external provisioner**. Dynamic provisioning não implica obrigatoriamente CSI.
 
 ---
 
-# 14. `WaitForFirstConsumer`
+# 10. `WaitForFirstConsumer`
 
-Com:
-
-```text
-volumeBindingMode: WaitForFirstConsumer
-```
-
-a PVC pode permanecer `Pending` até surgir um Pod que a consuma.
-
-Isto é comportamento esperado:
+Com `WaitForFirstConsumer`, uma PVC pode permanecer `Pending` até existir um consumidor elegível.
 
 ```text
 PVC criada
@@ -607,394 +310,189 @@ Pending
    ↓
 Pod consumidor criado
    ↓
-scheduler escolhe Node
+Scheduler escolhe Node compatível
    ↓
-provisioner cria volume adequado ao Node
+volume é provisionado
    ↓
 PVC Bound
 ```
 
-No laboratório validado:
+Por isso:
 
 ```text
-Pod consumidor → k8s-wk-03
-PV             → nodeAffinity k8s-wk-03
+PVC Pending sem consumidor
+≠
+provisioner avariado
 ```
 
-## 14.1. Porque é útil?
+A investigação deve distinguir:
 
-Em storage dependente de topologia, criar o volume demasiado cedo pode escolher uma localização incompatível com o futuro consumidor.
+```text
+Pod sem Node + FailedScheduling
+→ scheduling
 
-`WaitForFirstConsumer` permite que a decisão de scheduling participe no processo.
+PVC Pending antes do consumidor
+→ estado esperado com WaitForFirstConsumer
+
+PVC Pending depois do consumidor
+→ PVC/Events/provisioner
+
+Pod com Node + FailedMount
+→ mount/storage depois do placement
+```
 
 ---
 
-# 15. Storage local e afinidade ao Node
+# 11. Storage local e afinidade ao Node
 
-O local-path cria armazenamento local no Node.
-
-No ambiente validado:
+Um PV `local-path` fica dependente do Node onde foi criado.
 
 ```text
-/opt/local-path-provisioner/...
-```
-
-e o PV inclui afinidade ao Node onde foi provisionado.
-
-Consequência:
-
-```text
-dados no k8s-wk-03
-      ↓
-Pod eliminado
-      ↓
-Pod recriado usando mesma PVC
-      ↓
-scheduler tem de respeitar afinidade do PV
-      ↓
-dados continuam acessíveis
-```
-
-Mas:
-
-```text
-perda física do k8s-wk-03
-      ↓
-disco local deixa de estar acessível
-      ↓
-local-path não replica os dados para outro Worker
-```
-
-Portanto:
-
-> **local-path é adequado ao objetivo pedagógico desta sessão, mas não representa storage distribuído nem solução de HA.**
-
----
-
-# 16. `reclaimPolicy: Delete`
-
-A StorageClass do laboratório usa:
-
-```text
-reclaimPolicy: Delete
-```
-
-No teste validado:
-
-```text
-PVC Bound
-   ↓
-namespace/PVC eliminado
-   ↓
-PV eliminado
-```
-
-Isto demonstra que o ciclo de vida do volume pode estar associado ao da claim.
-
-> `Delete` é a configuração utilizada no laboratório. Não deve ser apresentada como recomendação universal para produção.
-
-A política adequada depende do storage, do risco, da operação e da estratégia de recuperação.
-
----
-
-# 17. PostgreSQL como StatefulSet
-
-A base de dados do caso transversal é PostgreSQL 16.
-
-O objetivo da Sessão 5 é trabalhar:
-
-```text
-identidade
-+
-persistência
-+
-Service/DNS
-+
-backup
-+
-restore
-```
-
-Não é ainda construir toda a integração aplicacional Symfony → PostgreSQL. Essa implementação completa fica para a Sessão 9.
-
-## 17.1. Variáveis do laboratório
-
-```text
-POSTGRES_DB       = symfony_demo
-POSTGRES_USER     = postgres
-POSTGRES_PASSWORD = Secret postgres-credentials
-```
-
-A password é lida através de:
-
-```yaml
-valueFrom:
-  secretKeyRef:
-    name: postgres-credentials
-    key: password
-```
-
-Nesta sessão o Secret é usado como recurso necessário ao cenário. A gestão de configuração e secrets é aprofundada mais tarde.
-
-## 17.2. Readiness
-
-A readiness probe usa:
-
-```bash
-pg_isready
-```
-
-Objetivo:
-
-```text
-container arrancou
-      ≠
-PostgreSQL já aceita ligações
-```
-
-Quando o Pod passa a `Ready`, queremos uma evidência mais significativa do que apenas o processo estar em execução.
-
----
-
-# 18. `volumeClaimTemplates`
-
-No StatefulSet PostgreSQL, `volumeClaimTemplates` permite criar storage associado à réplica.
-
-Conceito:
-
-```text
-postgres-0
-   ↓
-data-postgres-0
-   ↓
+PVC
+ ↓
 PV local
+ ↓
+nodeAffinity
+ ↓
+Node concreto
 ```
 
-Se existissem várias réplicas:
+Isto permite que os dados sobrevivam à recriação do Pod, desde que o Node e o storage local continuem disponíveis.
+
+Não fornece:
 
 ```text
-postgres-0 → PVC própria
-postgres-1 → PVC própria
-postgres-2 → PVC própria
+replicação entre Workers
+storage distribuído
+alta disponibilidade por si só
 ```
-
-Cada réplica pode ter a sua claim.
-
-Isto não significa que o conteúdo seja automaticamente replicado entre bases de dados.
 
 ---
 
-# 19. Service `ClusterIP`
+# 12. Symfony Demo com SQLite persistente
 
-Um Service fornece um ponto estável para chegar a Pods selecionados.
+A imagem contém inicialmente:
 
 ```text
-cliente
-   ↓
-postgres
-   ↓
-Service
-   ↓ selector app=postgres
-   ↓
+/var/www/html/data/database.sqlite
+```
+
+Quando uma PVC vazia é montada diretamente sobre `/var/www/html/data`, o conteúdo original da imagem nesse caminho fica oculto. Por isso o laboratório usa um `initContainer` para copiar a base inicial para a PVC apenas quando ainda não existe `database.sqlite`.
+
+```text
+imagem contém database.sqlite
+        ↓
+PVC vazia
+        ↓
+initContainer verifica
+        ↓
+copia base inicial uma única vez
+        ↓
+container principal monta a mesma PVC
+```
+
+A aplicação usa:
+
+```text
+strategy: Recreate
+replicas: 1
+```
+
+Isto evita ter dois Pods da aplicação a escrever simultaneamente o mesmo ficheiro SQLite durante uma atualização.
+
+## 12.1. Prova de persistência
+
+O laboratório cria um marcador dentro da base:
+
+```text
+persistencia-sessao5-ok
+```
+
+Depois elimina o Pod sem eliminar a PVC. O novo Pod deve conseguir ler o mesmo marcador.
+
+A prova só é válida porque o arranque do novo Pod **não recria o marcador**.
+
+---
+
+# 13. Service, selectors e EndpointSlice
+
+Um Service seleciona Pods por labels.
+
+```text
+Service selector
+      ↓
+labels dos Pods
+      ↓
 EndpointSlice
-   ↓
-Pod postgres-0
+      ↓
+endereços dos backends
 ```
 
-No caso do Symfony:
+No laboratório, o Service é criado deliberadamente com:
 
 ```text
-cliente
-   ↓
-symfony-demo
-   ↓
-ClusterIP
-   ↓
-Pods do Deployment
+selector: app=symfony-demo-ERRO
 ```
 
-## 19.1. Service não “descobre aplicações” por nome humano
-
-A ligação a Pods é feita através de labels e selectors.
-
-Exemplo:
-
-```yaml
-selector:
-  app: symfony-demo
-```
-
-Se o selector for:
-
-```yaml
-app: symfony-demo-ERRO
-```
-
-o Service pode existir perfeitamente, mas não terá backends válidos.
-
----
-
-# 20. DNS de Service
-
-Dentro do mesmo namespace:
+enquanto os Pods possuem:
 
 ```text
-http://symfony-demo/health
-postgres:5432
+app=symfony-demo
 ```
 
-podem ser resolvidos através do DNS do cluster.
+O Service pode existir sem erro de API e, ainda assim, não possuir endpoints válidos.
 
-Forma completa:
+Sequência de diagnóstico:
 
 ```text
-<service>.<namespace>.svc.cluster.local
-```
-
-Exemplo:
-
-```text
-symfony-demo.sessao5.svc.cluster.local
-```
-
-O DNS resolve o nome do Service. O encaminhamento para Pods depende depois da configuração do Service e dos seus endpoints.
-
----
-
-# 21. EndpointSlice como evidência operacional
-
-Nesta sessão usamos `EndpointSlice` como objeto principal para diagnosticar backends de Services.
-
-```bash
-kubectl get endpointslices \
-  -l kubernetes.io/service-name=symfony-demo
-```
-
-Perguntas:
-
-```text
-Existe EndpointSlice?
-Tem addresses?
-Esses IPs correspondem a Pods Ready?
-O selector do Service corresponde às labels?
-```
-
-## 21.1. Sequência de diagnóstico
-
-```text
-Service não responde
-       ↓
 kubectl get svc
-       ↓
+      ↓
 ver selector
-       ↓
+      ↓
 kubectl get pods --show-labels
-       ↓
+      ↓
 kubectl get endpointslices
-       ↓
-comparar labels / endpoints
-       ↓
-corrigir
-       ↓
+      ↓
+comparar
+      ↓
+corrigir selector
+      ↓
 retestar
 ```
 
-Não começamos por reiniciar Pods aleatoriamente.
-
 ---
 
-# 22. Traefik no laboratório
+# 14. Ingress com Traefik
 
-O Traefik é preparado antes do laboratório principal.
-
-```text
-Namespace:           traefik
-IngressClass:        traefik
-GatewayClass:        traefik
-
-entryPoint web:      8000
-entryPoint websecure:8443
-
-Service:
-HTTP   80  → NodePort 30080
-HTTPS  443 → NodePort 30443
-```
-
-O mesmo Traefik processa:
+O Traefik é infraestrutura pré-instalada no cluster.
 
 ```text
-Ingress
-+
-Gateway API
-```
-
-Isto permite comparar os dois modelos mantendo o backend e a exposição externa constantes.
-
----
-
-# 23. Ingress
-
-Um Ingress descreve regras de entrada HTTP/HTTPS processadas por um Ingress Controller.
-
-Exemplo conceptual:
-
-```text
-curl
-Host: symfony-ingress.lab
-      ↓
-WorkerIP:30080
-      ↓
-Traefik Service
-      ↓
+cliente
+  ↓ NodePort 30080
+Traefik Service :80
+  ↓
 entryPoint web :8000
-      ↓
+  ↓
 Ingress
-      ↓
-Service symfony-demo:80
-      ↓
+  ↓
+Service symfony-demo :80
+  ↓
 Pod Symfony
 ```
 
-Manifesto:
+O header `Host` determina a regra de routing usada no exercício:
 
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: symfony-demo
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: symfony-ingress.lab
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: symfony-demo
-                port:
-                  number: 80
+```text
+Host: symfony-ingress.lab
 ```
 
-## 23.1. Teste externo
-
-```bash
-curl -H "Host: symfony-ingress.lab" \
-  http://<WORKER-IP>:30080/health
-```
-
-No laboratório validado:
-
-```json
-{"status":"ok"}
-```
+A evidência final é uma resposta HTTP `200` do endpoint `/health`.
 
 ---
 
-# 24. Gateway API
+# 15. Gateway API
 
-Gateway API separa responsabilidades de forma mais explícita.
+Gateway API separa de forma explícita vários papéis:
 
 ```text
 GatewayClass
@@ -1006,445 +504,259 @@ HTTPRoute
 Service
 ```
 
-## 24.1. GatewayClass
+A `GatewayClass traefik` já existe. O formando cria `Gateway` e `HTTPRoute`.
 
-A `GatewayClass traefik` é pré-instalada antes do exercício.
+## 15.1. Portas
 
-O formando deve **interpretá-la**, não criá-la no laboratório principal:
-
-```bash
-kubectl get gatewayclass traefik
-```
-
-Esperado:
-
-```text
-CONTROLLER                      ACCEPTED
-traefik.io/gateway-controller   True
-```
-
-## 24.2. Gateway
-
-O Gateway representa a infraestrutura/listener aceite pelo controller.
-
-No nosso Traefik:
-
-```yaml
-listeners:
-  - name: http
-    protocol: HTTP
-    port: 8000
-```
-
-### Ponto crítico: porque 8000 e não 80?
-
-Porque o listener do Gateway tem de corresponder ao entryPoint interno do Traefik utilizado nesta configuração:
+É importante não confundir:
 
 ```text
 Gateway listener       8000
-          ↓
 Traefik entryPoint web 8000
-          ↓
 Service Traefik          80
-          ↓
 NodePort               30080
 ```
 
-`8000` é a porta interna do listener; `30080` é a porta usada pelo cliente externo no Node.
+O cliente externo usa `30080`. O listener do Gateway usa `8000` na configuração do controller.
 
----
+## 15.2. Condições importantes
 
-# 25. HTTPRoute
-
-O `HTTPRoute` associa regras HTTP ao Gateway.
-
-Exemplo:
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: symfony-demo
-spec:
-  parentRefs:
-    - name: symfony-gateway
-  hostnames:
-    - symfony-gateway.lab
-  rules:
-    - backendRefs:
-        - name: symfony-demo
-          port: 80
-```
-
-Duas condições são particularmente importantes:
+No `HTTPRoute`, observar:
 
 ```text
 Accepted=True
 ResolvedRefs=True
 ```
 
-- `Accepted=True` — o controller aceitou a route para aquele parent;
-- `ResolvedRefs=True` — as referências, como o Service backend, foram resolvidas.
-
-No laboratório:
-
-```bash
-curl -H "Host: symfony-gateway.lab" \
-  http://<WORKER-IP>:30080/health
-```
-
-deve devolver:
-
-```json
-{"status":"ok"}
-```
+Estas condições demonstram que a route foi aceite pelo parent e que as referências, como o Service backend, foram resolvidas.
 
 ---
 
-# 26. Ingress versus Gateway API
+# 16. Job de backup SQLite online
 
-Neste laboratório não apresentamos Gateway API como simples “renomeação” de Ingress.
+Persistência e backup resolvem problemas diferentes.
 
-| Aspeto | Ingress | Gateway API |
-|---|---|---|
-| Entrada | recurso `Ingress` | `GatewayClass` + `Gateway` + Routes |
-| Separação de papéis | menor | mais explícita |
-| Extensibilidade | baseada no modelo Ingress/controller | modelo de APIs de routing mais estruturado |
-| Backend no exercício | `symfony-demo` | `symfony-demo` |
-| Controller | Traefik | Traefik |
-| Entrada externa | NodePort `30080` | NodePort `30080` |
+```text
+PVC
+→ mantém o ficheiro para além do ciclo de vida do Pod
 
-O objetivo pedagógico é comparar **modelos de configuração**, não mudar simultaneamente controller, aplicação e rede externa.
+backup
+→ cria uma cópia independente que pode ser usada no restore
+```
+
+Copiar diretamente um ficheiro SQLite enquanto a aplicação escreve pode produzir uma cópia inconsistente. O laboratório usa a API de backup SQLite através de `SQLite3::backup()`.
+
+```text
+source database.sqlite
+       ↓ SQLite3::backup()
+backup database-online.sqlite
+       ↓
+PRAGMA integrity_check
+       ↓
+SHA256
+```
+
+O Job deve terminar com evidência equivalente a:
+
+```text
+MARKER_BACKUP=persistencia-sessao5-ok
+INTEGRITY_CHECK=ok
+SHA256_BACKUP=<hash>
+```
+
+## 16.1. Porque a aplicação pode continuar online?
+
+A API de backup SQLite cria uma cópia consistente através do mecanismo próprio da base de dados. O exercício não depende de copiar cegamente o ficheiro enquanto está a ser usado.
 
 ---
 
-# 27. Job
+# 17. CronJob
 
-Um Job representa uma tarefa finita.
-
-```text
-criar Pod
-   ↓
-executar trabalho
-   ↓
-exit 0
-   ↓
-Job Complete
-```
-
-No laboratório, o Job executa:
-
-```bash
-pg_dump
-```
-
-e escreve:
-
-```text
-/backup/dump.sql
-```
-
-num PVC dedicado.
-
-## 27.1. Porque Job e não Deployment?
-
-Um Deployment procura manter um processo contínuo.
-
-O backup deve:
-
-```text
-começar
-executar
-terminar
-registar sucesso/falha
-```
-
-Esse comportamento corresponde a um Job.
-
-## 27.2. `backoffLimit`
-
-```yaml
-spec:
-  backoffLimit: 2
-```
-
-limita tentativas adicionais perante falha.
-
-Não transforma uma falha lógica num sucesso; apenas controla o comportamento de repetição.
-
----
-
-# 28. CronJob
-
-Um CronJob cria Jobs de acordo com uma expressão de calendário.
+Um CronJob cria Jobs segundo uma expressão de calendário.
 
 No laboratório:
 
 ```yaml
 schedule: "0 3 * * *"
-timeZone: "Europe/Lisbon"
+timeZone: Europe/Lisbon
 suspend: true
 ```
 
-Interpretação:
+Interpretar:
 
 ```text
-schedule   → 03:00
-timeZone   → Europe/Lisbon
-suspend    → não executar automaticamente durante a aula
-```
-
-Mantemos `suspend: true` para evitar que a execução dependa da hora exata da sessão.
-
-O formando observa a configuração sem introduzir uma tarefa automática imprevisível no meio do laboratório.
-
----
-
-# 29. Backup lógico de PostgreSQL
-
-Persistir o diretório de dados e criar um dump são mecanismos diferentes.
-
-```text
-PVC PostgreSQL
-→ mantém ficheiros de dados do workload
-```
-
-```text
-pg_dump
-→ produz representação lógica exportável
-```
-
-No laboratório:
-
-```text
-PostgreSQL
-   ↓ pg_dump
-backup-pvc
-   ↓
-backup-reader
-   ↓ kubectl cp
-./dump-symfony_demo.sql
-   ↓
-cópia fora do cluster
-```
-
-## 29.1. Porque copiar o dump para fora?
-
-Se o único backup estiver num volume sujeito ao mesmo domínio de falha, a proteção é limitada.
-
-O laboratório introduz esta distinção:
-
-```text
-dados primários no cluster
+03:00 no fuso Europe/Lisbon
 +
-backup no cluster
-      ↓
-ainda existe risco comum
+suspenso durante a aula
 ```
 
-Ao retirar uma cópia:
-
-```text
-cluster
-   ↓
-dump
-   ↓
-máquina administrativa
-```
-
-passamos a ter uma cópia fora daquele storage de laboratório.
-
-Isto continua a ser um exercício pedagógico, não uma política completa de backup empresarial.
+Para não depender da hora da formação, é criado manualmente um Job a partir do template do CronJob.
 
 ---
 
-# 30. `kubectl cp` e o Pod `backup-reader`
+# 18. Retirar o backup para fora do cluster
 
-O Job terminado não é usado diretamente como ponto de cópia.
+`backup-pvc` continua a ser storage `local-path`. Se a cópia existir apenas noutro PVC do mesmo Node, continua exposta a um domínio de falha comum.
 
-Criamos um Pod temporário que monta `backup-pvc`:
+Por isso o laboratório cria `backup-reader` e utiliza `kubectl cp`:
 
 ```text
 backup-pvc
     ↓
 backup-reader
+    ↓ kubectl cp
+máquina de administração
     ↓
-kubectl cp
+database-online.sqlite
 ```
 
-O `kubectl cp` depende de `tar` no container usado no exercício. Por isso validamos:
+A validação mínima inclui:
 
 ```bash
-kubectl exec backup-reader -- tar --help >/dev/null
+test -s ./database-online.sqlite
 ```
 
-Depois:
-
-```bash
-kubectl cp \
-  backup-reader:/backup/dump.sql \
-  ./dump-symfony_demo.sql
-```
-
-Finalmente confirmamos:
-
-```bash
-test -s ./dump-symfony_demo.sql
-```
-
-`-s` verifica que o ficheiro existe e tem tamanho superior a zero.
+Isto prova que existe uma cópia não vazia fora do storage Kubernetes utilizado pela aplicação.
 
 ---
 
-# 31. Falha controlada A — perda do Pod
+# 19. Health gate antes da operação destrutiva
 
-Primeiro eliminamos apenas:
+Antes de eliminar a PVC primária, é obrigatório provar que o estado anterior é saudável e que o backup é recuperável.
+
+Validar:
 
 ```text
-postgres-0
+Deployment Symfony saudável
+symfony-data Bound
+backup-pvc Bound
+Job de backup Complete
+MARKER_BACKUP=persistencia-sessao5-ok
+INTEGRITY_CHECK=ok
+database-online.sqlite copiado para fora do cluster
+/health = HTTP 200
 ```
 
-O StatefulSet recria o Pod.
+Se algum ponto falhar, parar e diagnosticar antes de apagar storage.
 
-A PVC permanece.
+---
+
+# 20. Falha controlada A — perda do Pod
+
+Eliminar apenas o Pod da aplicação:
 
 ```text
-Pod perdido
+Pod desaparece
    ↓
-StatefulSet reconcilia
-   ↓
-mesmo nome postgres-0
-   ↓
-nova UID do Pod
+Deployment reconcilia
    ↓
 mesma PVC
    ↓
-dados continuam
+mesmo database.sqlite
+   ↓
+marcador continua disponível
 ```
 
-Isto demonstra:
+Conclusão:
 
 ```text
-persistência perante recriação do Pod
+perda do Pod
+→ persistência resolve
+→ backup não foi necessário
 ```
-
-Não demonstra backup e não demonstra sobrevivência à perda física do Worker.
 
 ---
 
-# 32. Falha controlada B — eliminação da PVC / perda lógica dos dados
+# 21. Falha controlada B — eliminação da PVC
 
-Depois do backup externo estar confirmado, eliminamos o StatefulSet e a PVC de dados no cenário controlado.
-
-Com `reclaimPolicy: Delete`, o volume associado pode ser eliminado.
-
-Depois recriamos o PostgreSQL.
-
-Resultado esperado antes do restore:
+Agora o exercício é diferente:
 
 ```text
-base de dados nova
-dados lab_marker ausentes
+Deployment escalado para 0
+      ↓
+PVC symfony-data eliminada
+      ↓
+PV antigo removido por reclaimPolicy Delete
+      ↓
+dados primários deixam de existir
 ```
 
-Este cenário é chamado:
+Este cenário representa **perda lógica do storage primário**, não perda física do Worker.
 
-> **perda lógica dos dados / eliminação da PVC**
-
-Não é descrito como simulação de perda física do Worker.
+A recuperação exige o backup.
 
 ---
 
-# 33. Restore por streaming
+# 22. Restore para nova PVC/PV
 
-O restore é feito através do cliente PostgreSQL:
-
-```bash
-kubectl exec -i pg-client -- \
-  psql \
-  -h postgres \
-  -U postgres \
-  -d symfony_demo \
-  -v ON_ERROR_STOP=1 \
-  < ./dump-symfony_demo.sql
-```
-
-## 33.1. Elementos importantes
-
-| Elemento | Função |
-|---|---|
-| `kubectl exec -i` | mantém stdin aberto |
-| `psql` | cliente PostgreSQL |
-| `-h postgres` | usa o Service DNS |
-| `-U postgres` | utilizador |
-| `-d symfony_demo` | base de dados |
-| `-v ON_ERROR_STOP=1` | termina perante erro SQL |
-| `< ficheiro.sql` | envia o dump local para stdin |
-
-Fluxo:
+O laboratório cria uma nova PVC `symfony-data` e um Job de restore que monta simultaneamente:
 
 ```text
-dump local
-   ↓ stdin
-kubectl exec -i
-   ↓
-psql em pg-client
-   ↓ rede Kubernetes
-Service postgres
-   ↓
-postgres-0
+backup-pvc      → read-only
+symfony-data    → destino novo
 ```
 
-Não é necessário copiar primeiro o dump para o Pod PostgreSQL.
+O restore copia:
+
+```text
+database-online.sqlite
+        ↓
+database.sqlite
+```
+
+Depois valida:
+
+```text
+MARKER_RESTORE=persistencia-sessao5-ok
+INTEGRITY_CHECK=ok
+SHA256_BACKUP=<hash>
+SHA256_RESTORE=<mesmo hash>
+```
+
+A aplicação é novamente escalada para uma réplica e deve confirmar:
+
+```text
+MARKER_FINAL=persistencia-sessao5-ok
+INTEGRITY_FINAL=ok
+/health = HTTP 200
+```
+
+O PV resultante é um **novo PV**, mesmo que a claim volte a chamar-se `symfony-data`.
 
 ---
 
-# 34. Persistência ≠ Backup
+# 23. Persistência, backup e Alta Disponibilidade
 
-Esta é a mensagem central da sessão.
-
-## 34.1. Persistência
-
-No laboratório:
+## Persistência
 
 ```text
-eliminar Pod
-   ↓
-PVC permanece
-   ↓
-dados permanecem
-```
-
-A persistência ajuda o workload a sobreviver à substituição do processo/Pod.
-
-## 34.2. Backup
-
-```text
-dados primários
-   ↓
-cópia independente
-   ↓
-possibilidade de restore
-```
-
-Um backup só demonstra valor quando a recuperação é testada.
-
-## 34.3. O laboratório prova as duas coisas separadamente
-
-```text
-CENÁRIO A
 Pod eliminado
-→ dados continuam
-→ persistência comprovada
+→ PVC permanece
+→ dados permanecem
 ```
 
+## Backup
+
 ```text
-CENÁRIO B
-PVC eliminada
-→ dados desaparecem
-→ dump externo restaurado
-→ recuperação comprovada
+dados primários perdidos
+→ cópia independente disponível
+→ restore
+→ integridade validada
 ```
+
+## Alta Disponibilidade
+
+O laboratório não transforma SQLite + `local-path` numa solução de HA.
+
+```text
+uma réplica Symfony
++
+um ficheiro SQLite
++
+PV local a um Worker
+```
+
+é adequado para demonstrar mecanismos Kubernetes, mas não representa uma arquitetura distribuída tolerante à perda física do Node.
 
 Conclusão:
 
@@ -1458,637 +770,113 @@ ALTA DISPONIBILIDADE
 
 ---
 
-# 35. Troubleshooting orientado por evidências
+# 24. Troubleshooting orientado por evidência
 
-A metodologia mantém a abordagem iniciada nas sessões anteriores:
+Antes de corrigir, classificar a camada da falha.
+
+| Evidência | Interpretação inicial |
+|---|---|
+| Pod `Pending`, `NODE=<none>`, `FailedScheduling` | scheduling |
+| PVC `Pending` sem consumidor e `WaitForFirstConsumer` | estado esperado |
+| PVC continua `Pending` depois do consumidor | provisioning/storage |
+| Pod tem Node e apresenta `FailedMount` | mount/storage |
+| Service sem addresses no EndpointSlice | selector/labels/backends |
+| HTTPRoute sem `Accepted=True` | aceitação/routing |
+| HTTPRoute sem `ResolvedRefs=True` | referência a backend/objeto |
+| backup sem `INTEGRITY_CHECK=ok` | backup não validado |
+
+Método:
 
 ```text
 SINTOMA
-   ↓
-RECOLHER EVIDÊNCIA
-   ↓
-FORMULAR HIPÓTESE
-   ↓
-VALIDAR HIPÓTESE
-   ↓
-CORRIGIR
-   ↓
-VALIDAR NOVAMENTE
-```
-
-## 35.1. PVC fica `Pending`
-
-Observar:
-
-```bash
-kubectl get pvc
-kubectl describe pvc <PVC>
-kubectl get storageclass
-kubectl get pods -n local-path-storage
-kubectl get events --sort-by=.lastTimestamp
-```
-
-Perguntar:
-
-```text
-StorageClass existe?
-Provisioner está Running?
-É WaitForFirstConsumer?
-Já existe Pod consumidor?
-Existem Events de provisioning?
-```
-
-Um PVC `Pending` antes do primeiro consumidor pode ser completamente normal com `WaitForFirstConsumer`.
-
-## 35.2. Pod com PVC não agenda
-
-Observar:
-
-```bash
-kubectl describe pod <POD>
-kubectl describe pv <PV>
-```
-
-Procurar:
-
-```text
-nodeAffinity
-taints
-selectors
-recursos
-volume binding
-```
-
-Num PV local, a afinidade ao Node é uma restrição real.
-
-## 35.3. Service existe mas não responde
-
-Observar:
-
-```bash
-kubectl get svc <SERVICE> -o yaml
-kubectl get pods --show-labels
-kubectl get endpointslices \
-  -l kubernetes.io/service-name=<SERVICE>
-```
-
-Um Service sem endpoints frequentemente indica incompatibilidade selector/labels ou ausência de Pods Ready.
-
-## 35.4. Ingress devolve `404`
-
-Primeiro separar camadas:
-
-```text
-NodePort responde?
-Traefik está Running?
-Host header está correto?
-IngressClass é traefik?
-Ingress aponta para Service certo?
-Service tem EndpointSlice?
-```
-
-Testar:
-
-```bash
-curl -v \
-  -H "Host: symfony-ingress.lab" \
-  http://<WORKER-IP>:30080/health
-```
-
-## 35.5. Gateway não encaminha
-
-Observar:
-
-```bash
-kubectl get gateway
-kubectl describe gateway <GATEWAY>
-kubectl get httproute -o yaml
-```
-
-Condições:
-
-```text
-Gateway Accepted / Programmed
-HTTPRoute Accepted=True
-HTTPRoute ResolvedRefs=True
-```
-
-Confirmar ainda:
-
-```text
-Gateway listener = 8000
-Traefik entryPoint web = 8000
-Service externo = NodePort 30080
-```
-
-## 35.6. PostgreSQL Pod está `Running` mas não `Ready`
-
-Observar:
-
-```bash
-kubectl get pod postgres-0
-kubectl describe pod postgres-0
-kubectl logs postgres-0
-```
-
-A readiness probe com `pg_isready` ajuda a distinguir processo iniciado de serviço pronto.
-
-## 35.7. Job de backup falha
-
-Observar:
-
-```bash
-kubectl get job postgres-backup
-kubectl describe job postgres-backup
-kubectl logs job/postgres-backup
-kubectl get pvc backup-pvc
-```
-
-Validar:
-
-```text
-DNS postgres
-credenciais
-DB symfony_demo
-PVC montada
-pg_dump
-espaço
+  ↓
+kubectl get
+  ↓
+kubectl describe
+  ↓
+Events
+  ↓
+logs quando aplicável
+  ↓
+CLASSIFICAR A CAMADA
+  ↓
+HIPÓTESE
+  ↓
+CORREÇÃO
+  ↓
+VALIDAÇÃO
 ```
 
 ---
 
-# 36. Como interpretar outputs importantes
-
-## 36.1. `kubectl get pods -o wide`
-
-| Coluna | Significado |
-|---|---|
-| `READY` | containers prontos / total |
-| `STATUS` | estado resumido |
-| `RESTARTS` | reinícios |
-| `IP` | IP do Pod |
-| `NODE` | Node escolhido pelo scheduler |
-
-`Running` não implica necessariamente `Ready`.
-
-## 36.2. `kubectl get pvc`
-
-Exemplo:
+# 25. Resumo da sessão
 
 ```text
-NAME              STATUS   CAPACITY   ACCESS MODES   STORAGECLASS
-data-postgres-0   Bound    2Gi        RWO            local-path
-```
-
-- `Pending` — claim ainda não ligada a PV;
-- `Bound` — claim ligada a volume;
-- `STORAGECLASS` — política/provisioner selecionado.
-
-## 36.3. `kubectl get pv`
-
-Observar:
-
-```text
-CAPACITY
-ACCESS MODES
-RECLAIM POLICY
-STATUS
-CLAIM
-STORAGECLASS
-```
-
-## 36.4. `kubectl get gateway`
-
-`PROGRAMMED=True` indica que o controller programou a infraestrutura necessária para o Gateway, dentro das capacidades do ambiente.
-
-## 36.5. HTTPRoute
-
-No YAML de status procurar:
-
-```yaml
-type: Accepted
-status: "True"
-```
-
-e:
-
-```yaml
-type: ResolvedRefs
-status: "True"
+Deployment reconcilia
+DaemonSet cobre Nodes elegíveis
+StatefulSet fornece identidade estável
+Headless Service fornece DNS individual
+PVC solicita storage
+StorageClass + provisioner criam PV
+WaitForFirstConsumer coordena storage e scheduling
+local-path implica afinidade ao Node
+SQLite persistente vive numa PVC
+Service depende de selectors e EndpointSlices
+Ingress e Gateway API encaminham HTTP
+Job executa trabalho finito
+CronJob agenda Jobs
+SQLite3::backup cria cópia consistente
+PRAGMA integrity_check valida a base
+perda do Pod é resolvida por persistência
+perda da PVC exige backup + restore
+Persistência ≠ Backup ≠ Alta Disponibilidade
 ```
 
 ---
 
-# 37. Comandos de observação que deves dominar
+# 26. Exercícios de consolidação
 
-| Objetivo | Comando |
-|---|---|
-| Nodes | `kubectl get nodes -o wide` |
-| Pods | `kubectl get pods -o wide` |
-| Controladores | `kubectl get deploy,ds,sts` |
-| Rollout Deployment | `kubectl rollout status deployment/<nome>` |
-| Rollout DaemonSet | `kubectl rollout status daemonset/<nome>` |
-| StatefulSet | `kubectl get statefulset` |
-| Services | `kubectl get svc` |
-| EndpointSlices | `kubectl get endpointslices` |
-| PVC | `kubectl get pvc` |
-| PV | `kubectl get pv` |
-| StorageClass | `kubectl get storageclass` |
-| Ingress | `kubectl get ingress` |
-| GatewayClass | `kubectl get gatewayclass` |
-| Gateway | `kubectl get gateway` |
-| HTTPRoute | `kubectl get httproute` |
-| Jobs | `kubectl get jobs` |
-| CronJobs | `kubectl get cronjobs` |
-| Events | `kubectl get events --sort-by=.lastTimestamp` |
-| Detalhes | `kubectl describe <tipo> <nome>` |
-| Logs | `kubectl logs <pod>` |
+1. Explica por que `web-1` pode reaparecer com o mesmo nome e UID diferente.
+2. Explica por que uma PVC `Pending` pode ser normal com `WaitForFirstConsumer`.
+3. Indica que evidência distingue `FailedScheduling` de `FailedMount`.
+4. Explica por que um Service pode existir sem conseguir encaminhar tráfego.
+5. Distingue `IngressClass`, `GatewayClass`, `Gateway` e `HTTPRoute`.
+6. Explica por que copiar diretamente um ficheiro SQLite em utilização pode ser inadequado.
+7. Justifica a utilização de `PRAGMA integrity_check` e SHA256 no backup/restore.
+8. Explica por que `backup-pvc` sozinho não é proteção suficiente contra perda física do Worker.
+9. Distingue a recuperação após perda de Pod da recuperação após eliminação da PVC.
+10. Explica por que este laboratório não deve ser apresentado como uma arquitetura de Alta Disponibilidade.
 
-Flags frequentes:
+## Regra final de evidência
 
-| Flag | Função |
-|---|---|
-| `-n <namespace>` | restringe a um namespace |
-| `-A` | todos os namespaces |
-| `-o wide` | colunas adicionais |
-| `-o yaml` | representação YAML |
-| `-l chave=valor` | label selector |
-| `--sort-by` | ordena por campo |
-| `--timeout` | limita o tempo de espera |
-| `--for=condition=...` | espera por uma condição |
-| `--for=create` | espera pela criação do recurso |
-| `-i` em `kubectl exec` | mantém stdin ligado ao processo remoto |
-
----
-
-# 38. Pontos-chave da sessão
+A Sessão 5 está concluída quando consegues **apresentar e explicar**:
 
 ```text
-Deployment gere ReplicaSets e réplicas substituíveis.
-
-DaemonSet mantém Pods em Nodes elegíveis.
-
-StatefulSet fornece identidade estável e ordenação.
-StatefulSet não garante distribuição por Nodes.
-StatefulSet pode existir sem volumeClaimTemplates.
-
-Headless Service permite identidade DNS por Pod.
-
-PVC exprime necessidade.
-PV representa volume.
-StorageClass define a classe/política de provisioning.
-
-local-path-provisioner é external provisioner, não CSI.
-
-WaitForFirstConsumer adia o binding/provisioning até existir consumidor.
-
-Storage local implica afinidade ao Node.
-
-reclaimPolicy Delete não é backup.
-
-Service usa selectors.
-EndpointSlice mostra backends.
-
-Ingress e Gateway API podem usar o mesmo Traefik.
-
-Gateway listener 8000 é interno.
-NodePort 30080 é a entrada externa HTTP.
-
-Job é finito.
-CronJob cria Jobs recorrentes.
-
-Persistência ≠ Backup.
-Backup sem restore testado é proteção incompleta.
+reconciliação de Deployment
++
+DaemonSet em Nodes elegíveis
++
+identidade de StatefulSet + Headless DNS
++
+WaitForFirstConsumer observado
++
+PV local + nodeAffinity interpretados
++
+persistência SQLite comprovada
++
+Service quebrado diagnosticado por selector/EndpointSlice
++
+Ingress funcional
++
+Gateway + HTTPRoute aceites/resolvidos
++
+backup SQLite com marcador + integrity_check
++
+backup copiado para fora do cluster
++
+perda de Pod recuperada sem restore
++
+eliminação da PVC recuperada por restore
++
+Persistência ≠ Backup ≠ Alta Disponibilidade
 ```
-
----
-
-# 39. Exercícios de consolidação
-
-## Exercício 1 — Escolher o workload
-
-Indica o objeto mais adequado e justifica:
-
-1. API web stateless com três réplicas.
-2. Agente de recolha de logs em cada Worker.
-3. Base de dados que precisa de identidade estável.
-4. Exportação de base de dados que deve terminar.
-5. Exportação diária às 03:00.
-
-## Exercício 2 — Reconciliação
-
-Tens um Deployment com:
-
-```text
-replicas desejadas = 2
-Pods observados     = 2
-```
-
-Eliminas um Pod manualmente.
-
-Explica:
-
-- o que acontece ao número de réplicas;
-- que controlador participa;
-- porque o novo Pod não precisa do mesmo nome.
-
-## Exercício 3 — StatefulSet
-
-Explica por que:
-
-```text
-web-0
-web-1
-```
-
-é uma diferença operacional relevante face aos nomes gerados por um Deployment.
-
-Depois responde:
-
-> Um StatefulSet de duas réplicas garante uma réplica em cada Worker?
-
-Justifica.
-
-## Exercício 4 — PVC `Pending`
-
-Uma PVC usa:
-
-```text
-StorageClass: local-path
-volumeBindingMode: WaitForFirstConsumer
-```
-
-Foi criada, mas ainda não existe consumidor.
-
-O estado `Pending` representa necessariamente falha? Explica.
-
-## Exercício 5 — Node Affinity do PV
-
-O PV mostra:
-
-```text
-kubernetes.io/hostname in [k8s-wk-03]
-```
-
-O que acontece se um Pod que usa essa PVC tentar ser agendado noutro Worker?
-
-## Exercício 6 — Service sem endpoints
-
-O Service existe, mas:
-
-```bash
-kubectl get endpointslices \
-  -l kubernetes.io/service-name=symfony-demo
-```
-
-não apresenta addresses úteis.
-
-Indica pelo menos três evidências que recolherias antes de alterar a aplicação.
-
-## Exercício 7 — Portas Traefik
-
-Explica a diferença entre:
-
-```text
-Gateway listener     8000
-Service HTTP           80
-NodePort            30080
-```
-
-## Exercício 8 — Gateway API
-
-Ordena:
-
-```text
-Service
-HTTPRoute
-GatewayClass
-Gateway
-cliente
-```
-
-e explica o papel de cada objeto.
-
-## Exercício 9 — Persistência
-
-Eliminamos `postgres-0`, mas a PVC permanece e os dados continuam.
-
-O que foi comprovado?
-
-O que **não** foi comprovado?
-
-## Exercício 10 — Backup
-
-Porque é insuficiente afirmar “temos backup” apenas porque existe:
-
-```text
-/backup/dump.sql
-```
-
-num PVC dentro do mesmo cluster?
-
-## Exercício 11 — Restore
-
-Explica o fluxo:
-
-```bash
-kubectl exec -i pg-client -- psql ... < dump.sql
-```
-
-O ficheiro é copiado para `postgres-0` antes do restore?
-
-## Exercício 12 — Cenários de falha
-
-Compara:
-
-```text
-A) eliminar Pod postgres-0
-B) eliminar PVC data-postgres-0
-```
-
-Que mecanismo permite recuperar em cada cenário?
-
----
-
-# 40. Autoavaliação
-
-No final da sessão, confirma se consegues afirmar:
-
-- [ ] Sei escolher entre Deployment, DaemonSet, StatefulSet, Job e CronJob.
-- [ ] Sei explicar `Deployment → ReplicaSet → Pods`.
-- [ ] Sei demonstrar reconciliação após perda de um Pod.
-- [ ] Sei explicar “um Pod por Node elegível” num DaemonSet.
-- [ ] Sei explicar ordinais e identidade estável num StatefulSet.
-- [ ] Sei explicar por que StatefulSet não implica HA nem dispersão de Pods.
-- [ ] Sei explicar a função do Headless Service.
-- [ ] Sei resolver um nome DNS individual de uma réplica.
-- [ ] Sei distinguir PV, PVC e StorageClass.
-- [ ] Sei explicar dynamic provisioning.
-- [ ] Sei interpretar `WaitForFirstConsumer`.
-- [ ] Sei explicar a afinidade de um PV local ao Node.
-- [ ] Sei explicar por que local-path não é CSI nem storage distribuído.
-- [ ] Sei validar persistência após recriação de Pod.
-- [ ] Sei interpretar `reclaimPolicy: Delete`.
-- [ ] Sei diagnosticar um Service com EndpointSlice.
-- [ ] Sei testar DNS interno.
-- [ ] Sei explicar Ingress, IngressClass e Ingress Controller.
-- [ ] Sei interpretar GatewayClass.
-- [ ] Sei criar Gateway e HTTPRoute.
-- [ ] Sei procurar `Accepted=True` e `ResolvedRefs=True`.
-- [ ] Sei distinguir listener 8000, Service 80 e NodePort 30080.
-- [ ] Sei explicar Job e CronJob.
-- [ ] Sei criar e validar um `pg_dump`.
-- [ ] Sei retirar uma cópia do dump para fora do cluster.
-- [ ] Sei distinguir perda de Pod de perda dos dados.
-- [ ] Sei executar um restore por streaming.
-- [ ] Sei justificar **Persistência ≠ Backup**.
-
----
-
-# 41. Delimitação de âmbito
-
-## Incluído nesta sessão
-
-- Deployment, ReplicaSet e reconciliação;
-- DaemonSet;
-- StatefulSet;
-- identidade estável e Headless Service;
-- PV, PVC, StorageClass e dynamic provisioning;
-- local-path e `WaitForFirstConsumer`;
-- PostgreSQL 16 stateful;
-- Services, DNS e EndpointSlice;
-- Ingress com Traefik;
-- Gateway API: GatewayClass, Gateway e HTTPRoute;
-- Job e CronJob;
-- backup lógico;
-- falhas controladas;
-- restore.
-
-## Deliberadamente não aprofundado
-
-- affinity e topology spread avançados — Sessão 6;
-- quotas, requests/limits e scheduling avançado — Sessão 6;
-- RBAC e políticas de segurança — Sessão 6;
-- alta disponibilidade do Control Plane — Sessão 7;
-- observabilidade aprofundada — Sessão 7;
-- integração completa Symfony → PostgreSQL através de ConfigMaps/Secrets e manifests de aplicação — Sessão 9;
-- storage distribuído/CSI empresarial em profundidade;
-- estratégias empresariais completas de backup, retenção e disaster recovery.
-
----
-
-# 42. Laboratório e recursos de apoio
-
-O procedimento operacional completo encontra-se em:
-
-```text
-sessao-05/formando/labs/laboratorio_integrado_sessao_5.md
-```
-
-Manifests de referência:
-
-```text
-sessao-05/manifests/
-```
-
-O script:
-
-```text
-sessao-05/formador/validar_lab_sessao5.sh
-```
-
-é um recurso de **validação do formador**. Não substitui a execução manual do laboratório pelo formando.
-
-O laboratório manual obriga a:
-
-```text
-executar
-→ observar
-→ interpretar
-→ registar evidência
-→ explicar
-```
-
----
-
-# 43. Fontes e leituras recomendadas
-
-A preparação conceptual do manual é coerente com a bibliografia disponibilizada na formação, nomeadamente:
-
-- *The Kubernetes Book* — workloads, Services, storage, reconciliação e operação;
-- *Kubernetes in Action* — controllers, StatefulSets, Services, DNS e persistência;
-- *Kubernetes: Up & Running* — workloads, Services, storage e práticas operacionais.
-
-Para execução do laboratório devem também ser consultadas as documentações oficiais dos componentes usados na baseline:
-
-- Kubernetes;
-- Gateway API;
-- Traefik;
-- Rancher Local Path Provisioner;
-- PostgreSQL.
-
-As versões concretas devem ser novamente validadas quando a formação for atualizada.
-
----
-
-# 44. Síntese final
-
-A Sessão 5 parte de um cluster já construído e passa a administrar o que vive dentro dele:
-
-```text
-Deployment
-    ↓
-reconciliação
-
-DaemonSet
-    ↓
-Node elegível
-
-StatefulSet
-    ↓
-identidade estável
-    ↓
-Headless Service
-
-PVC
-    ↓
-StorageClass
-    ↓
-Provisioner
-    ↓
-PV local
-    ↓
-persistência
-
-Service
-    ↓
-EndpointSlice
-    ↓
-DNS
-
-Traefik
-   ├── Ingress
-   └── Gateway API
-
-PostgreSQL
-    ↓
-Job / pg_dump
-    ↓
-cópia fora do cluster
-    ↓
-perda controlada
-    ↓
-restore
-```
-
-A conclusão operacional é:
-
-```text
-PERSISTÊNCIA
-     ≠
-BACKUP
-     ≠
-ALTA DISPONIBILIDADE
-```
-
-Na Sessão 6, a administração avança para **recursos, scheduling e segurança**.
