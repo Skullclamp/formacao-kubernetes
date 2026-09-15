@@ -489,6 +489,11 @@ PVC
 
 A ordem de aplicação não é arbitrária: primeiro disponibilizamos configuração e descoberta de serviço; depois os workloads que dependem delas.
 
+
+'''bash
+kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+'''
+
 ## 2.0. Garantir o provisionamento dinâmico `local-path`
 
 O `StatefulSet` PostgreSQL deste laboratório pede explicitamente:
