@@ -172,11 +172,42 @@ Se houver falta de espaço, corrigir primeiro o volume/filesystem e voltar a val
 
 ## 1.2. Swap, módulos e sysctl
 
-Desativamos a swap para manter a baseline deste laboratório e carregamos módulos necessários à rede e ao armazenamento em camadas dos containers.
+Neste laboratório a swap deve ficar **desativada de forma persistente**, e não apenas até ao próximo reboot. `swapoff -a` desativa a swap atualmente ativa, mas é também necessário impedir que volte a ser ativada a partir de `/etc/fstab` ou por unidades `.swap` do systemd.
+
+### 1.2.1. Desativar a swap de forma persistente
 
 ```bash
+# 1. Desativar toda a swap atualmente ativa
 sudo swapoff -a
 
+# 2. Comentar entradas de swap ativas em /etc/fstab
+#    É criada automaticamente uma cópia de segurança em /etc/fstab.bak
+sudo sed -i.bak '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
+
+# 3. Mascarar unidades systemd de swap, impedindo ativações automáticas
+sudo systemctl --type=swap --all --no-legend --no-pager \
+  | awk '{print $1}' \
+  | while read -r unit; do
+      [ -n "$unit" ] && sudo systemctl mask "$unit"
+    done
+
+# 4. Confirmar que a swap está a 0B
+free -h
+swapon --show
+```
+
+### O que estamos a fazer
+
+- `swapoff -a` desativa imediatamente todas as áreas de swap ativas;
+- o `sed` comenta as linhas de swap em `/etc/fstab`, evitando que sejam reativadas no próximo arranque;
+- `systemctl mask` impede que unidades `.swap` identificadas pelo systemd sejam iniciadas automaticamente;
+- `free -h` deve mostrar `Swap: 0B` e `swapon --show` não deve apresentar entradas.
+
+> O ficheiro `/etc/fstab.bak` permite recuperar a configuração anterior se for necessário. A desativação permanente da swap é uma decisão desta baseline de laboratório.
+
+### 1.2.2. Carregar módulos necessários
+
+```bash
 cat <<'EOF' | sudo tee /etc/modules-load.d/k8s.conf
 overlay
 br_netfilter
@@ -186,7 +217,11 @@ sudo modprobe overlay
 sudo modprobe br_netfilter
 ```
 
-Depois ativamos forwarding IPv4 e o processamento de tráfego bridged por netfilter:
+O módulo `overlay` é utilizado pelo armazenamento em camadas dos containers. O `br_netfilter` permite que tráfego de interfaces bridge seja processado pelas regras de netfilter usadas no networking do cluster.
+
+### 1.2.3. Configurar parâmetros de rede do kernel
+
+Ativar forwarding IPv4 e o processamento de tráfego bridged por netfilter:
 
 ```bash
 cat <<'EOF' | sudo tee /etc/sysctl.d/k8s.conf
@@ -200,6 +235,8 @@ sudo sysctl --system
 Validar:
 
 ```bash
+free -h
+swapon --show
 lsmod | grep -E 'overlay|br_netfilter'
 sysctl net.ipv4.ip_forward
 sysctl net.bridge.bridge-nf-call-iptables
@@ -208,13 +245,15 @@ sysctl net.bridge.bridge-nf-call-iptables
 ### O que observar
 
 ```text
+Swap = 0B
+swapon --show sem entradas
 overlay carregado
 br_netfilter carregado
 net.ipv4.ip_forward = 1
 net.bridge.bridge-nf-call-iptables = 1
 ```
 
-Se algum módulo não aparecer ou algum `sysctl` não devolver `1`, parar e corrigir antes de instalar o runtime.
+Se a swap continuar ativa, algum módulo não aparecer ou algum `sysctl` não devolver `1`, parar e corrigir antes de instalar o runtime.
 
 ## 1.3. Resolução entre nós
 
@@ -251,7 +290,8 @@ ping -c 2 k8s-wk-01
 ```text
 hostname correto
 IPs corretos
-swap desativada
+swap desativada de forma persistente
+Swap = 0B e swapon --show sem entradas
 cgroup v2
 módulos overlay e br_netfilter carregados
 ip_forward = 1
@@ -260,7 +300,7 @@ resolução e ping entre Nodes
 filesystem / sem pressão de espaço
 ```
 
-**Evidência:** guardar `hostname`, `df -h /`, resultado dos dois `sysctl` e um teste de resolução.
+**Evidência:** guardar `hostname`, `df -h /`, `free -h`, `swapon --show`, resultado dos dois `sysctl` e um teste de resolução.
 
 ---
 
@@ -524,9 +564,9 @@ fi
 bash "$REPO_DIR/sessao-04/labs/scripts/cp1_cp3_preparar_nodes.sh"
 ```
 
-O script valida o hostname e o IP do Node, prepara swap/módulos/sysctl e `/etc/hosts`, instala e valida `containerd 2.2.6`, garante CRI disponível e `SystemdCgroup=true`, instala `kubeadm`, `kubelet` e `kubectl` em `v1.35.8` e coloca os packages relevantes em `hold`.
+O script prepara swap/módulos/sysctl, instala e valida `containerd 2.2.6`, garante CRI disponível e `SystemdCgroup=true`, instala `kubeadm`, `kubelet` e `kubectl` em `v1.35.8` e coloca os packages relevantes em `hold`. Não valida nem depende de hostnames ou endereços IP específicos dos Nodes.
 
-> Esta é uma alternativa à execução manual dos CP1 a CP3. Deve ser executada nos **dois Nodes**. O script recusa executar se detetar que o Node já foi inicializado ou integrado num cluster, evitando alterar a baseline depois de CP4/CP6.
+> Esta é uma alternativa à execução manual dos CP1 a CP3. Deve ser executada nos **dois Nodes**. O script recusa executar se detetar que o Node já foi inicializado ou integrado num cluster, evitando alterar a baseline depois de CP4/CP6. A validação de hostname, IP e resolução entre Nodes deve ser feita de acordo com a topologia atribuída a cada formando.
 
 ---
 
