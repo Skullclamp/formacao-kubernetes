@@ -591,6 +591,11 @@ symfony-service.yaml
 → cria um endpoint estável para chegar às réplicas selecionadas por labels
 ```
 
+'''bash
+kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+'''
+
+
 ### O que observar para validar
 
 O `apply` bem-sucedido significa apenas que os objetos foram aceites. A validação real vem no passo seguinte, quando os controllers convergem e os Pods ficam `Ready`.
