@@ -1,40 +1,76 @@
-# README-LAB — Sessão 5
+# Laboratório Integrado — Sessão 5
+## Kubernetes Admin II — Administração e Governação de uma Aplicação
 
-## Laboratório Integrado — Administração e Governação de uma Aplicação Kubernetes
+**Sessão:** 5 de 10  
+**Duração:** 4 horas / 240 minutos  
+**Nível:** intermédio  
+**Topologia:** 1 Control Plane + 2 Workers elegíveis  
+**CNI:** Calico  
+**Aplicação:** Symfony Demo + PostgreSQL 16  
+**Namespace:** `lab-admin`
 
-Laboratório integrado de 240 minutos. Ambiente: cluster partilhado (1 Control Plane + 2 Workers, Calico). Aplicação: Symfony Demo + PostgreSQL 16, Namespace `lab-admin`.
+Este documento é o **único laboratório integrado da Sessão 5**. O objetivo não é apenas executar comandos: em cada checkpoint o formando deve saber **o que está a fazer, por que o faz, o que deve observar e que evidência prova o resultado**.
 
-> **Pré-requisito crítico:** todos os manifests abaixo devem estar preparados, testados e disponíveis (repositório/pasta partilhada) **antes** da sessão. Os formandos aplicam, interpretam, alteram e diagnosticam — não escrevem YAML de raiz.
-
-> **Namespace:** por omissão, este guião assume **um único Namespace `lab-admin`, partilhado por todos os formandos** (laboratório colaborativo, com alternância de quem opera o terminal). Se a formação decidir por Namespaces individuais (`lab-admin-f1`…`lab-admin-f5`), substituir `lab-admin` pelo Namespace de cada formando em todos os comandos abaixo, e coordenar centralmente qualquer alteração a Nodes (Fase 3), que são recursos cluster-scoped partilhados.
-
----
-
-## 1. Checklist de preparação (antes da formação)
-
-- [ ] Cluster acessível, `kubectl get nodes -o wide` devolve os 3 nós `Ready`.
-- [ ] O Control Plane permanece não elegível para workloads aplicacionais normais (por exemplo, com taint `NoSchedule` adequado).
-- [ ] `kubectl get sc` mostra uma StorageClass com provisionamento dinâmico.
-- [ ] Calico operacional: `kubectl get pods -A | grep -i calico` sem erros e enforcement de `NetworkPolicy` previamente validado.
-- [ ] CoreDNS operacional; Service e labels reais identificados previamente com `kubectl get pods -n kube-system --show-labels` e `kubectl get svc -n kube-system` para construir `allow-dns.yaml` sem assumir labels.
-- [ ] Imagem `ghcr.io/skullclamp/symfony-demo:1.0.0` acessível por pull a partir dos nós e configuração de runtime validada com `APP_ENV=prod` para esta imagem.
-- [ ] Imagem `postgres:16` acessível por pull a partir dos nós.
-- [ ] Nome da base de dados aplicacional (`POSTGRES_DB`) confirmado e igual no StatefulSet/Symfony/Job de backup.
-- [ ] A rota `/ready` da aplicação foi testada previamente e **confirma dependência real do PostgreSQL**. Se não o fizer, o formador deve substituir `/ready`, antes da sessão, por uma rota HTTP validada que consulte efetivamente a base de dados.
-- [ ] A imagem usada em `04-networking/pod-debug.yaml` foi previamente validada e contém `curl`, `nslookup` e `nc`; o laboratório não depende de ferramentas cuja existência na imagem não tenha sido confirmada.
-- [ ] Todos os manifests da secção 2 testados de ponta a ponta pelo menos uma vez.
-- [ ] Job de backup da **Fase 7 / diretoria** **`07-backup/`** testado e a produzir um artefacto identificável.
-- [ ] Pelo menos dois Workers elegíveis e `Ready` para a Fase 3; o guião descobre dinamicamente o Worker usado no `nodeSelector`, sem depender de nomes ou IPs específicos.
-- [ ] Antes da sessão, confirmar que nenhum Node possui já a label `disco=ssd`, para que a label criada pelo laboratório possa ser identificada e removida sem ambiguidade.
-- [ ] `03-scheduling/symfony-antiaffinity-patch.yaml` validado com `requiredDuringSchedulingIgnoredDuringExecution`, `topologyKey: kubernetes.io/hostname` e estratégia de rollout compatível com apenas dois Workers (`maxSurge: 0`, `maxUnavailable: 1`).
-- [ ] `ResourceQuota`/`LimitRange` da Fase 1 validados com margem para **todos** os Pods previstos no laboratório (PostgreSQL, 2× Symfony, `debug`, `client`, `intruder`, backup Job, `backup-reader`, `pod-pending-exemplo`) — só `pod-acima-da-quota.yaml` deve produzir a falha intencional de quota; nenhum outro Pod pode falhar por este motivo.
-
----
-
-## 2. Estrutura de diretórios
+A sequência pedagógica segue o padrão comum da formação:
 
 ```text
-lab-admin/
+OBJETIVO
+   ↓
+O QUE ESTAMOS A FAZER E PORQUÊ
+   ↓
+ONDE EXECUTAR
+   ↓
+COMANDOS / MANIFESTOS
+   ↓
+FLAGS / CAMPOS IMPORTANTES
+   ↓
+OUTPUT / ESTADO ESPERADO
+   ↓
+O QUE OBSERVAR
+   ↓
+TESTE NEGATIVO / FALHA CONTROLADA, quando aplicável
+   ↓
+CHECKPOINT — NÃO AVANÇAR SEM VALIDAR
+   ↓
+EVIDÊNCIA A REGISTAR
+```
+
+> **Regra do laboratório:** um `kubectl apply` sem erro prova apenas que a API aceitou o recurso. Não prova que o comportamento pretendido está a acontecer.
+
+> **Portabilidade:** os comandos destinados aos formandos não dependem de nomes nem IPs específicos de Nodes. O Worker usado no exercício de `nodeSelector` é descoberto dinamicamente.
+
+---
+
+# 0. Baseline e preparação do formador
+
+Antes da sessão, o formador deve confirmar:
+
+- cluster acessível com 3 Nodes `Ready`;
+- Control Plane não elegível para workloads aplicacionais normais;
+- pelo menos 2 Workers elegíveis e `Ready`;
+- StorageClass com provisionamento dinâmico;
+- Calico operacional e enforcement de `NetworkPolicy` previamente validado;
+- CoreDNS operacional e respetivas labels/Service identificados;
+- imagem `ghcr.io/skullclamp/symfony-demo:1.0.0` acessível e validada com `APP_ENV=prod`;
+- imagem `postgres:16` acessível;
+- `POSTGRES_DB` coerente entre PostgreSQL, Symfony e Job de backup;
+- rota `/ready` validada como dependente do PostgreSQL;
+- imagem de diagnóstico de `04-networking/pod-debug.yaml` com `curl`, `nslookup` e `nc`;
+- nenhum Node com a label `disco=ssd` antes do laboratório;
+- `symfony-antiaffinity-patch.yaml` com Anti-Affinity obrigatória por `kubernetes.io/hostname` e rollout `maxSurge: 0`, `maxUnavailable: 1`;
+- `ResourceQuota` com margem para todos os Pods previstos;
+- todos os manifests testados de ponta a ponta.
+
+O laboratório foi validado de ponta a ponta com Symfony Demo, PostgreSQL 16, Calico, CoreDNS e provisionamento dinâmico `local-path`. O restore completo não faz parte do percurso obrigatório de 240 minutos.
+
+---
+
+# Estrutura dos recursos
+
+A partir da diretoria `sessao-05-06/`:
+
+```text
+sessao-05-06/
 ├── 00-namespace.yaml
 ├── 01-governacao/
 │   ├── limitrange.yaml
@@ -64,35 +100,126 @@ lab-admin/
 │   ├── allow-app-db.yaml
 │   ├── pod-client.yaml
 │   └── pod-intruder.yaml
-└── 07-backup/
-    ├── backup-pvc.yaml
-    ├── backup-job.yaml
-    ├── backup-reader.yaml
-    └── allow-backup-db.yaml
+├── 07-backup/
+│   ├── backup-pvc.yaml
+│   ├── backup-job.yaml
+│   ├── backup-reader.yaml
+│   └── allow-backup-db.yaml
+└── labs/
+    └── laboratorio_integrado_sessao_5.md
 ```
 
 ---
 
-## 3. Fase 0 — Preparação (10 min)
+# CP0 — Obter os recursos e validar o cluster (10 min)
+
+## Objetivo
+
+Garantir que o repositório está atualizado, que o cluster cumpre a baseline e que o Namespace do laboratório pode ser criado em segurança.
+
+**Executar em:** terminal de administração com `kubectl` funcional e permissões para os recursos usados no laboratório.
+
+## O que estamos a fazer e porquê
+
+Não assumimos que a shell abriu dentro do repositório. Primeiro obtemos ou atualizamos a branch `main`; depois validamos Nodes, storage, CNI, DNS e políticas existentes antes de criar recursos.
+
+## 0.1. Obter ou atualizar o repositório
 
 ```bash
-kubectl apply -f 00-namespace.yaml
+clear
 
+REPO_DIR="$HOME/formacao-kubernetes"
+REPO_URL="https://github.com/Skullclamp/formacao-kubernetes.git"
+
+if [ -d "$REPO_DIR/.git" ]; then
+  git -C "$REPO_DIR" switch main
+  git -C "$REPO_DIR" pull --ff-only origin main
+elif [ -e "$REPO_DIR" ]; then
+  BACKUP_DIR="${REPO_DIR}.bak-$(date +%Y%m%d-%H%M%S)"
+  mv "$REPO_DIR" "$BACKUP_DIR"
+  echo "Diretoria anterior preservada em: $BACKUP_DIR"
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+else
+  git clone --branch main --single-branch "$REPO_URL" "$REPO_DIR"
+fi
+
+cd "$REPO_DIR/sessao-05-06"
+
+git -C "$REPO_DIR" branch --show-current
+git -C "$REPO_DIR" status --short
+```
+
+### Como interpretar
+
+```text
+git -C ...        → executa Git na diretoria indicada
+switch main       → garante a branch usada na formação
+pull --ff-only    → atualiza sem criar merges locais inesperados
+--single-branch   → clona apenas a branch necessária
+```
+
+## 0.2. Validar infraestrutura
+
+```bash
 kubectl get nodes -o wide
 kubectl get sc
 kubectl get pods -A | grep -i calico
 kubectl get pods -n kube-system --show-labels
 kubectl get svc -n kube-system
 kubectl get networkpolicy -A
+kubectl get nodes -l disco=ssd
 ```
 
-Não alteramos o `kubeconfig` do formando com `kubectl config set-context --current --namespace=...`: todos os comandos abaixo usam `-n lab-admin` explícito, o que é mais seguro e evita que o contexto do formando fique apontado para um Namespace já eliminado no final da sessão.
+### O que observar
 
-**Resultado esperado:** Namespace `lab-admin` criado; 3 nós `Ready`; StorageClass disponível; Calico sem erros; CoreDNS identificado; estado inicial de `NetworkPolicy` conhecido; Control Plane não utilizado como destino de workloads aplicacionais.
+- 3 Nodes `Ready`;
+- Control Plane não utilizado como destino de workloads aplicacionais;
+- 2 Workers disponíveis;
+- StorageClass dinâmica disponível;
+- Calico sem erros;
+- CoreDNS operacional;
+- nenhuma label `disco=ssd` preexistente.
+
+## 0.3. Criar o Namespace
+
+```bash
+kubectl apply -f 00-namespace.yaml
+kubectl get namespace lab-admin
+```
+
+Todos os comandos seguintes usam `-n lab-admin` explicitamente. Não alteramos o contexto atual do `kubeconfig`.
+
+### CHECKPOINT CP0
+
+```text
+branch main ativa
+recursos da sessão disponíveis
+3 Nodes Ready
+StorageClass disponível
+Calico e CoreDNS operacionais
+nenhum Node previamente marcado disco=ssd
+Namespace lab-admin Active
+```
+
+**Não avançar** se a infraestrutura base estiver degradada.
+
+**Evidência:** guardar `kubectl get nodes -o wide`, `kubectl get sc` e a confirmação do Namespace.
 
 ---
 
-## 4. Fase 1 — Governação inicial (30 min)
+# CP1 — Governação inicial com LimitRange e ResourceQuota (30 min)
+
+## Objetivo
+
+Aplicar defaults de recursos ao Namespace e provar que uma quota pode impedir a criação de um workload que excede a política definida.
+
+**Executar em:** terminal de administração, dentro de `sessao-05-06/`.
+
+## O que estamos a fazer e porquê
+
+`LimitRange` permite definir defaults/limites por objeto; `ResourceQuota` controla o consumo agregado do Namespace. Primeiro observamos um Pod que recebe recursos por defeito; depois provocamos uma falha controlada por quota.
+
+## 1.1. Aplicar governação
 
 ```bash
 kubectl apply -f 01-governacao/limitrange.yaml
@@ -100,27 +227,65 @@ kubectl apply -f 01-governacao/resourcequota.yaml
 
 kubectl describe limitrange -n lab-admin
 kubectl describe resourcequota -n lab-admin
+```
 
+## 1.2. Provar a aplicação de defaults
+
+```bash
 kubectl run teste-sem-limites --image=nginx -n lab-admin
+
 kubectl get pod teste-sem-limites \
   -n lab-admin \
-  -o jsonpath='{.spec.containers[0].resources}'
+  -o jsonpath='{.spec.containers[0].resources}{"\n"}'
+
 kubectl delete pod teste-sem-limites -n lab-admin
 ```
 
-Eliminar o Pod de teste é obrigatório: caso contrário continua a consumir quota e pode interferir com o Symfony/PostgreSQL da Fase 2.
+### Flags importantes
 
-**Falha intencional:** tentar criar um recurso que ultrapasse a quota (ex.: um segundo Pod com `requests.cpu` elevado).
+```text
+-n lab-admin     → Namespace alvo
+-o jsonpath=...  → extrai diretamente o campo de recursos do Pod
+```
+
+Eliminar o Pod de teste é obrigatório para não consumir quota nas fases seguintes.
+
+## 1.3. Falha controlada — exceder a quota
 
 ```bash
 kubectl apply -f 01-governacao/pod-acima-da-quota.yaml
 ```
 
-**Resultado esperado:** erro `exceeded quota` — registar a mensagem completa como evidência.
+### Resultado esperado
+
+A API deve rejeitar o recurso com mensagem semelhante a `exceeded quota`.
+
+### CHECKPOINT CP1
+
+```text
+LimitRange aplicado
+ResourceQuota aplicado
+Pod sem recursos explícitos recebeu defaults
+Pod acima da quota foi rejeitado
+```
+
+**Evidência:** guardar os recursos atribuídos ao Pod de teste e a mensagem completa da rejeição por quota.
 
 ---
 
-## 5. Fase 2 — Aplicação e persistência (45 min)
+# CP2 — Disponibilizar a aplicação e o storage (45 min)
+
+## Objetivo
+
+Disponibilizar PostgreSQL persistente e duas réplicas Symfony, observando as relações entre Secret, Service, StatefulSet, Deployment e PVC.
+
+**Executar em:** terminal de administração, dentro de `sessao-05-06/`.
+
+## O que estamos a fazer e porquê
+
+Criamos primeiro a configuração e o endpoint estável da base de dados; depois o StatefulSet e a aplicação. Os rollouts são aguardados explicitamente antes de avançar para alterações de scheduling.
+
+## 2.1. Aplicar os recursos na ordem das dependências
 
 ```bash
 kubectl apply -f 02-aplicacao/postgres-secret.yaml
@@ -128,27 +293,80 @@ kubectl apply -f 02-aplicacao/postgres-service-headless.yaml
 kubectl apply -f 02-aplicacao/postgres-statefulset.yaml
 kubectl apply -f 02-aplicacao/symfony-deployment.yaml
 kubectl apply -f 02-aplicacao/symfony-service.yaml
+```
 
+## 2.2. Aguardar convergência
+
+```bash
 kubectl rollout status statefulset/postgres -n lab-admin --timeout=120s
 kubectl rollout status deployment/symfony -n lab-admin --timeout=120s
+```
 
+`rollout status` não cria recursos; espera que o controller atinja o estado desejado ou termine por timeout.
+
+## 2.3. Observar workloads e storage
+
+```bash
 kubectl get pods -n lab-admin -o wide
 kubectl get statefulset -n lab-admin
+kubectl get deployment -n lab-admin
+kubectl get svc -n lab-admin
 kubectl get pvc -n lab-admin
 kubectl get pv
 ```
 
+### O que observar
+
+```text
+postgres-0        → Running / Ready
+Symfony           → 2 réplicas Running / Ready
+PVC PostgreSQL    → Bound
+Service postgres  → headless
+Service symfony   → disponível no Namespace
+```
+
 A ordem `Secret → Headless Service → StatefulSet` torna explícitas as dependências do PostgreSQL antes do arranque do workload.
 
-**Resultado esperado:** `postgres-0` `Running` com PVC associado (`data-postgres-0` ou equivalente); Symfony com 2 réplicas `Running`.
+### CHECKPOINT CP2
+
+```text
+PostgreSQL Ready
+PVC Bound
+Deployment Symfony 2/2 disponível
+Services criados
+sem Pods em CrashLoopBackOff ou Pending inesperado
+```
+
+**Evidência:** guardar `kubectl get pods -n lab-admin -o wide` e `kubectl get pvc -n lab-admin`.
 
 ---
 
-## 6. Fase 3 — Scheduling (25 min)
+# CP3 — Scheduling: seleção, distribuição e falha controlada (25 min)
 
-### Experiência A — nodeSelector
+## Objetivo
 
-Selecionar dinamicamente um Worker `Ready`, excluindo Control Plane e labels de função legacy `master`, e guardar o nome numa variável para reutilização no final do laboratório:
+Observar três comportamentos distintos do scheduler:
+
+1. seleção obrigatória de um Worker por label;
+2. distribuição obrigatória das réplicas Symfony por hostname;
+3. um Pod não agendável por condição impossível.
+
+**Executar em:** terminal de administração.
+
+## Health gate antes das alterações
+
+```bash
+kubectl rollout status deployment/symfony -n lab-admin --timeout=60s
+kubectl get pods -n lab-admin -l app=symfony -o wide
+```
+
+Não iniciar alterações de placement se as duas réplicas Symfony não estiverem saudáveis.
+
+## 3.1. Experiência A — `nodeSelector`
+
+### O que estamos a fazer e porquê
+
+Selecionamos dinamicamente um Worker `Ready`, aplicamos a label `disco=ssd` e restringimos o Deployment Symfony a Nodes com essa label.
 
 ```bash
 WORKER_SSD=$(kubectl get nodes \
@@ -162,45 +380,59 @@ kubectl label node "$WORKER_SSD" disco=ssd --overwrite
 kubectl get node "$WORKER_SSD" --show-labels
 ```
 
-Aplicar o patch ao Deployment Symfony:
+Aplicar o patch:
 
 ```bash
 kubectl patch deployment symfony -n lab-admin \
   --patch-file 03-scheduling/symfony-nodeselector-patch.yaml
 
 kubectl rollout status deployment/symfony -n lab-admin --timeout=60s
-kubectl get pods -o wide -n lab-admin
+kubectl get pods -n lab-admin -l app=symfony -o wide
 ```
 
-O `nodeSelector` aplica-se ao **Symfony** (Deployment stateless), não ao PostgreSQL: mover o Pod do PostgreSQL entre Workers depende do comportamento da StorageClass (topologia, `ReadWriteOnce`), que não está garantido em todos os ambientes.
+### Campos importantes
 
-**Resultado esperado:** as réplicas Symfony ficam elegíveis apenas para o Worker com `disco=ssd`.
+```text
+nodeSelector    → exige que o Node tenha a label indicada
+--patch-file    → lê o patch a partir do ficheiro validado
+-o wide         → mostra, entre outros dados, o Node escolhido
+```
 
-### Experiência B — Anti-Affinity
+**Esperado:** as réplicas Symfony ficam elegíveis apenas para o Worker com `disco=ssd`.
 
-Antes de aplicar Anti-Affinity, remover explicitamente o `nodeSelector`. Caso contrário, a regra anterior restringiria ambas as réplicas ao mesmo Worker e entraria em conflito com a distribuição obrigatória por `hostname`.
+> O exercício altera apenas o Deployment Symfony. Não deslocamos deliberadamente o PostgreSQL entre Workers, porque a portabilidade do volume depende da StorageClass e da topologia do ambiente.
+
+## 3.2. Experiência B — Anti-Affinity obrigatória
+
+Antes da Anti-Affinity, remover o `nodeSelector` para não manter uma restrição incompatível com a distribuição por Workers diferentes:
 
 ```bash
 kubectl patch deployment symfony -n lab-admin \
   --type=json \
-  -p='[
-    {"op":"remove","path":"/spec/template/spec/nodeSelector"}
-  ]'
+  -p='[{"op":"remove","path":"/spec/template/spec/nodeSelector"}]'
 ```
 
-Aplicar a regra de Anti-Affinity:
+Aplicar o patch validado:
 
 ```bash
 kubectl patch deployment symfony -n lab-admin \
   --patch-file 03-scheduling/symfony-antiaffinity-patch.yaml
 
 kubectl rollout status deployment/symfony -n lab-admin --timeout=60s
-kubectl get pods -o wide -n lab-admin
+kubectl get pods -n lab-admin -l app=symfony -o wide
 ```
 
-`symfony-antiaffinity-patch.yaml` deve usar `requiredDuringSchedulingIgnoredDuringExecution` com `topologyKey: kubernetes.io/hostname` — uma regra apenas `preferred` não garante o resultado esperado.
+### Porque o rollout também interessa
 
-Como o laboratório tem exatamente **dois Workers elegíveis** e duas réplicas, o patch validado define também uma estratégia de rollout compatível com Anti-Affinity obrigatória:
+O patch usa Anti-Affinity obrigatória por:
+
+```text
+requiredDuringSchedulingIgnoredDuringExecution
+        +
+topologyKey: kubernetes.io/hostname
+```
+
+Com duas réplicas e apenas dois Workers elegíveis, um rollout com `maxSurge: 1` tentaria criar temporariamente uma terceira réplica, que não teria hostname disponível compatível com a Anti-Affinity. Por isso o patch validado usa:
 
 ```yaml
 spec:
@@ -211,46 +443,79 @@ spec:
       maxUnavailable: 1
 ```
 
-Com `maxSurge: 1` e `maxUnavailable: 0`, um rollout tentaria criar temporariamente uma terceira réplica. Com Anti-Affinity obrigatória e apenas dois Workers elegíveis, essa réplica ficaria `Pending` e o rollout poderia bloquear. Esta interação entre **estratégia de rollout** e **regras de placement** faz parte da evidência pedagógica da experiência.
+**Esperado:** rollout concluído e uma réplica Symfony em cada Worker.
 
-**Resultado esperado:** as duas réplicas Symfony em Workers diferentes e rollout concluído sem Pod adicional permanentemente `Pending`.
-
-### Experiência C — falha intencional de scheduling
+## 3.3. Experiência C — falha intencional de scheduling
 
 ```bash
 kubectl apply -f 03-scheduling/pod-pending-exemplo.yaml
-kubectl get pods -n lab-admin
+kubectl get pod pod-pending-exemplo -n lab-admin -o wide
 kubectl describe pod pod-pending-exemplo -n lab-admin
 kubectl get events -n lab-admin --sort-by=.lastTimestamp
 ```
 
-**Resultado esperado:** Pod em `Pending`, evento `FailedScheduling` com a causa explícita (ex.: `nodeSelector` sem nó correspondente).
+### Resultado esperado
 
-Depois de recolher a evidência, eliminar o Pod para não consumir quota nem interferir com as fases seguintes:
+O Pod fica `Pending` e os Events apresentam `FailedScheduling`, indicando que os Nodes não satisfazem a condição de placement.
+
+Depois da evidência:
 
 ```bash
 kubectl delete pod pod-pending-exemplo -n lab-admin
 ```
 
+### CHECKPOINT CP3
+
+```text
+nodeSelector concentrou Symfony no Worker marcado
+Anti-Affinity distribuiu as duas réplicas por hostnames diferentes
+rollout concluiu sem terceira réplica bloqueada
+Pod impossível ficou Pending com FailedScheduling
+```
+
+**Evidência:** guardar a distribuição dos Pods antes/depois e a causa de `FailedScheduling`.
+
 ---
 
-## Intervalo (15 min)
+# Intervalo — 15 min
 
-Pausa formal entre a Fase 3 e a Fase 4. Com esta pausa, o total do laboratório fecha em `10 + 30 + 45 + 25 + 15 + 25 + 30 + 30 + 20 + 10 = 240 min`.
+Até aqui decorreram `10 + 30 + 45 + 25 = 110 min`. Após o intervalo, faltam 115 minutos de prática, totalizando 240 minutos com a pausa incluída.
 
 ---
 
-## 7. Fase 4 — Networking e DNS (25 min)
+# CP4 — Networking, DNS e cadeia aplicação → base de dados (25 min)
 
-O Pod de diagnóstico é criado a partir de um manifesto previamente validado. A imagem definida em `pod-debug.yaml` deve conter `curl`, `nslookup` e `nc`; não se assume que uma imagem genérica disponha destas ferramentas.
+## Objetivo
+
+Provar resolução DNS dentro do cluster, acesso ao Service Symfony e prontidão da aplicação com dependência real do PostgreSQL.
+
+**Executar em:** terminal de administração; os testes de rede são executados dentro do Pod `debug`.
+
+## O que estamos a fazer e porquê
+
+Criamos um Pod de diagnóstico com ferramentas previamente validadas. Não usamos a shell do Node para provar comunicação Pod-to-Service, porque queremos observar o percurso a partir da rede dos Pods.
+
+## 4.1. Criar e aguardar o Pod de diagnóstico
 
 ```bash
 kubectl apply -f 04-networking/pod-debug.yaml
 kubectl wait --for=condition=Ready pod/debug -n lab-admin --timeout=60s
+```
 
+`kubectl wait` evita uma condição de corrida entre a criação do objeto Pod e a disponibilidade efetiva do container para `exec`.
+
+## 4.2. Resolver os Services
+
+```bash
 kubectl exec debug -n lab-admin -- nslookup symfony
 kubectl exec debug -n lab-admin -- nslookup postgres
+```
 
+**Esperado:** ambos os nomes resolvem para endereços do cluster.
+
+## 4.3. Testar o Service Symfony
+
+```bash
 kubectl exec debug -n lab-admin -- \
   curl -sS --max-time 5 \
   -o /dev/null \
@@ -258,44 +523,104 @@ kubectl exec debug -n lab-admin -- \
   http://symfony
 ```
 
-**Resultado esperado:** resolução DNS de ambos os Services e `HTTP 200` no Service Symfony, sem despejar toda a página HTML no terminal.
+### Flags relevantes
 
-Para provar explicitamente o salto `app → db`, este laboratório usa uma rota HTTP da aplicação que foi **validada antes da sessão como dependente do PostgreSQL**. Por omissão usa-se `/ready`; se essa rota não consultar a base de dados na imagem efetivamente utilizada, o formador deve substituir o caminho no guião antes da sessão.
+```text
+-sS             → modo silencioso, mas mostra erros
+--max-time 5    → limita a espera total
+-o /dev/null    → descarta o corpo HTML
+-w ...          → mostra explicitamente o código HTTP
+```
+
+**Esperado:** `HTTP 200`.
+
+## 4.4. Provar `debug → app → db`
+
+A rota `/ready` usada neste laboratório foi previamente validada como dependente do PostgreSQL.
 
 ```bash
 kubectl exec debug -n lab-admin -- \
   curl -sS --max-time 5 \
   -w '\nHTTP %{http_code}\n' \
   http://symfony/ready
+```
 
+**Esperado:** corpo semelhante a:
+
+```text
+{"status":"ready","database":"ok"}
+HTTP 200
+```
+
+Eliminar o Pod temporário:
+
+```bash
 kubectl delete pod debug -n lab-admin
 ```
 
-**Resultado esperado:** corpo semelhante a `{"status":"ready","database":"ok"}` e `HTTP 200`. Este teste evidencia `debug → app → db` de ponta a ponta. O Pod `debug` é eliminado explicitamente no final da fase.
+## 4.5. Gateway API — apenas enquadramento conceptual
 
-Gateway API: apresentar apenas o diagrama conceptual `GatewayClass → Gateway → HTTPRoute → Service → Pods`, sem aplicar manifests nem instalar controller.
+Nesta sessão não instalamos controller nem aplicamos manifests de Gateway API. A relação a compreender é:
+
+```text
+GatewayClass → Gateway → HTTPRoute → Service → Pods
+```
+
+### CHECKPOINT CP4
+
+```text
+DNS de symfony resolve
+DNS de postgres resolve
+Service Symfony responde HTTP 200
+/ready confirma database=ok
+Pod debug eliminado
+```
+
+**Evidência:** guardar os dois `nslookup` e a resposta de `/ready` com `HTTP 200`.
 
 ---
 
-## 8. Fase 5 — Identidade, RBAC e hardening (30 min)
+# CP5 — Identidade, RBAC e hardening do workload (30 min)
+
+## Objetivo
+
+Dar ao workload Symfony uma identidade própria, aplicar menor privilégio na API e endurecer o contexto de segurança sem impedir a aplicação de arrancar.
+
+**Executar em:** terminal de administração.
+
+## 5.1. Criar identidade e autorização
 
 ```bash
 kubectl apply -f 05-identidade/serviceaccount.yaml
 kubectl apply -f 05-identidade/role.yaml
 kubectl apply -f 05-identidade/rolebinding.yaml
-
-kubectl auth can-i get pods \
-  --as=system:serviceaccount:lab-admin:app-reader -n lab-admin
-
-kubectl auth can-i delete pods \
-  --as=system:serviceaccount:lab-admin:app-reader -n lab-admin
 ```
 
-Aplicar ao Deployment Symfony um patch previamente validado que inclua:
+## 5.2. Teste positivo e negativo de RBAC
 
-- `serviceAccountName: app-reader`;
-- `automountServiceAccountToken: false`, porque a aplicação não necessita de comunicar diretamente com a Kubernetes API;
-- o `SecurityContext` compatível com a imagem.
+```bash
+kubectl auth can-i get pods \
+  --as=system:serviceaccount:lab-admin:app-reader \
+  -n lab-admin
+
+kubectl auth can-i delete pods \
+  --as=system:serviceaccount:lab-admin:app-reader \
+  -n lab-admin
+```
+
+### Como interpretar
+
+```text
+get pods        → deve ser permitido
+delete pods     → deve ser negado
+--as=...        → simula a identidade da ServiceAccount indicada
+```
+
+**Esperado:** primeiro comando `yes`; segundo comando `no`.
+
+## 5.3. Aplicar o `SecurityContext`
+
+O patch foi previamente validado para a imagem usada no laboratório.
 
 ```bash
 kubectl patch deployment symfony -n lab-admin \
@@ -304,21 +629,19 @@ kubectl patch deployment symfony -n lab-admin \
 kubectl rollout status deployment/symfony -n lab-admin --timeout=60s
 ```
 
-Exemplo conceptual da parte de identidade do patch:
+A configuração inclui:
 
-```yaml
-spec:
-  template:
-    spec:
-      serviceAccountName: app-reader
-      automountServiceAccountToken: false
+```text
+serviceAccountName: app-reader
+automountServiceAccountToken: false
+allowPrivilegeEscalation: false
+capabilities.drop: [ALL]
+seccompProfile: RuntimeDefault
 ```
 
-**Atenção:** aplicar o patch de `SecurityContext` ao Deployment Symfony só é seguro se esta configuração já tiver sido **testada previamente contra a imagem** **`symfony-demo:1.0.0`**. Se incluir `runAsNonRoot: true`, confirmar que a imagem corre sem privilégios de root antes da sessão, para não confundir uma limitação da imagem com o próprio conceito de `SecurityContext`.
+Capabilities adicionais só devem existir se forem necessárias e previamente validadas para a imagem.
 
-**Resultado esperado:** primeiro `can-i` → `yes`; segundo `can-i` → `no`; Deployment associado à ServiceAccount dedicada; token não montado desnecessariamente; Pods reiniciados e `Ready` com `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]` e `seccompProfile: RuntimeDefault` (mais apenas as capabilities adicionais previamente validadas para esta imagem).
-
-Confirmar:
+## 5.4. Confirmar a configuração efetiva
 
 ```bash
 kubectl get deployment symfony -n lab-admin \
@@ -334,14 +657,45 @@ echo "Pod selecionado: $SYMFONY_POD"
 kubectl get pod "$SYMFONY_POD" -n lab-admin \
   -o jsonpath='{.spec.containers[0].securityContext}{"\n"}'
 
-kubectl get pods -n lab-admin -o wide
+kubectl get pods -n lab-admin -l app=symfony -o wide
 ```
+
+### CHECKPOINT CP5
+
+```text
+ServiceAccount dedicada aplicada
+get pods = yes
+delete pods = no
+automountServiceAccountToken = false
+SecurityContext endurecido
+2 réplicas Symfony continuam Ready
+```
+
+**Evidência:** guardar os dois `can-i`, a identidade do Deployment e o `securityContext` efetivo de um Pod.
 
 ---
 
-## 9. Fase 6 — NetworkPolicy (30 min)
+# CP6 — NetworkPolicy: fechar tudo e reabrir apenas o necessário (30 min)
 
-Criar os Pods de teste e **esperar explicitamente que estejam `Ready`** antes do primeiro `kubectl exec`:
+## Objetivo
+
+Demonstrar isolamento de rede por política, distinguindo DNS de tráfego aplicacional e provando simultaneamente um fluxo permitido e um fluxo bloqueado.
+
+**Executar em:** terminal de administração; testes dentro dos Pods `client` e `intruder`.
+
+## O que estamos a fazer e porquê
+
+Começamos com comunicação livre, aplicamos `default-deny` para Ingress e Egress e reabrimos progressivamente apenas:
+
+```text
+DNS
+client → Symfony
+Symfony → PostgreSQL
+```
+
+O Pod `intruder` nunca recebe autorização para chegar ao PostgreSQL.
+
+## 6.1. Criar os clientes de teste e esperar por `Ready`
 
 ```bash
 kubectl apply -f 06-networkpolicy/pod-client.yaml
@@ -351,7 +705,7 @@ kubectl wait --for=condition=Ready pod/client -n lab-admin --timeout=120s
 kubectl wait --for=condition=Ready pod/intruder -n lab-admin --timeout=120s
 ```
 
-### Etapa A — baseline sem isolamento
+## 6.2. Baseline — antes do isolamento
 
 ```bash
 kubectl exec client -n lab-admin -- \
@@ -362,12 +716,15 @@ kubectl exec client -n lab-admin -- \
 echo $?
 ```
 
-**Resultado esperado:** corpo de `/ready`, `HTTP 200` e código de saída `0`.
+**Esperado:** `database=ok`, `HTTP 200` e exit code `0`.
 
-### Etapa B — default deny
+Este baseline é obrigatório: sem ele não saberíamos se uma falha posterior foi introduzida pela política ou já existia.
+
+## 6.3. Aplicar `default-deny`
 
 ```bash
 kubectl apply -f 06-networkpolicy/default-deny.yaml
+kubectl get networkpolicy -n lab-admin
 
 kubectl exec client -n lab-admin -- \
   curl -sS --max-time 3 \
@@ -378,9 +735,9 @@ kubectl exec client -n lab-admin -- \
 echo $?
 ```
 
-**Resultado esperado:** falha por timeout. Como o `default-deny` bloqueia também egress, o primeiro sintoma pode ser resolução DNS bloqueada (`HTTP 000`, código de saída do `curl` diferente de `0`, tipicamente `28`).
+**Esperado:** falha. Como o egress DNS também fica bloqueado, o primeiro sintoma pode ser timeout de resolução, `HTTP 000` e exit code diferente de `0`.
 
-### Etapa C — reabrir apenas DNS
+## 6.4. Reabrir apenas DNS
 
 ```bash
 kubectl apply -f 06-networkpolicy/allow-dns.yaml
@@ -397,9 +754,15 @@ kubectl exec client -n lab-admin -- \
 echo $?
 ```
 
-**Resultado esperado:** DNS volta a resolver, mas HTTP continua bloqueado. Isto demonstra que **resolver nomes e autorizar tráfego aplicacional são permissões distintas**.
+**Esperado:** DNS funciona novamente, mas HTTP continua bloqueado.
 
-### Etapa D — autorizar apenas os fluxos aplicacionais necessários
+Esta etapa prova que:
+
+```text
+resolver nomes ≠ autorizar comunicação aplicacional
+```
+
+## 6.5. Reabrir os fluxos aplicacionais necessários
 
 ```bash
 kubectl apply -f 06-networkpolicy/allow-client-app.yaml
@@ -411,66 +774,88 @@ kubectl exec client -n lab-admin -- \
   http://symfony/ready
 
 echo $?
+```
 
-kubectl exec intruder -n lab-admin -- nc -zvw3 postgres 5432
+**Esperado:** `database=ok`, `HTTP 200`, exit code `0`.
+
+## 6.6. Teste negativo obrigatório — `intruder → db`
+
+```bash
+kubectl exec intruder -n lab-admin -- \
+  nc -zvw3 postgres 5432
+
 echo $?
 ```
 
-**Resultado esperado:** `client → app → db` devolve `/ready`, `HTTP 200` e código de saída `0`; `intruder → db` falha por timeout/conexão bloqueada e devolve código de saída diferente de `0`.
+**Esperado:** timeout/conexão bloqueada e exit code diferente de `0`.
 
-**Contrato das políticas:** `default-deny.yaml` deve isolar **Ingress e Egress**. Por isso, cada fluxo entre workloads isolados tem de ser autorizado nos dois extremos.
+## 6.7. Interpretar o contrato das políticas
 
-Para reduzir ambiguidades na escrita dos manifests, cada ficheiro que autoriza um fluxo **entre workloads do laboratório** deve conter **dois objetos `NetworkPolicy`**, separados por `---`:
-
-1. uma `NetworkPolicy` cujo `podSelector` seleciona os Pods de **origem** e autoriza o `egress`;
-2. uma `NetworkPolicy` cujo `podSelector` seleciona os Pods de **destino** e autoriza o `ingress`.
-
-Uma `NetworkPolicy` só rege os Pods selecionados pelo seu próprio `podSelector`; autorizar apenas um dos lados não torna o fluxo bidirecionalmente permitido perante um `default-deny` de Ingress e Egress.
+Com `default-deny` de Ingress e Egress, os fluxos entre workloads são autorizados nos dois extremos:
 
 ```text
 allow-client-app.yaml
-  objeto 1: client   ── egress HTTP ──> Symfony
-  objeto 2: Symfony <── ingress HTTP ── client
+  client  ── egress HTTP ──> Symfony
+  Symfony <── ingress HTTP ── client
 
 allow-app-db.yaml
-  objeto 1: Symfony    ── egress TCP/5432 ──> PostgreSQL
-  objeto 2: PostgreSQL <── ingress TCP/5432 ── Symfony
+  Symfony    ── egress TCP/5432 ──> PostgreSQL
+  PostgreSQL <── ingress TCP/5432 ── Symfony
 
 allow-backup-db.yaml
-  objeto 1: role=backup ── egress TCP/5432 ──> PostgreSQL
-  objeto 2: PostgreSQL  <── ingress TCP/5432 ── role=backup
+  role=backup ── egress TCP/5432 ──> PostgreSQL
+  PostgreSQL  <── ingress TCP/5432 ── role=backup
 ```
 
-**Exceção — `allow-dns.yaml`:** este ficheiro não segue a regra dos dois objetos do laboratório. O `default-deny` é aplicado ao Namespace `lab-admin`, enquanto o CoreDNS está normalmente em `kube-system`. Assim, `allow-dns.yaml` contém a regra de **egress** dos Pods isolados para o DNS do cluster, usando o Service/labels reais identificados na Fase 0. Não se cria, neste laboratório, uma `NetworkPolicy` adicional em `kube-system` apenas para representar o lado de ingress do CoreDNS.
+`allow-dns.yaml` é diferente: autoriza o egress dos Pods de `lab-admin` para o CoreDNS no Namespace do sistema; este laboratório não cria uma política adicional no Namespace do DNS.
 
-```text
-allow-dns.yaml
-  Pods isolados ── egress UDP/TCP 53 ──> CoreDNS
-```
-
-`pod-client.yaml` e `pod-intruder.yaml` devem usar imagens previamente validadas com as ferramentas necessárias; em particular, `intruder` precisa de `nc` para o teste à porta 5432.
-
-Confirmar as políticas efetivamente aplicadas:
+Confirmar o estado final:
 
 ```bash
 kubectl get networkpolicy -n lab-admin
 ```
 
-**Resultado esperado (obrigatório registar as evidências):**
+### CHECKPOINT CP6
 
 ```text
-client → app        OK
-app → db            OK
-intruder → db       BLOQUEADO
+baseline client → app → db = OK
+default-deny = comunicação bloqueada
+DNS reaberto sem reabrir HTTP
+client → app → db = OK depois das allows
+intruder → db = BLOQUEADO
 ```
+
+**Evidência:** registar `HTTP 200/0` do fluxo permitido e a falha/exit code do `intruder`.
 
 ---
 
-## 10. Fase 7 — Persistência e backup (20 min)
+# CP7 — Persistência e backup independente (20 min)
 
-### Parte A — Persistência
+## Objetivo
 
-Obter dinamicamente do próprio Pod PostgreSQL o nome da base de dados e o utilizador configurados pelo Secret. Desta forma o guião não depende de valores escritos manualmente nem assume o utilizador `postgres`:
+Provar duas propriedades diferentes:
+
+1. os dados sobrevivem à recriação do Pod PostgreSQL;
+2. existe um backup independente, guardado noutro PVC, contendo a evidência criada.
+
+**Executar em:** terminal de administração.
+
+## Health gate antes da falha controlada
+
+```bash
+kubectl get pod postgres-0 -n lab-admin
+
+kubectl exec client -n lab-admin -- \
+  curl -sS --max-time 5 \
+  -w '\nHTTP %{http_code}\n' \
+  http://symfony/ready
+```
+
+Só avançar se PostgreSQL estiver `Ready` e `/ready` devolver `HTTP 200`.
+
+## 7.1. Parte A — provar persistência
+
+Obter dinamicamente as credenciais não-secretas necessárias ao comando:
 
 ```bash
 APP_DB=$(kubectl exec postgres-0 -n lab-admin -- printenv POSTGRES_DB)
@@ -480,7 +865,7 @@ echo "Base de dados: $APP_DB"
 echo "Utilizador: $APP_USER"
 ```
 
-Criar a evidência nessa base de dados através do cliente `psql` que já existe no container PostgreSQL — **não é necessário instalar `psql` no Control Plane**:
+Criar a evidência usando `psql` dentro do próprio container PostgreSQL:
 
 ```bash
 kubectl exec postgres-0 -n lab-admin -- \
@@ -490,60 +875,91 @@ kubectl exec postgres-0 -n lab-admin -- \
 kubectl exec postgres-0 -n lab-admin -- \
   psql -U "$APP_USER" -d "$APP_DB" -c \
   "INSERT INTO teste (valor) VALUES ('evidencia-lab-s5');"
+```
 
+Não é necessário instalar `psql` no Node de administração.
+
+Provocar a recriação do Pod:
+
+```bash
 kubectl delete pod postgres-0 -n lab-admin
 
-# esperar que o StatefulSet recrie o objeto antes de aguardar Ready
 until kubectl get pod postgres-0 -n lab-admin >/dev/null 2>&1; do
   sleep 1
 done
 
-kubectl wait --for=condition=Ready pod/postgres-0 -n lab-admin --timeout=120s
-
-kubectl exec postgres-0 -n lab-admin -- \
-  psql -U "$APP_USER" -d "$APP_DB" -c "SELECT * FROM teste;"
+kubectl wait --for=condition=Ready pod/postgres-0 \
+  -n lab-admin \
+  --timeout=120s
 ```
 
-**Resultado esperado:** o registo `evidencia-lab-s5` continua presente após a recriação do Pod.
+Validar os dados depois da recriação:
 
-### Parte B — Backup
+```bash
+kubectl exec postgres-0 -n lab-admin -- \
+  psql -U "$APP_USER" -d "$APP_DB" -c \
+  "SELECT * FROM teste;"
+```
+
+**Esperado:** o registo `evidencia-lab-s5` continua presente.
+
+Conclusão intermédia:
+
+```text
+Pod eliminado
+    ↓
+Pod recriado
+    ↓
+mesmo PVC
+    ↓
+dados preservados
+```
+
+## 7.2. Parte B — criar um backup independente
 
 ```bash
 kubectl apply -f 07-backup/backup-pvc.yaml
 kubectl apply -f 07-backup/allow-backup-db.yaml
 kubectl apply -f 07-backup/backup-job.yaml
-kubectl wait --for=condition=complete job/backup-postgres -n lab-admin --timeout=120s
+
+kubectl wait --for=condition=complete \
+  job/backup-postgres \
+  -n lab-admin \
+  --timeout=120s
 ```
 
-**Atenção — base de dados e NetworkPolicy:** `backup-job.yaml` deve executar `pg_dump` sobre a **mesma base de dados definida em `POSTGRES_DB`/`APP_DB`**, obtendo esse valor da mesma configuração/Secret usada pela aplicação. O objetivo é garantir que o artefacto contém precisamente os dados cuja persistência foi validada na Parte A.
+O Job usa a mesma `POSTGRES_DB` da aplicação e, como o `default-deny` continua ativo, recebe apenas os fluxos mínimos necessários através de `allow-backup-db.yaml` e da política DNS já existente.
 
-A partir da Fase 6, `default-deny.yaml` isola Ingress e Egress. `backup-job.yaml` deve ter a label `role: backup`, e `allow-backup-db.yaml` deve permitir apenas o mínimo necessário:
-
-```text
-backup Job ── egress DNS UDP/TCP 53 ──> CoreDNS
-backup Job ── egress TCP/5432 ────────> PostgreSQL
-PostgreSQL <── ingress TCP/5432 ─────── role=backup
-```
-
-Não se remove a `NetworkPolicy` para o backup funcionar — acrescenta-se o fluxo mínimo necessário, reforçando o princípio de menor privilégio.
-
-Se o PVC de backup usar `ReadWriteOnce`, eliminar o Job concluído antes de montar o mesmo PVC no `backup-reader`, garantindo que o Pod do Job deixa de manter o volume associado:
+Se o PVC de backup for `ReadWriteOnce`, eliminar o Job concluído antes de montar o volume no reader:
 
 ```bash
 kubectl delete job backup-postgres -n lab-admin --wait=true
 
 kubectl apply -f 07-backup/backup-reader.yaml
 kubectl wait --for=condition=Ready pod/backup-reader -n lab-admin --timeout=60s
+```
 
-kubectl exec backup-reader -n lab-admin -- ls -lh /backup/backup.sql
-kubectl exec backup-reader -n lab-admin -- wc -c /backup/backup.sql
+Validar o artefacto:
+
+```bash
+kubectl exec backup-reader -n lab-admin -- \
+  ls -lh /backup/backup.sql
+
+kubectl exec backup-reader -n lab-admin -- \
+  wc -c /backup/backup.sql
+
 kubectl exec backup-reader -n lab-admin -- \
   grep -F "evidencia-lab-s5" /backup/backup.sql
 ```
 
-**Resultado esperado:** o Job terminou com sucesso; `backup-reader` monta **exclusivamente o PVC de backup** (não o PVC de dados do PostgreSQL); `backup.sql` existe, tem tamanho > 0 e contém `evidencia-lab-s5`. Assim é validado não apenas o ficheiro, mas também que o backup inclui os dados criados na Parte A.
+### O que observar
 
-A evidência pedagógica é:
+- `backup.sql` existe;
+- tamanho maior que zero;
+- contém `evidencia-lab-s5`;
+- `backup-reader` monta o PVC de backup, não o PVC de dados do PostgreSQL.
+
+A regra a reter é:
 
 ```text
 Pod ≠ dados
@@ -551,33 +967,67 @@ PVC ≠ backup
 Persistência ≠ backup
 ```
 
-> **Delimitação:** esta fase demonstra persistência e criação/validação de backup. Um exercício completo de restore fica fora do percurso obrigatório de 240 minutos e pode ser disponibilizado como extensão.
+> Um restore completo fica fora do percurso obrigatório de 240 minutos e pode ser tratado como extensão.
+
+### CHECKPOINT CP7
+
+```text
+dados preservados após recriação do Pod
+Job de backup Complete
+backup.sql existe e não está vazio
+backup.sql contém evidencia-lab-s5
+backup guardado em PVC separado
+```
+
+**Evidência:** guardar o `SELECT`, o estado `Complete`, o tamanho do ficheiro e o `grep` da evidência.
 
 ---
 
-## 11. Fase 8 — Evidência final e limpeza (10 min)
+# CP8 — Evidência final e limpeza (10 min)
 
-Cada formando mostra ao formador as evidências recolhidas ao longo do laboratório. No final:
+## Objetivo
+
+Fechar o laboratório sem deixar estado cluster-scoped ou storage do exercício por tratar e consolidar as evidências recolhidas.
+
+**Executar em:** terminal de administração.
+
+## 8.1. Capturar os PVs do laboratório antes de eliminar o Namespace
 
 ```bash
-# guardar os PVs associados ao Namespace antes da eliminação
 LAB_PVS=$(kubectl get pv \
   -o custom-columns=NAME:.metadata.name,NAMESPACE:.spec.claimRef.namespace \
   --no-headers | awk '$2 == "lab-admin" {print $1}')
 
 echo "PVs do laboratório: ${LAB_PVS:-nenhum}"
+```
 
+Guardamos os nomes antes da eliminação para não confundir os PVs desta sessão com volumes de outros exercícios existentes no cluster.
+
+## 8.2. Eliminar o Namespace
+
+```bash
 kubectl delete namespace lab-admin --wait=true
+```
 
-# se a shell tiver sido reiniciada, recuperar o Worker pela label criada pelo laboratório
+Eliminar o Namespace elimina os recursos namespaced do laboratório, mas **não remove labels aplicadas a Nodes**, porque Nodes são recursos cluster-scoped.
+
+## 8.3. Remover a label criada na Fase de scheduling
+
+Se a variável ainda existir:
+
+```bash
 if [ -z "${WORKER_SSD:-}" ]; then
   WORKER_SSD=$(kubectl get nodes -l disco=ssd -o jsonpath='{.items[0].metadata.name}')
 fi
 
 test -n "$WORKER_SSD" || { echo "Worker com disco=ssd não encontrado"; exit 1; }
-kubectl label node "$WORKER_SSD" disco-
 
-# verificar especificamente os PVs que pertenciam a lab-admin
+kubectl label node "$WORKER_SSD" disco-
+```
+
+## 8.4. Verificar apenas os PVs que pertenciam ao laboratório
+
+```bash
 for PV in $LAB_PVS; do
   if kubectl get pv "$PV" >/dev/null 2>&1; then
     kubectl get pv "$PV"
@@ -587,49 +1037,100 @@ for PV in $LAB_PVS; do
 done
 ```
 
-**Resultado esperado:** Namespace eliminado, label removida do Worker selecionado na Fase 3 e nenhum PV do laboratório deixado inadvertidamente em estado `Released`. Em StorageClasses com `reclaimPolicy: Delete`, os PVs identificados devem desaparecer; com `Retain`, devem permanecer e ser tratados pelo procedimento de limpeza do ambiente.
+### Como interpretar
 
-> **Atenção:** eliminar o Namespace não remove a label aplicada ao Worker na Fase 3 (recurso cluster-scoped). Os nomes dos PVs do laboratório são capturados antes da eliminação do Namespace para evitar confundi-los com volumes de outros exercícios. Se a StorageClass usar `reclaimPolicy: Retain`, esses PVs podem permanecer após a eliminação dos PVCs; executar o procedimento de limpeza definido para o ambiente e não assumir que a eliminação do Namespace remove storage externo.
+- com `reclaimPolicy: Delete`, os PVs provisionados dinamicamente devem desaparecer;
+- com `reclaimPolicy: Retain`, podem permanecer e têm de ser tratados pelo procedimento de limpeza do ambiente;
+- uma listagem global de PVs não é prova suficiente se o cluster tiver volumes de outros laboratórios.
 
----
+### CHECKPOINT CP8
 
-## 12. Estado de validação técnica
+```text
+Namespace lab-admin eliminado
+label disco=ssd removida do Worker selecionado
+PVs do laboratório identificados e verificados
+nenhum recurso do exercício ficou inadvertidamente por tratar
+```
 
-Este guião foi validado de ponta a ponta num cluster de referência com **1 Control Plane + 2 Workers**, Calico, CoreDNS, provisionamento dinâmico `local-path`, Symfony Demo e PostgreSQL 16. Durante o ensaio foram corrigidos os seguintes pontos antes desta versão:
-
-- runtime Symfony ajustado para `APP_ENV=prod`;
-- rollout com Anti-Affinity obrigatória ajustado para `maxSurge: 0` / `maxUnavailable: 1`;
-- descoberta dinâmica do Worker e do Pod Symfony, sem nomes/IPs específicos;
-- `kubectl wait` antes de `exec` em Pods de teste;
-- testes HTTP com status e código de saída observáveis;
-- progressão `baseline → default deny → DNS → fluxos aplicacionais` em `NetworkPolicy`;
-- `POSTGRES_DB` e `POSTGRES_USER` obtidos dinamicamente na validação de persistência;
-- evidência de backup confirmada num PVC separado;
-- limpeza final validada, distinguindo os PVs de `lab-admin` dos volumes pertencentes a outros Namespaces.
-
-O restore completo continua deliberadamente fora do percurso obrigatório de 240 minutos.
+**Evidência:** guardar a confirmação da eliminação do Namespace, da remoção da label e o estado final dos PVs capturados.
 
 ---
 
-## 13. Notas de operação para o formador
+# Checklist de autoavaliação
 
-- O laboratório não depende de nomes nem IPs específicos de Nodes. O Worker usado no `nodeSelector` é descoberto dinamicamente na Fase 3 e guardado em `WORKER_SSD` para reutilização na limpeza.
-- Confirmar antes da formação que o Control Plane não será utilizado como destino de workloads aplicacionais.
-- Confirmar que nenhum Node possui previamente a label `disco=ssd`; esta condição torna inequívoca a label criada pelo laboratório.
-- Confirmar que a imagem Symfony é executada com a configuração validada (`APP_ENV=prod` nesta versão); `APP_ENV=dev` não deve ser usado se a imagem não incluir `DebugBundle`.
-- Confirmar que o patch de Anti-Affinity mantém `maxSurge: 0` e `maxUnavailable: 1`; com apenas dois Workers e Anti-Affinity obrigatória, `maxSurge: 1` pode bloquear o rollout ao tentar criar temporariamente uma terceira réplica.
-- Após aplicar os workloads da Fase 2, aguardar explicitamente pelos rollouts do StatefulSet PostgreSQL e do Deployment Symfony antes de iniciar scheduling.
-- Os ficheiros `symfony-nodeselector-patch.yaml`, `symfony-antiaffinity-patch.yaml` e `securitycontext-patch.yaml` devem ser testados como patches sobre o Deployment `symfony` efetivamente usado no laboratório.
-- Se a Experiência C (Fase 3) não gerar `Pending` no primeiro `apply`, ter um segundo manifest de reserva com uma condição impossível diferente.
-- O Job de backup deve ser idempotente ou o Namespace deve ser recriado entre turmas, para evitar conflitos de nome em `backup-postgres`.
-- Confirmar que `default-deny.yaml` isola Ingress e Egress e que cada política de autorização cobre explicitamente os dois lados do fluxo que pretende permitir.
-- Após criar `client` e `intruder`, usar sempre `kubectl wait` antes do primeiro `kubectl exec`; sem esta espera, o Pod pode existir na API antes de o container estar disponível.
-- Nos testes HTTP de validação, preferir corpo curto/status HTTP e código de saída (`HTTP 200`/`0` ou `HTTP 000`/erro) em vez de depender apenas da presença ou ausência de texto.
-- Confirmar que `allow-dns.yaml` foi construído a partir das labels/Service reais do CoreDNS do cluster.
-- Confirmar que `/ready` (ou a rota escolhida antes da sessão) depende efetivamente do PostgreSQL; não usar uma rota que apenas valide o processo HTTP.
-- Confirmar que a Parte A obtém `POSTGRES_DB` e `POSTGRES_USER` dinamicamente do Pod/Secret e executa `psql` dentro do container PostgreSQL; não exigir `psql` instalado no Control Plane.
-- Confirmar que o Job executa `pg_dump` sobre a mesma `POSTGRES_DB` usada na Parte A e que `backup.sql` contém `evidencia-lab-s5`.
-- Confirmar que o Pod do Job é eliminado antes do `backup-reader` quando o PVC de backup é `ReadWriteOnce`.
-- Confirmar que o `backup-reader` termina ou é removido com o Namespace sem manter mounts ativos desnecessários.
-- Na limpeza, capturar os nomes dos PVs cujo `claimRef.namespace` é `lab-admin` antes de eliminar o Namespace e verificar apenas esses PVs; não usar a listagem global como prova isolada, pois o cluster pode conter volumes de outros laboratórios.
-- Cada ficheiro que autoriza um fluxo **entre workloads isolados** (`allow-client-app.yaml`, `allow-app-db.yaml` e `allow-backup-db.yaml`) deve conter **dois objetos `NetworkPolicy`**: origem/`egress` e destino/`ingress`. `allow-dns.yaml` é a exceção, porque autoriza egress do Namespace `lab-admin` para o CoreDNS em `kube-system`; o laboratório não cria uma política adicional no Namespace do DNS.
+No fim da sessão, devo conseguir afirmar:
+
+- [ ] Consigo explicar a diferença entre `LimitRange` e `ResourceQuota`.
+- [ ] Consigo interpretar porque um Pod pode ser aceite pela API e ficar `Pending` no scheduler.
+- [ ] Consigo distinguir `nodeSelector` de Pod Anti-Affinity.
+- [ ] Consigo explicar por que a estratégia de rollout interfere com Anti-Affinity obrigatória.
+- [ ] Consigo validar DNS, Service e a dependência aplicação → base de dados.
+- [ ] Consigo testar RBAC com uma ação permitida e outra negada.
+- [ ] Consigo interpretar os principais campos de um `SecurityContext` de menor privilégio.
+- [ ] Consigo explicar `default-deny` e reabrir apenas os fluxos necessários com `NetworkPolicy`.
+- [ ] Consigo distinguir persistência de backup.
+- [ ] Consigo recolher evidência antes de concluir que uma configuração funciona.
+
+---
+
+# Regra de evidência da Sessão 5
+
+```text
+APLICAR
+   ≠
+VALIDAR
+
+Objeto criado
+   ↓
+Estado observado
+   ↓
+Comportamento testado
+   ↓
+Teste positivo / negativo quando aplicável
+   ↓
+Evidência recolhida
+   ↓
+Conclusão técnica
+```
+
+Na Sessão 5, uma conclusão só é aceite quando existe evidência do comportamento real: quota rejeitada, placement observado, `FailedScheduling`, `HTTP 200`, ação RBAC negada, fluxo de rede bloqueado, dados preservados ou backup validado.
+
+---
+
+# Mapa final do laboratório
+
+```text
+Namespace e governação
+        ↓
+Aplicação + PostgreSQL + PVC
+        ↓
+Scheduling e distribuição
+        ↓
+DNS + Service + readiness
+        ↓
+ServiceAccount + RBAC + SecurityContext
+        ↓
+Default deny + allow mínimo
+        ↓
+Persistência + backup independente
+        ↓
+Evidências + limpeza
+```
+
+---
+
+# Notas de operação para o formador
+
+- Validar antes da formação que o Control Plane não recebe workloads aplicacionais normais.
+- Confirmar que nenhum Node possui previamente `disco=ssd`.
+- Manter `APP_ENV=prod` na imagem Symfony usada nesta versão.
+- Manter `maxSurge: 0` e `maxUnavailable: 1` no patch de Anti-Affinity enquanto o laboratório tiver exatamente dois Workers elegíveis.
+- Aguardar sempre os rollouts da Fase 2 antes de iniciar scheduling.
+- Usar `kubectl wait` antes do primeiro `exec` em Pods temporários.
+- Confirmar que `allow-dns.yaml` corresponde às labels reais do CoreDNS do cluster.
+- Confirmar que `/ready` depende efetivamente do PostgreSQL.
+- Obter `POSTGRES_DB` e `POSTGRES_USER` dinamicamente; não exigir `psql` instalado no Node.
+- Confirmar que `backup.sql` contém `evidencia-lab-s5`.
+- Eliminar o Job antes do `backup-reader` quando o PVC de backup for `ReadWriteOnce`.
+- Na limpeza, verificar apenas os PVs cujo `claimRef.namespace` era `lab-admin`.
+- Não confundir `PVC`, `backup` e `restore`: são conceitos e operações diferentes.
