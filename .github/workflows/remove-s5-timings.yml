@@ -1,0 +1,71 @@
+name: Remover tempos do laboratório S5
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/remove-s5-timings.yml
+
+permissions:
+  contents: write
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remover tempos e intervalo
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('sessao-05-06/labs/laboratorio_integrado_sessao_5.md')
+          text = p.read_text(encoding='utf-8')
+
+          text = text.replace('**Duração:** 4 horas / 240 minutos  \n', '')
+          text = text.replace(
+              'O laboratório foi validado de ponta a ponta com Symfony Demo, PostgreSQL 16, Calico, CoreDNS e provisionamento dinâmico `local-path`. O restore completo não faz parte do percurso obrigatório de 240 minutos.',
+              'O laboratório foi validado de ponta a ponta com Symfony Demo, PostgreSQL 16, Calico, CoreDNS e provisionamento dinâmico `local-path`. O restore completo não faz parte do percurso obrigatório do laboratório.'
+          )
+
+          substituicoes = {
+              '# CP0 — Obter os recursos e validar o cluster (10 min)': '# CP0 — Obter os recursos e validar o cluster',
+              '# CP1 — Governação inicial com LimitRange e ResourceQuota (30 min)': '# CP1 — Governação inicial com LimitRange e ResourceQuota',
+              '# CP2 — Disponibilizar a aplicação e o storage (45 min)': '# CP2 — Disponibilizar a aplicação e o storage',
+              '# CP3 — Scheduling: seleção, distribuição e falha controlada (25 min)': '# CP3 — Scheduling: seleção, distribuição e falha controlada',
+              '# CP4 — Networking, DNS e cadeia aplicação → base de dados (25 min)': '# CP4 — Networking, DNS e cadeia aplicação → base de dados',
+              '# CP5 — Identidade, RBAC e hardening do workload (30 min)': '# CP5 — Identidade, RBAC e hardening do workload',
+              '# CP6 — NetworkPolicy: fechar tudo e reabrir apenas o necessário (30 min)': '# CP6 — NetworkPolicy: fechar tudo e reabrir apenas o necessário',
+              '# CP7 — Persistência e backup independente (20 min)': '# CP7 — Persistência e backup independente',
+              '# CP8 — Evidência final e limpeza (10 min)': '# CP8 — Evidência final e limpeza',
+              '> Um restore completo fica fora do percurso obrigatório de 240 minutos e pode ser tratado como extensão.': '> Um restore completo fica fora do percurso obrigatório e pode ser tratado como extensão.'
+          }
+          for old, new in substituicoes.items():
+              text = text.replace(old, new)
+
+          intervalo = '''---\n\n# Intervalo — 15 min\n\nAté aqui decorreram `10 + 30 + 45 + 25 = 110 min`. Após o intervalo, faltam 115 minutos de prática, totalizando 240 minutos com a pausa incluída.\n\n---\n\n'''
+          text = text.replace(intervalo, '---\n\n')
+
+          p.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validar ausência de tempos e intervalo
+        shell: bash
+        run: |
+          ! grep -nEi '\b(min|minuto|minutos|hora|horas|intervalo)\b' sessao-05-06/labs/laboratorio_integrado_sessao_5.md
+
+      - name: Commit e push
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add sessao-05-06/labs/laboratorio_integrado_sessao_5.md
+          if git diff --cached --quiet; then
+            echo 'Sem alterações a gravar.'
+            exit 0
+          fi
+          git commit -m 'Sessão 5: remover tempos e intervalo do laboratório'
+          git push
