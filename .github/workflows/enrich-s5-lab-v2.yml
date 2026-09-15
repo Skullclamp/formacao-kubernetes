@@ -1,0 +1,47 @@
+name: Enriquecer laboratório integrado S5
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/enrich-s5-lab-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enriquecer explicações pedagógicas
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          LAB='sessao-05-06/labs/laboratorio_integrado_sessao_5.md'
+
+          # Normaliza duas diferenças editoriais da versão-base usada para gerar o patch.
+          sed -i 's/get pods        → deve ser permitido/get pods       → deve ser permitido/' "$LAB"
+          sed -i 's/^delete pods     → deve ser negado/ delete pods    → deve ser negado/' "$LAB"
+
+          base64 -d .github/tmp/s5-enrich.patch.b64 | gzip -d > /tmp/s5-enrich.patch
+          patch --batch -p1 --fuzz=3 < /tmp/s5-enrich.patch
+
+          # Coerência com a estrutura atual por checkpoints.
+          sed -i 's/da Fase de scheduling/do CP3 — scheduling/' "$LAB"
+          sed -i 's/rollouts da Fase 2/rollouts do CP2/' "$LAB"
+
+          # Remover artefactos temporários usados apenas nesta alteração.
+          rm -f .github/workflows/enrich-s5-lab.yml
+          rm -f .github/workflows/enrich-s5-lab-v2.yml
+          rm -f .github/tmp/s5-enrich.patch.b64
+
+          git config user.name 'Skullclamp'
+          git config user.email 'tiago.skullclamp@gmail.com'
+          git add -A
+          git commit -m 'Sessão 5: explicar comandos, flags e critérios de validação'
+          git push origin main
