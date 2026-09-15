@@ -2,7 +2,6 @@
 ## Kubernetes Admin II — Administração e Governação de uma Aplicação
 
 **Sessão:** 5 de 10  
-**Duração:** 4 horas / 240 minutos  
 **Nível:** intermédio  
 **Topologia:** 1 Control Plane + 2 Workers elegíveis  
 **CNI:** Calico  
@@ -61,7 +60,7 @@ Antes da sessão, o formador deve confirmar:
 - `ResourceQuota` com margem para todos os Pods previstos;
 - todos os manifests testados de ponta a ponta.
 
-O laboratório foi validado de ponta a ponta com Symfony Demo, PostgreSQL 16, Calico, CoreDNS e provisionamento dinâmico `local-path`. O restore completo não faz parte do percurso obrigatório de 240 minutos.
+O laboratório foi validado de ponta a ponta com Symfony Demo, PostgreSQL 16, Calico, CoreDNS e provisionamento dinâmico `local-path`. O restore completo não faz parte do percurso obrigatório do laboratório.
 
 ---
 
@@ -111,7 +110,7 @@ sessao-05-06/
 
 ---
 
-# CP0 — Obter os recursos e validar o cluster (10 min)
+# CP0 — Obter os recursos e validar o cluster
 
 ## Objetivo
 
@@ -207,7 +206,7 @@ Namespace lab-admin Active
 
 ---
 
-# CP1 — Governação inicial com LimitRange e ResourceQuota (30 min)
+# CP1 — Governação inicial com LimitRange e ResourceQuota
 
 ## Objetivo
 
@@ -273,7 +272,7 @@ Pod acima da quota foi rejeitado
 
 ---
 
-# CP2 — Disponibilizar a aplicação e o storage (45 min)
+# CP2 — Disponibilizar a aplicação e o storage
 
 ## Objetivo
 
@@ -341,7 +340,7 @@ sem Pods em CrashLoopBackOff ou Pending inesperado
 
 ---
 
-# CP3 — Scheduling: seleção, distribuição e falha controlada (25 min)
+# CP3 — Scheduling: seleção, distribuição e falha controlada
 
 ## Objetivo
 
@@ -477,13 +476,7 @@ Pod impossível ficou Pending com FailedScheduling
 
 ---
 
-# Intervalo — 15 min
-
-Até aqui decorreram `10 + 30 + 45 + 25 = 110 min`. Após o intervalo, faltam 115 minutos de prática, totalizando 240 minutos com a pausa incluída.
-
----
-
-# CP4 — Networking, DNS e cadeia aplicação → base de dados (25 min)
+# CP4 — Networking, DNS e cadeia aplicação → base de dados
 
 ## Objetivo
 
@@ -580,7 +573,7 @@ Pod debug eliminado
 
 ---
 
-# CP5 — Identidade, RBAC e hardening do workload (30 min)
+# CP5 — Identidade, RBAC e hardening do workload
 
 ## Objetivo
 
@@ -675,7 +668,7 @@ SecurityContext endurecido
 
 ---
 
-# CP6 — NetworkPolicy: fechar tudo e reabrir apenas o necessário (30 min)
+# CP6 — NetworkPolicy: fechar tudo e reabrir apenas o necessário
 
 ## Objetivo
 
@@ -829,7 +822,7 @@ intruder → db = BLOQUEADO
 
 ---
 
-# CP7 — Persistência e backup independente (20 min)
+# CP7 — Persistência e backup independente
 
 ## Objetivo
 
@@ -967,7 +960,7 @@ PVC ≠ backup
 Persistência ≠ backup
 ```
 
-> Um restore completo fica fora do percurso obrigatório de 240 minutos e pode ser tratado como extensão.
+> Um restore completo fica fora do percurso obrigatório e pode ser tratado como extensão.
 
 ### CHECKPOINT CP7
 
@@ -983,7 +976,7 @@ backup guardado em PVC separado
 
 ---
 
-# CP8 — Evidência final e limpeza (10 min)
+# CP8 — Evidência final e limpeza
 
 ## Objetivo
 
