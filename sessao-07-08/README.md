@@ -1,8 +1,8 @@
-# Sessão 7 — Continuidade, Troubleshooting e Operação Avançada
+# Sessões 7 e 8 — Continuidade, Troubleshooting e Operação Avançada
 
 ## Módulos 10 e 11 em 4 horas
 
-Esta sessão integra:
+Este laboratório integra:
 
 - **M10 — Alta Disponibilidade, Monitorização e Troubleshooting**;
 - **M11 — Gestão Avançada e Operação**.
@@ -40,7 +40,7 @@ Validar
 - Kustomize;
 - Prometheus Operator preparado previamente pelo formador.
 
-A aplicação usa o namespace `s7-lab`. O `PrometheusRule` pedagógico é criado no namespace `monitoring`, embora a expressão PromQL observe o Deployment no namespace `s7-lab`.
+A aplicação usa o namespace `s78-lab`. O `PrometheusRule` pedagógico é criado no namespace `monitoring`, embora a expressão PromQL observe o Deployment no namespace `s78-lab`.
 
 ## Laboratório
 
@@ -71,7 +71,7 @@ Validação
 ## Estrutura dos materiais
 
 ```text
-sessao-07/
+sessao-07-08/
 ├── README.md
 ├── lab-integrado.md
 ├── folha_evidencias.md
@@ -125,6 +125,6 @@ Sem validação pós-correção não há recuperação demonstrada.
 - um rollback Helm cria uma nova revision;
 - depois da adoção por Helm, não voltar a aplicar Kustomize sobre o Deployment e o Service Symfony;
 - manter apenas um `port-forward` para a porta local `9090` na mesma máquina;
-- remover no fim o `PrometheusRule` `s7-lab-rules`, porque ele existe no namespace `monitoring` e não é eliminado com o namespace `s7-lab`.
+- remover no fim o `PrometheusRule` `s78-lab-rules`, porque ele existe no namespace `monitoring` e não é eliminado com o namespace `s78-lab`.
 
 > O cluster possui apenas um Control Plane. O laboratório demonstra resiliência de workloads e enquadra HA do Control Plane, mas não simula a falha destrutiva do único Control Plane.
