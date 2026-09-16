@@ -33,10 +33,27 @@ if [ "$api_ok" -eq 1 ]; then
     && ok 'StorageClass local-path disponível' \
     || err 'StorageClass local-path não encontrada'
 
-  if kubectl get pods -A 2>/dev/null | grep -qi calico; then
-    ok 'Calico identificado no cluster'
+  # Não usar `kubectl ... | grep -q` com `set -o pipefail`: o grep pode sair
+  # após a primeira correspondência e provocar SIGPIPE no kubectl, originando
+  # um falso negativo. Identificamos diretamente o DaemonSet calico-node e
+  # comparamos o número desejado de Pods com o número Ready.
+  calico_ns=$(kubectl get daemonset -A \
+    -o jsonpath='{range .items[?(@.metadata.name=="calico-node")]}{.metadata.namespace}{"\n"}{end}' \
+    2>/dev/null || true)
+
+  if [ -n "$calico_ns" ]; then
+    desired=$(kubectl get daemonset calico-node -n "$calico_ns" \
+      -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || true)
+    ready=$(kubectl get daemonset calico-node -n "$calico_ns" \
+      -o jsonpath='{.status.numberReady}' 2>/dev/null || true)
+
+    if [ -n "$desired" ] && [ "$desired" -gt 0 ] && [ "$ready" -eq "$desired" ]; then
+      ok "Calico operacional: calico-node $ready/$desired Ready em $calico_ns"
+    else
+      warn "Calico identificado em $calico_ns, mas calico-node não está totalmente Ready ($ready/$desired)"
+    fi
   else
-    warn 'Calico não identificado; validar o CNI'
+    warn 'DaemonSet calico-node não identificado; validar o CNI'
   fi
 
   kubectl kustomize --help >/dev/null 2>&1 \
