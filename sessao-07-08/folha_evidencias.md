@@ -18,26 +18,33 @@ decisão de avançar ou diagnosticar
 
 ---
 
-## CP0 — Pré-validação
+## CP0 — Pré-validação mínima
 
 | Questão | Evidência / output relevante | Interpretação |
 |---|---|---|
+| `git`, `kubectl` e Helm disponíveis? | | |
 | Contexto Kubernetes correto? | | |
 | API acessível? | | |
 | 2 Workers `Ready` e schedulable? | | |
 | `local-path` disponível? | | |
 | Calico identificado? | | |
-| Helm disponível? | | |
 | Kustomize integrado disponível? | | |
+| Helm suporta `--take-ownership`? | | |
+
+> As máquinas Ubuntu dos formandos são criadas de raiz. Não é necessário registar ou comparar UUIDs/UIDs das máquinas neste checkpoint.
 
 **Gate:** não avançar se faltar um pré-requisito crítico.
 
 ---
 
-## CP1 — Baseline da aplicação
+## CP1 — Materiais e baseline da aplicação
 
 | Questão | Evidência / output relevante | Interpretação |
 |---|---|---|
+| Repositório da formação descarregado? | | |
+| Diretoria `sessao-07-08/` contém os manifests e guiões? | | |
+| Chart `kube-prometheus-stack-91.4.1.tgz` descarregado? | | |
+| `precheck.sh` terminou sem erros críticos? | | |
 | PostgreSQL `Running` e `Ready`? | | |
 | PVC `Bound`? | | |
 | 2 Pods Symfony `Running` e `Ready`? | | |
@@ -48,6 +55,7 @@ decisão de avançar ou diagnosticar
 Comandos úteis:
 
 ```bash
+ls -lh packages/kube-prometheus-stack-91.4.1.tgz
 kubectl get pods -n s78-lab -o wide
 kubectl get pvc -n s78-lab
 kubectl get endpointslices -n s78-lab
@@ -156,16 +164,20 @@ snapshot de etcd    → ______________________________
 
 ---
 
-## CP7 — Health gate antes do upgrade Helm
+## CP7 — Transição Kustomize → Helm e health gate
 
 | Questão | Evidência / output relevante | Interpretação |
 |---|---|---|
+| `helm template` produz a baseline esperada? | | |
+| `kubectl diff -n s78-lab` mostra apenas alterações previstas? | | |
+| Deployment/Service foram adotados sem serem apagados? | | |
+| `managed-by=Helm`? | | |
 | Release conhecida como boa? | | |
 | Revisão atual? | | |
 | 2 Pods `Ready`? | | |
-| Service com endpoints? | | |
+| Service com 2 endpoints prontos? | | |
 
-**Gate:** não executar o upgrade defeituoso sem baseline saudável.
+**Gate:** não executar o upgrade defeituoso sem baseline Helm saudável.
 
 ---
 
@@ -180,6 +192,7 @@ snapshot de etcd    → ______________________________
 | Event/describe relevante | |
 | Causa raiz | |
 | Revisão escolhida para rollback | |
+| Nova revisão criada pelo rollback | |
 | Estado após rollback | |
 | Endpoints após rollback | |
 
@@ -190,7 +203,7 @@ Resposta:
 
 ---
 
-## CP9 — Alteração de Custom Resource
+## CP9 — Alteração de Custom Resource e reconciliação
 
 Regista uma alteração não destrutiva no `PrometheusRule`:
 
@@ -199,13 +212,21 @@ Regista uma alteração não destrutiva no `PrometheusRule`:
 | Campo alterado | |
 | Valor anterior | |
 | Novo valor | |
-| Evidência após `kubectl apply` | |
+| `generation` antes/depois | |
+| `resourceVersion` antes/depois | |
+| Nova `summary` visível no CR? | |
+| Nova `summary` visível em `/api/v1/rules` do Prometheus? | |
+| Estado da regra no Prometheus | |
+| Regra original reposta no final? | |
 | O que significa reconciliação neste caso? | |
+
+**Prova forte de reconciliação:** a alteração não deve ficar apenas visível no objeto Kubernetes; deve também aparecer na configuração carregada pelo Prometheus.
 
 ---
 
 ## Autoavaliação final
 
+- [ ] Consigo descarregar e identificar os manifests e materiais necessários ao laboratório.
 - [ ] Consigo distinguir sintoma de causa raiz.
 - [ ] Consigo recolher evidência com `get`, `describe`, `logs` e Events.
 - [ ] Consigo explicar `Running ≠ Ready`.
@@ -214,10 +235,12 @@ Regista uma alteração não destrutiva no `PrometheusRule`:
 - [ ] Distingo resiliência de workload de HA do Control Plane.
 - [ ] Distingo HA, persistência, backup e recuperação.
 - [ ] Consigo utilizar Kustomize para aplicar uma baseline e variantes.
+- [ ] Consigo transferir de forma controlada o ownership de objetos para uma release Helm.
 - [ ] Consigo consultar uma release Helm e o respetivo histórico.
 - [ ] Consigo identificar uma revisão boa e executar rollback.
 - [ ] Distingo CRD de Custom Resource.
 - [ ] Consigo relacionar Custom Resource, Controller/Operator e reconciliação.
+- [ ] Consigo provar reconciliação observando também o sistema gerido.
 
 ## Regra final da sessão
 
