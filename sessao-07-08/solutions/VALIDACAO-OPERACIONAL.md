@@ -2,765 +2,335 @@
 
 > Documento de ensaio do formador. Executar **antes da formação**, no cluster real que será usado em aula.
 >
-> Este documento não substitui `lab-integrado.md`: serve para provar que a sequência completa é executável, cabe no tempo disponível e produz os sintomas previstos.
+> A lógica deste laboratório foi validada anteriormente no mesmo cenário técnico com a diretoria `sessao-07/` e o namespace `s7-lab`. Depois da reorganização para `sessao-07-08/` e `s78-lab`, este ensaio deve ser repetido para validar a variante renomeada.
 
 ## 1. Critério de fecho
 
-O laboratório só deve ser considerado operacionalmente fechado quando forem confirmados, no cluster real:
+O laboratório só fica operacionalmente fechado quando forem confirmados:
 
-- todos os checkpoints CP0–CP9;
-- os sintomas previstos nos quatro incidentes;
-- a recuperação declarativa após cada incidente;
-- os tempos reais de execução;
-- o consumo de recursos da monitorização;
-- a versão concreta e validada de `kube-prometheus-stack`;
-- a imagem `ghcr.io/skullclamp/symfony-demo:1.0.0`;
-- a imagem `postgres:16`;
-- o funcionamento real de `local-path`;
-- a limpeza final sem deixar workloads de laboratório ativos.
+- precheck sem erros críticos;
+- baseline saudável;
+- os quatro incidentes com os sintomas previstos;
+- recuperação e validação pós-correção;
+- observação segura do Control Plane e `etcd`;
+- adoção Helm com `--take-ownership` sem apagar Deployment/Service;
+- upgrade defeituoso com `ImagePullBackOff` e rollback;
+- Kustomize usado para render/diff após adoção Helm, sem reaplicar os objetos Symfony;
+- `PrometheusRule` alterado e reconciliação comprovada pela API do Prometheus;
+- validação global final;
+- limpeza do Custom Resource e dos recursos da aplicação.
 
 Regra:
 
 ```text
-EXPECTATIVA
-    ↓
-EXECUÇÃO REAL
-    ↓
-EVIDÊNCIA
-    ↓
-PASS / FAIL
-    ↓
-CONTINGÊNCIA, se necessário
+EXPECTATIVA → EXECUÇÃO REAL → EVIDÊNCIA → PASS/FAIL → CONTINGÊNCIA
 ```
 
-Os tempos apresentados abaixo são **orçamento de ensaio**, não tempos garantidos. Registar sempre o tempo efetivamente observado.
-
 ---
 
-# 2. Registo global do ensaio
-
-| Elemento | Registo |
-|---|---|
-| Data | |
-| Kubernetes version | |
-| Helm version | |
-| Control Plane | |
-| Worker 1 | |
-| Worker 2 | |
-| vCPU/RAM por Node | |
-| StorageClass | |
-| CNI | |
-| Versão `kube-prometheus-stack` | |
-| Imagem Symfony validada | |
-| Imagem PostgreSQL validada | |
-| Resultado global | PASS / FAIL |
-
----
-
-# CP0 — Pré-validação
-
-**Orçamento:** 5–10 min  
-**Risco:** baixo  
-**Gate:** obrigatório
-
-## Executar
+# CP0 — Precheck
 
 ```bash
 cd ~/formacao-kubernetes/sessao-07-08
-chmod +x 00-precheck/precheck.sh monitoring/prepare-chart.sh
-./00-precheck/precheck.sh
+bash 00-precheck/precheck.sh
 ```
 
-Confirmar também:
-
-```bash
-kubectl version
-helm version --short
-kubectl get nodes -o wide
-kubectl get storageclass
-kubectl get pods -A | grep -i calico
-ls -lh packages/kube-prometheus-stack-*.tgz
-```
+Não ativar `set -euo pipefail` manualmente no shell interativo.
 
 ## PASS
 
 - API acessível;
-- exatamente o contexto pretendido;
-- pelo menos 2 Workers `Ready` e schedulable;
+- pelo menos 2 Workers `Ready`;
 - `local-path` presente;
 - Calico operacional;
-- Helm disponível;
-- Kustomize integrado disponível;
-- existe um único pacote local `kube-prometheus-stack-*.tgz` selecionado para a sessão.
-
-## FAIL / contingência
-
-| Sintoma | Ação |
-|---|---|
-| API inacessível | Corrigir kubeconfig/contexto antes de continuar. |
-| Worker `NotReady` | Não iniciar o laboratório. Diagnosticar o Node. |
-| Worker cordoned | `kubectl uncordon <NODE>` apenas se essa for a intenção operacional. |
-| `local-path` ausente | Corrigir provisioner/StorageClass; não alterar o laboratório para storage efémero. |
-| chart local ausente | Executar `monitoring/prepare-chart.sh <VERSAO_TESTADA>` antes da aula. |
-| mais de um chart local | Selecionar e documentar uma única versão validada. |
-
-**Tempo real CP0:** ______ min  
-**Resultado:** PASS / FAIL
+- Kustomize disponível;
+- Helm suporta `--take-ownership`;
+- Prometheus Operator/monitorização disponíveis.
 
 ---
 
-# CP1 — Baseline Kustomize
-
-**Orçamento:** 8–12 min  
-**Risco:** médio; valida imagens, storage e scheduling
-
-## Renderizar
+# CP1 — Baseline
 
 ```bash
-kubectl kustomize app/overlays/normal/ > /tmp/s78-rendered.yaml
-kubectl apply --dry-run=client -f /tmp/s78-rendered.yaml >/dev/null
-```
-
-## Aplicar
-
-```bash
+kubectl kustomize app/overlays/normal/ > /tmp/s78-normal.yaml
 kubectl apply -k app/overlays/normal/
 kubectl rollout status statefulset/postgres -n s78-lab --timeout=180s
 kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
-```
-
-## Evidência
-
-```bash
 kubectl get pods -n s78-lab -o wide
 kubectl get pvc -n s78-lab
-kubectl get svc -n s78-lab
 kubectl get endpointslices -n s78-lab
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
 ```
 
 ## PASS
 
 ```text
-postgres-0         Running / Ready
-PVC                Bound
-Symfony Pod A      Running / Ready / Worker A
-Symfony Pod B      Running / Ready / Worker B
-Service            2 endpoints ready
+postgres-0       1/1 Running
+PVC              Bound
+Symfony          Deployment 2/2
+réplicas Web     Workers diferentes
+Service          2 backends prontos
 ```
-
-## FAIL / contingência
-
-| Sintoma | Diagnóstico imediato |
-|---|---|
-| `ImagePullBackOff` Symfony | `kubectl describe pod`; validar existência/acesso a `ghcr.io/skullclamp/symfony-demo:1.0.0`. |
-| `ImagePullBackOff` PostgreSQL | Validar acesso a `postgres:16`. |
-| PVC `Pending` | `kubectl describe pvc`; validar `local-path` e provisioner. |
-| Symfony `Pending` | `kubectl describe pod`; verificar CPU/RAM e anti-affinity. |
-| Symfony `Running` mas `NotReady` na baseline | Validar `/ready`, `DATABASE_URL` e PostgreSQL. Não avançar para incidentes. |
-
-**Tempo real CP1:** ______ min  
-**Resultado:** PASS / FAIL
 
 ---
 
-# CP2 — Helm + Prometheus Operator + CRDs
-
-**Orçamento:** 12–20 min  
-**Risco:** alto; é o bloco com maior dependência de recursos do cluster
-
-## Confirmar pacote
-
-```bash
-CHART=$(ls packages/kube-prometheus-stack-*.tgz)
-helm show chart "$CHART"
-```
-
-Registar a versão efetiva: ____________________
-
-## Instalar
-
-```bash
-helm install monitoring "$CHART" \
-  --namespace monitoring \
-  --create-namespace \
-  -f monitoring/values-lab.yaml \
-  --wait \
-  --timeout 5m
-```
-
-## Evidência
-
-```bash
-helm list -n monitoring
-helm status monitoring -n monitoring
-kubectl get pods -n monitoring -o wide
-kubectl get crd | grep monitoring.coreos.com
-kubectl get prometheus -n monitoring
-kubectl get statefulset -n monitoring
-kubectl get deploy -n monitoring
-kubectl get events -n monitoring --sort-by=.lastTimestamp
-```
-
-Aplicar a regra:
-
-```bash
-kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s78-lab-rules -n monitoring -o yaml
-```
-
-## PASS
-
-- release Helm em estado operacional;
-- Operator em `Running`;
-- Prometheus CR existente;
-- StatefulSet/Pod Prometheus criado pelo Operator;
-- `kube-state-metrics` em execução;
-- CRDs `monitoring.coreos.com` presentes;
-- `PrometheusRule/s78-lab-rules` aceite pela API.
-
-## Verificação de capacidade
-
-```bash
-kubectl top nodes 2>/dev/null || true
-kubectl top pods -n monitoring 2>/dev/null || true
-```
-
-Se Metrics Server não existir, registar apenas requests/limits e utilização observável no hypervisor.
-
-## FAIL / contingência
-
-| Sintoma | Ação |
-|---|---|
-| `helm install` timeout | Não aumentar o timeout cegamente. Ver Pods/Events e identificar a causa. |
-| Pods `Pending` | Verificar CPU/RAM livres e scheduling. |
-| `ImagePullBackOff` | Pré-carregar/garantir acesso às imagens antes da formação. |
-| CRDs ausentes | Não continuar para CP9; validar instalação do chart e versão. |
-| PrometheusRule existe mas não há `kube-state-metrics` | Corrigir `values-lab.yaml`/versão do chart antes da formação. |
-
-> Se este bloco exceder consistentemente 20 minutos ou consumir recursos excessivos, rever os componentes do chart que não são necessários ao objetivo pedagógico antes de congelar a versão.
-
-**Tempo real CP2:** ______ min  
-**Resultado:** PASS / FAIL
-
----
-
-# CP3 — Incidente 1: readiness incorreta
-
-**Orçamento:** 12–15 min
-
-## Health gate
-
-```bash
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
-```
-
-Confirmar 2/2 réplicas Ready antes da falha.
-
-## Provocar
+# CP2A — Readiness
 
 ```bash
 kubectl apply -k app/overlays/incident-probe/
-```
-
-Observar rollout:
-
-```bash
-kubectl get pods -n s78-lab -w
-```
-
-Noutro terminal:
-
-```bash
 kubectl get deployment symfony-demo -n s78-lab
-kubectl get endpointslices -n s78-lab -o yaml
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
+kubectl get pods -n s78-lab -o wide
+kubectl get events -n s78-lab --sort-by=.metadata.creationTimestamp
+kubectl get endpointslices -n s78-lab \
+  -l kubernetes.io/service-name=symfony-demo -o yaml
 ```
 
-Identificar o Pod novo:
-
-```bash
-kubectl get pods -n s78-lab --sort-by=.metadata.creationTimestamp -o wide
-```
-
-Depois:
-
-```bash
-kubectl describe pod <NOVO_POD> -n s78-lab
-kubectl logs <NOVO_POD> -n s78-lab
-```
+Aprofundar o Pod não pronto com `describe` e `logs`.
 
 ## PASS
 
-```text
-Pod antigo   Running / Ready
-Pod novo     Running / NotReady
-Service      mantém pelo menos 1 endpoint ready
-Rollout      não conclui enquanto a probe estiver errada
-```
+- novo Pod `Running` mas `Ready=False`;
+- readiness `/ready-inexistente` devolve HTTP `404`;
+- o Pod pode permanecer no EndpointSlice com `ready:false`/`serving:false`;
+- pelo menos uma réplica saudável permanece `ready:true`;
+- eventual `FailedScheduling` transitório não é confundido com a causa raiz.
 
-A evidência deve apontar para `/ready-inexistente` e falha da readiness probe.
-
-## Recuperar
-
-```bash
-kubectl apply -k app/overlays/normal/
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
-kubectl get pods -n s78-lab
-kubectl get endpointslices -n s78-lab
-```
-
-## Contingência
-
-Se o novo Pod ficar `Pending`, o problema é de scheduling/recursos e **não** o incidente pretendido. Voltar à baseline e resolver antes de continuar.
-
-**Tempo real CP3:** ______ min  
-**Resultado:** PASS / FAIL
+Recuperar e exigir Deployment `2/2` e dois endpoints `ready:true`.
 
 ---
 
-# CP4 — Incidente 2: selector do Service
-
-**Orçamento:** 8–10 min
-
-## Provocar
+# CP2B — Service sem backends
 
 ```bash
 kubectl apply -k app/overlays/incident-service/
-```
-
-## Evidência
-
-```bash
 kubectl get pods -n s78-lab --show-labels
 kubectl get svc symfony-demo -n s78-lab -o yaml
-kubectl get endpointslices -n s78-lab -o yaml
+kubectl get pods -n s78-lab -l app=symfony-demo-inexistente
+kubectl get endpointslices -n s78-lab \
+  -l kubernetes.io/service-name=symfony-demo -o yaml
 ```
 
 ## PASS
 
-- Pods permanecem `Running` e `Ready`;
-- Service existe;
-- selector não corresponde às labels dos Pods;
-- Service deixa de ter backends utilizáveis.
+- Pods permanecem saudáveis;
+- selector incorreto não encontra Pods;
+- EndpointSlice fica sem endpoints utilizáveis (`endpoints: null`).
 
-## Recuperar
-
-```bash
-kubectl apply -k app/overlays/normal/
-kubectl get endpointslices -n s78-lab -o yaml
-```
-
-## Contingência
-
-Se os Pods também deixarem de estar Ready, existe uma falha residual de CP3. Repor primeiro a baseline e repetir CP4 isoladamente.
-
-**Tempo real CP4:** ______ min  
-**Resultado:** PASS / FAIL
+Recuperar com overlay `normal` e validar selector/endpoints.
 
 ---
 
-# CP5 — Incidente 3: Worker `NotReady`
+# CP3 — Worker `NotReady`
 
-**Orçamento:** 15–25 min  
-**Risco:** alto; depende dos timers reais do cluster
-
-## Health gate
-
-```bash
-kubectl get pod postgres-0 -n s78-lab -o wide
-kubectl get pods -n s78-lab -l app=symfony-demo -o wide
-kubectl get endpointslices -n s78-lab
-```
-
-Selecionar o Worker com uma réplica Symfony **sem** `postgres-0`.
-
-Registar:
-
-```text
-Worker alvo: ____________________
-Pod Symfony nesse Worker: ____________________
-```
-
-## Provocar — apenas pelo formador
-
-No Worker alvo:
+Escolher o Worker que contém Symfony mas não PostgreSQL. Parar **apenas** o kubelet:
 
 ```bash
 sudo systemctl stop kubelet
 ```
 
-No terminal administrativo:
+Observar:
 
 ```bash
 kubectl get nodes -w
-```
-
-Noutro terminal:
-
-```bash
 kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab -o yaml
-kubectl get events -A --sort-by=.lastTimestamp
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get events -n s78-lab --sort-by=.metadata.creationTimestamp
+kubectl get endpointslices -n s78-lab \
+  -l kubernetes.io/service-name=symfony-demo -o yaml
 ```
 
 ## PASS
 
-- Node transita para `NotReady`;
-- a transição **não é assumida como instantânea**;
-- pelo menos uma réplica Symfony no Worker saudável permanece utilizável;
-- a topologia não é apresentada como HA do Control Plane;
-- é observado e explicado o efeito da anti-affinity obrigatória com apenas um Worker saudável.
+- Worker passa a `NotReady`;
+- PostgreSQL permanece saudável no outro Worker;
+- workload perde redundância mas conserva um backend elegível;
+- pode surgir substituição `Pending` por anti-affinity/taints;
+- endpoint do Worker afetado pode ficar `ready:false`;
+- compreende-se `estado desejado ≠ convergência imediata`.
 
-Registar:
-
-```text
-Tempo até NotReady: ______
-Tempo até alteração relevante de Pods/endpoints: ______
-```
-
-## Recuperar
-
-No Worker:
+Recuperar:
 
 ```bash
 sudo systemctl start kubelet
-```
-
-Depois:
-
-```bash
+sudo systemctl is-active kubelet
 kubectl get nodes
 kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=300s
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
 ```
 
-## Contingência temporal
-
-Não gastar a sessão à espera de timers de evicção. Se o objetivo pedagógico já estiver demonstrado (`NotReady`, impacto no endpoint e diferença entre resiliência/HA), recuperar o kubelet e continuar. Os tempos reais devem ser documentados neste ensaio para o formador saber quanto esperar em aula.
-
-**Tempo real CP5:** ______ min  
-**Resultado:** PASS / FAIL
+Exigir Worker `Ready`, Deployment `2/2` e dois endpoints `ready:true`.
 
 ---
 
-# CP6 — Control Plane e `etcd`
+# CP4 — Control Plane / etcd
 
-**Orçamento:** 5–8 min  
-**Risco:** baixo; exclusivamente observacional
-
-## Executar
+Apenas observação:
 
 ```bash
-kubectl get nodes
-kubectl get pods -n kube-system -o wide
-kubectl get pods -n kube-system -o wide | grep -E 'kube-apiserver|kube-controller-manager|kube-scheduler|etcd'
+kubectl get pods -n kube-system -o wide \
+  | grep -E 'kube-apiserver|kube-controller-manager|kube-scheduler|etcd'
+kubectl get --raw='/readyz?verbose'
 ```
 
 ## PASS
 
-Identificar objetivamente:
-
-```text
-1 Control Plane
-kube-apiserver
-kube-controller-manager
-kube-scheduler
-etcd
-```
-
-Explicação validada:
-
-```text
-redundância de Control Plane / etcd → disponibilidade
-snapshot de etcd                    → recuperação do estado
-```
-
-Não executar falha destrutiva ou restore de `etcd`.
-
-**Tempo real CP6:** ______ min  
-**Resultado:** PASS / FAIL
+- componentes identificados no único Control Plane;
+- `/readyz` saudável;
+- fica claro que `Control Plane saudável ≠ Control Plane altamente disponível`;
+- nenhum componente do Control Plane é parado;
+- nenhum restore destrutivo de `etcd` é executado.
 
 ---
 
-# CP7 — Transição Kustomize → Helm
+# CP6 — Adoção Helm, upgrade e rollback
 
-**Orçamento:** 6–10 min
-
-## Confirmar baseline antes da transição
+Renderizar e comparar:
 
 ```bash
-kubectl get deployment,svc,pods -n s78-lab
-kubectl get statefulset,pvc -n s78-lab
+helm template symfony-lab ./helm/app-lab \
+  -n s78-lab -f helm/values/values-good.yaml \
+  > /tmp/symfony-good.yaml
+kubectl diff -n s78-lab -f /tmp/symfony-good.yaml || true
 ```
 
-## Remover apenas ownership Kustomize da aplicação Web
+Adotar os objetos existentes **sem os apagar**:
 
 ```bash
-kubectl delete deployment symfony-demo -n s78-lab
-kubectl delete service symfony-demo -n s78-lab
-```
-
-Confirmar que PostgreSQL permanece:
-
-```bash
-kubectl get statefulset,pod,pvc,secret,svc -n s78-lab
-```
-
-## Instalar Helm
-
-```bash
-helm install symfony-lab \
-  ./helm/app-lab \
+helm upgrade --install symfony-lab ./helm/app-lab \
   -n s78-lab \
   -f helm/values/values-good.yaml \
-  --wait \
-  --timeout 3m
+  --take-ownership \
+  --wait --timeout 180s
 ```
 
-## PASS
+Validar ownership, Deployment `2/2`, Pods e imagem.
 
-- release `symfony-lab` criada;
-- revisão 1 operacional;
-- 2 réplicas Ready em Workers diferentes;
-- Service com endpoints;
-- PostgreSQL/PVC mantidos.
-
-## Nota operacional
-
-Existe uma pequena janela de indisponibilidade entre a remoção dos objetos Kustomize e a criação da release Helm. Neste laboratório é uma transição pedagógica controlada de ownership, não uma estratégia de migração zero-downtime.
-
-**Tempo real CP7:** ______ min  
-**Resultado:** PASS / FAIL
-
----
-
-# CP8 — Release defeituosa + rollback
-
-**Orçamento:** 12–15 min
-
-## Health gate
+Introduzir a candidata defeituosa:
 
 ```bash
-helm history symfony-lab -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
-```
-
-Não avançar sem baseline saudável.
-
-## Provocar
-
-```bash
-helm upgrade symfony-lab \
-  ./helm/app-lab \
+helm upgrade symfony-lab ./helm/app-lab \
   -n s78-lab \
   -f helm/values/values-broken.yaml \
-  --wait \
-  --timeout 90s
+  --wait --timeout 90s
 ```
 
-É esperado um retorno não-zero/timeout.
+## PASS da falha
 
-## Evidência
+- nova revisão `failed`;
+- Deployment `1/2`;
+- novo Pod em `ErrImagePull`/`ImagePullBackOff`;
+- imagem declarada `registry.invalid/s78/symfony-demo:1.0.0`;
+- uma réplica anterior permanece disponível.
 
-```bash
-helm status symfony-lab -n s78-lab
-helm history symfony-lab -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab -o yaml
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
-kubectl describe pod <NOVO_POD> -n s78-lab
-```
-
-## PASS
-
-```text
-1 réplica anterior continua disponível
-novo Pod → ErrImagePull / ImagePullBackOff
-histórico Helm contém revisão candidata falhada
-```
-
-## Rollback
-
-Identificar a revisão boa no histórico e só depois executar:
-
-```bash
-helm rollback symfony-lab <REVISAO_BOA> -n s78-lab --wait --timeout 3m
-```
-
-Validar:
+Rollback para a revisão conhecida como boa:
 
 ```bash
 helm history symfony-lab -n s78-lab
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
-kubectl get pods -n s78-lab
-kubectl get endpointslices -n s78-lab
+helm rollback symfony-lab <REVISAO_BOA> \
+  -n s78-lab --wait --timeout 180s
 ```
 
-## Contingência
+## PASS da recuperação
 
-Se a falha observada for `Pending` em vez de `ImagePullBackOff`, investigar scheduling/recursos: o incidente pretendido não foi reproduzido.
-
-**Tempo real CP8:** ______ min  
-**Resultado:** PASS / FAIL
+- rollback cria uma nova revision;
+- release `deployed`;
+- Deployment `2/2`;
+- imagem `ghcr.io/skullclamp/symfony-demo:1.0.0`;
+- dois endpoints `ready:true`.
 
 ---
 
-# CP9 — Custom Resource e reconciliação
+# CP7 — Kustomize após adoção Helm
 
-**Orçamento:** 7–10 min
-
-## Estado inicial
+Apenas renderizar/comparar:
 
 ```bash
-kubectl get prometheusrule s78-lab-rules -n monitoring -o yaml
-kubectl get prometheus -n monitoring
-kubectl get statefulset -n monitoring
-kubectl get pods -n monitoring
+kubectl kustomize app/overlays/normal/ > /tmp/normal.yaml
+kubectl kustomize app/overlays/incident-probe/ > /tmp/probe.yaml
+kubectl kustomize app/overlays/incident-service/ > /tmp/service.yaml
+
+diff -u /tmp/normal.yaml /tmp/probe.yaml || true
+diff -u /tmp/normal.yaml /tmp/service.yaml || true
 ```
 
-## Alterar
+**Não executar `kubectl apply -k` sobre Deployment/Service Symfony depois da adoção Helm.** Confirmar ownership por labels/anotações Helm.
 
-Em `monitoring/prometheus-rule.yaml`, alterar por exemplo:
+---
 
-```yaml
-for: 2m
-```
+# CP8 — Custom Resource e reconciliação
 
-em vez do valor inicial `1m`, ou alterar a annotation `summary`.
-
-Aplicar:
+Criar a regra:
 
 ```bash
 kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s78-lab-rules -n monitoring -o yaml
+kubectl get prometheusrule s78-lab-rules -n monitoring \
+  -o jsonpath='generation={.metadata.generation}{"\n"}summary={.spec.groups[0].rules[0].annotations.summary}{"\n"}'
 ```
 
-## Observar o Controller/Operator
+Alterar apenas `summary` com `kubectl patch` e confirmar incremento de `generation`.
 
-Identificar primeiro o Pod do Operator, sem assumir um nome fixo entre versões do chart:
+Abrir **um único** port-forward:
 
 ```bash
-kubectl get pods -n monitoring | grep -i operator
+kubectl port-forward -n monitoring \
+  svc/monitoring-kube-prometheus-prometheus 9090:9090
 ```
 
-Depois consultar os logs do Pod identificado:
-
-```bash
-kubectl logs -n monitoring <POD-OPERATOR> --since=5m
-```
+Noutro terminal, consultar `/api/v1/rules` e filtrar o grupo `s78-lab.rules` e a regra `SymfonyDeploymentUnavailable`.
 
 ## PASS
 
-- Custom Resource apresenta o novo estado desejado;
-- Operator permanece saudável;
-- o formando consegue relacionar `CRD → CR → Controller/Operator → reconciliação`;
-- em CP2 já foi demonstrado que um Prometheus CR leva à criação/gestão de StatefulSet e Pods.
-
-> A simples existência do `PrometheusRule` na API prova que o CR foi aceite; a observação do Operator e dos recursos geridos reforça a demonstração de reconciliação.
-
-**Tempo real CP9:** ______ min  
-**Resultado:** PASS / FAIL
+- `generation` aumenta após alteração do CR;
+- a nova `summary` aparece na API do Prometheus;
+- `state=inactive` é aceite quando o Deployment está saudável;
+- reaplicar `monitoring/prometheus-rule.yaml` repõe a `summary` original;
+- a API do Prometheus volta a apresentar a `summary` original.
 
 ---
 
-# 3. Limpeza end-to-end
-
-**Orçamento:** 5–10 min
+# CP9 — Validação global final
 
 ```bash
+kubectl get nodes
+kubectl get pod postgres-0 -n s78-lab -o wide
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -l app=symfony-demo -o wide
+kubectl get deployment symfony-demo -n s78-lab \
+  -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
+kubectl get endpointslices -n s78-lab \
+  -l kubernetes.io/service-name=symfony-demo \
+  -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]}{" ready="}{.conditions.ready}{" serving="}{.conditions.serving}{" terminating="}{.conditions.terminating}{"\n"}{end}'
+```
+
+## PASS global
+
+```text
+Nodes       todos Ready
+PostgreSQL  1/1 Running
+Deployment  2/2
+Symfony     2 Pods 1/1 Running, distribuídos pelos Workers
+Imagem      ghcr.io/skullclamp/symfony-demo:1.0.0
+Helm        deployed
+Endpoints   2 × ready=true, serving=true, terminating=false
+```
+
+---
+
+# Limpeza
+
+```bash
+kubectl delete prometheusrule s78-lab-rules \
+  -n monitoring --ignore-not-found
 helm uninstall symfony-lab -n s78-lab || true
-helm uninstall monitoring -n monitoring || true
-kubectl delete namespace monitoring --ignore-not-found
 kubectl delete namespace s78-lab --ignore-not-found
 ```
 
-Validar:
+Não remover automaticamente CRDs do Prometheus Operator.
 
-```bash
-kubectl get namespace s78-lab monitoring 2>/dev/null || true
-helm list -A
-kubectl get pods -A | grep -E 's78|monitoring' || true
-```
-
-Não remover automaticamente CRDs partilháveis do Prometheus Operator sem confirmar utilização noutros namespaces.
-
-**Tempo real limpeza:** ______ min
-
----
-
-# 4. Orçamento temporal do ensaio
-
-| Bloco | Orçamento | Tempo real |
-|---|---:|---:|
-| CP0 | 5–10 min | |
-| CP1 | 8–12 min | |
-| CP2 | 12–20 min | |
-| CP3 | 12–15 min | |
-| CP4 | 8–10 min | |
-| CP5 | 15–25 min | |
-| CP6 | 5–8 min | |
-| CP7 | 6–10 min | |
-| CP8 | 12–15 min | |
-| CP9 | 7–10 min | |
-| Limpeza | 5–10 min | |
-
-O ensaio técnico puro deverá deixar margem suficiente para, em aula, explicação, formulação de hipóteses, discussão dos outputs, preenchimento de evidências e intervalo.
-
----
-
-# 5. Critérios finais PASS / FAIL
-
-## PASS operacional
-
-- [ ] CP0 sem erros críticos.
-- [ ] Baseline Kustomize sobe de forma repetível.
-- [ ] Imagem Symfony validada no cluster real.
-- [ ] PostgreSQL e PVC operacionais.
-- [ ] Operator/Prometheus instalados dentro do orçamento.
-- [ ] Versão do chart registada e congelada.
-- [ ] Incidente 1 produz `Running/NotReady`, não `Pending`.
-- [ ] Incidente 2 remove backends mantendo Pods saudáveis.
-- [ ] Incidente 3 produz `NotReady` e recuperação controlável dentro do tempo de aula.
-- [ ] CP6 identifica corretamente o único Control Plane e `etcd`.
-- [ ] Transição Kustomize → Helm preserva PostgreSQL/PVC.
-- [ ] Incidente 4 produz `ErrImagePull/ImagePullBackOff`.
-- [ ] Rollback Helm recupera 2 réplicas Ready.
-- [ ] PrometheusRule pode ser alterada e reaplicada.
-- [ ] Operator/recursos reconciliados podem ser observados.
-- [ ] Limpeza concluída.
-
-## FAIL operacional
-
-Qualquer um dos seguintes bloqueia o fecho:
-
-- imagem principal inexistente/inacessível;
-- storage não provisiona;
-- chart não instala de forma previsível;
-- falta de recursos impede os cenários;
-- incidentes produzem sintomas diferentes dos documentados;
-- Worker não recupera de forma segura;
-- rollback não recupera a aplicação;
-- sequência excede de forma consistente o tempo disponível.
-
----
-
-# 6. Decisão final do formador
+## Decisão final
 
 ```text
-[ ] PASS — laboratório pronto para formação
-[ ] PASS COM AJUSTES — repetir apenas os checkpoints assinalados
+[ ] PASS — variante sessao-07-08 / s78-lab pronta para formação
+[ ] PASS COM AJUSTES — repetir checkpoints assinalados
 [ ] FAIL — não utilizar ainda em formação
 ```
-
-Observações:
-
-__________________________________________________________________
-
-__________________________________________________________________
-
-__________________________________________________________________
