@@ -49,16 +49,19 @@ Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção →
 | Aplicação | Symfony Demo |
 | Imagem | `ghcr.io/skullclamp/symfony-demo:1.0.0` |
 | Base de dados | PostgreSQL 16 |
-| Ferramentas | `kubectl`, Kustomize integrado, Helm |
+| Ferramentas | `git`, `kubectl`, Kustomize integrado, Helm |
 | Operator | Prometheus Operator via `kube-prometheus-stack` |
+| Chart validado | `kube-prometheus-stack` 91.4.1 |
 
 As credenciais existentes neste laboratório são deliberadamente fictícias e destinam-se apenas à formação.
 
 > **Limite do cenário:** um cluster com apenas um Control Plane não demonstra Alta Disponibilidade real do Control Plane. A HA do Control Plane e a redundância de `etcd` são analisadas tecnicamente, mas não simuladas de forma destrutiva neste cluster.
 
+> **Identidade das máquinas:** as máquinas Ubuntu dos formandos são criadas de raiz para a formação. Não faz parte do procedimento normal verificar `machine-id`, UUID de firmware/disco ou identificadores equivalentes. Esses identificadores só devem ser investigados se existir um sintoma concreto de clonagem ou identidade duplicada.
+
 ---
 
-## 2. Estrutura
+## 2. Estrutura dos materiais
 
 ```text
 sessao-07-08/
@@ -105,7 +108,7 @@ sessao-07-08/
 
 | Tempo | Atividade |
 |---:|---|
-| 15 min | CP0/CP1 — Pré-validação, baseline e evidência |
+| 15 min | CP0/CP1 — Pré-validação, obtenção dos materiais, baseline e evidência |
 | 25 min | Kustomize e gestão declarativa |
 | 35 min | Helm + Prometheus Operator + CRDs + regra pedagógica |
 | 30 min | Incidente 1 — rollout bloqueado por readiness |
@@ -118,43 +121,98 @@ sessao-07-08/
 
 ---
 
-# CP0 — Pré-validação
+# CP0 — Pré-validação mínima do ambiente
 
 ## Objetivo
 
-Provar que o ambiente está preparado antes de introduzir qualquer incidente.
+Confirmar que o ambiente base está utilizável antes de descarregar e aplicar os materiais do laboratório.
 
-Executar a partir de `sessao-07-08/`:
+Executar no terminal administrativo:
 
 ```bash
-chmod +x 00-precheck/precheck.sh monitoring/prepare-chart.sh
-./00-precheck/precheck.sh
+command -v git
+command -v kubectl
+command -v helm
+helm version --short
+kubectl cluster-info
+kubectl get nodes -o wide
+kubectl get storageclass local-path
+kubectl get pods -A | grep -i calico
+kubectl kustomize --help >/dev/null
 ```
 
-O precheck valida:
+Confirmar também que o Helm utilizado suporta a transferência explícita de ownership que será usada no CP7:
 
-- `kubectl` e Helm;
-- acesso à API Kubernetes;
-- pelo menos dois Worker Nodes exatamente em estado `Ready` e disponíveis para scheduling;
-- `StorageClass` `local-path`;
-- presença de Calico;
-- Kustomize integrado no `kubectl`.
+```bash
+helm upgrade --help | grep -- '--take-ownership'
+```
 
-### Checkpoint
+Critérios mínimos:
 
-Registar o resultado em `folha_evidencias.md`.
+- `git`, `kubectl` e Helm disponíveis;
+- API Kubernetes acessível;
+- dois Worker Nodes em estado `Ready` e disponíveis para scheduling;
+- `StorageClass` `local-path` disponível;
+- Calico presente;
+- Kustomize integrado no `kubectl`;
+- Helm com suporte para `--take-ownership`.
+
+Não é necessário recolher ou comparar UUIDs/UIDs das máquinas Ubuntu dos formandos, porque estas máquinas são criadas de raiz.
 
 **Não avançar** se faltar um pré-requisito crítico.
 
 ---
 
-# CP1 — Baseline da aplicação com Kustomize
+# CP1 — Obter os materiais e criar a baseline com Kustomize
 
 ## Objetivo
 
-Criar um estado conhecido como bom antes de provocar falhas.
+Cada formando começa por descarregar os manifests e restantes materiais necessários e, só depois, cria um estado conhecido como bom.
 
-### 1. Renderizar antes de aplicar
+### 1. Descarregar o repositório da formação
+
+As máquinas dos formandos partem de um estado novo, pelo que o procedimento normal é um clone limpo:
+
+```bash
+cd ~
+git clone --depth 1 https://github.com/Skullclamp/formacao-kubernetes.git
+cd ~/formacao-kubernetes/sessao-07-08
+```
+
+Confirmar que os materiais principais existem:
+
+```bash
+ls -1
+ls -1 app/base app/overlays helm monitoring incidents
+```
+
+### 2. Descarregar o chart externo validado
+
+A versão validada neste ambiente é `kube-prometheus-stack` **91.4.1**.
+
+```bash
+chmod +x 00-precheck/precheck.sh monitoring/prepare-chart.sh
+./monitoring/prepare-chart.sh 91.4.1
+```
+
+Confirmar o pacote:
+
+```bash
+ls -lh packages/kube-prometheus-stack-91.4.1.tgz
+helm show chart packages/kube-prometheus-stack-91.4.1.tgz
+```
+
+> Se a formação tiver de decorrer sem acesso à Internet, o formador deve disponibilizar previamente este `.tgz`. O restante laboratório usa sempre o pacote local.
+
+### 3. Executar o precheck completo dos materiais e do cluster
+
+```bash
+./00-precheck/precheck.sh
+```
+
+O precheck valida as ferramentas, a API Kubernetes, os Workers, o StorageClass, Calico, Kustomize e a presença do chart local.
+
+### 4. Renderizar antes de aplicar
 
 ```bash
 kubectl kustomize app/overlays/normal/
@@ -162,20 +220,20 @@ kubectl kustomize app/overlays/normal/
 
 `kubectl kustomize` permite observar o manifesto final produzido a partir da base e do overlay.
 
-### 2. Aplicar
+### 5. Aplicar a baseline
 
 ```bash
 kubectl apply -k app/overlays/normal/
 ```
 
-### 3. Aguardar a baseline
+### 6. Aguardar a baseline
 
 ```bash
 kubectl rollout status statefulset/postgres -n s78-lab --timeout=180s
 kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
 ```
 
-### 4. Recolher evidência
+### 7. Recolher evidência
 
 ```bash
 kubectl get nodes -o wide
@@ -215,32 +273,16 @@ Preencher **CP1** em `folha_evidencias.md`.
 
 # CP2 — Prometheus Operator, CRDs e reconciliação
 
-## Preparação antes da formação
-
-O laboratório não deve depender da Internet durante a sessão. O formador escolhe e testa previamente uma versão de `kube-prometheus-stack`:
+## Instalar a release a partir do pacote local
 
 ```bash
-./monitoring/prepare-chart.sh <VERSAO_VALIDADA>
-```
-
-O pacote deverá ficar em:
-
-```text
-packages/kube-prometheus-stack-<VERSAO_VALIDADA>.tgz
-```
-
-Não é fixada neste repositório uma versão que ainda não tenha sido validada no cluster real.
-
-## Instalar a release
-
-```bash
-helm install monitoring \
-  ./packages/kube-prometheus-stack-<VERSAO_VALIDADA>.tgz \
+helm upgrade --install monitoring \
+  packages/kube-prometheus-stack-91.4.1.tgz \
   --namespace monitoring \
   --create-namespace \
   -f monitoring/values-lab.yaml \
   --wait \
-  --timeout 5m
+  --timeout 10m
 ```
 
 ## Identificar a extensão da API
@@ -274,7 +316,7 @@ Operator / Controller
 StatefulSet e Pods reconciliados
 ```
 
-## Criar um Custom Resource pedagógico
+## Criar o Custom Resource pedagógico
 
 Criar a regra **antes dos incidentes**, para integrar monitorização com troubleshooting:
 
@@ -284,7 +326,7 @@ kubectl get prometheusrule s78-lab-rules -n monitoring
 kubectl describe prometheusrule s78-lab-rules -n monitoring
 ```
 
-A configuração do Prometheus seleciona explicitamente regras com:
+A configuração do Prometheus seleciona explicitamente regras com a label:
 
 ```yaml
 release: monitoring
@@ -306,7 +348,7 @@ Preencher **CP2** em `folha_evidencias.md`.
 kubectl apply -k app/overlays/incident-probe/
 ```
 
-Entregar:
+Entregar aos formandos:
 
 ```text
 incidents/01-probe.md
@@ -319,7 +361,7 @@ réplica antiga → Running / Ready
 nova réplica   → Running / NotReady
 ```
 
-A nova readiness probe aponta deliberadamente para um endpoint inexistente. O processo pode continuar `Running`, mas o novo Pod não deve entrar nos endpoints do Service.
+A nova readiness probe está incorreta. O processo pode continuar `Running`, mas o novo Pod não deve entrar nos endpoints do Service.
 
 ## Evidência inicial
 
@@ -372,7 +414,7 @@ Preencher **CP3** em `folha_evidencias.md`.
 kubectl apply -k app/overlays/incident-service/
 ```
 
-Entregar:
+Entregar aos formandos:
 
 ```text
 incidents/02-service.md
@@ -473,8 +515,6 @@ Como a anti-affinity é obrigatória, o único Worker saudável não pode execut
 1 réplica indisponível/Pending
 ```
 
-Isto permite discutir disponibilidade, capacidade e regras de placement.
-
 ## Recuperar
 
 No Worker:
@@ -547,48 +587,81 @@ Preencher **CP6** em `folha_evidencias.md`.
 
 ---
 
-# CP7 — Transição de Kustomize para Helm
+# CP7 — Transição controlada de Kustomize para Helm
 
-Kustomize e Helm não devem gerir simultaneamente os mesmos objetos neste exercício.
+A baseline atual foi criada por Kustomize. A partir deste checkpoint, o Deployment e o Service Symfony passam a ser geridos pela release Helm `symfony-lab`.
 
-Remover apenas Deployment e Service Symfony criados pela baseline Kustomize:
+**Não apagar** o Deployment nem o Service. A transição validada no ambiente real faz adoção dos objetos existentes para evitar uma interrupção artificial.
 
-```bash
-kubectl delete deployment symfony-demo -n s78-lab
-kubectl delete service symfony-demo -n s78-lab
-```
-
-Permanecem:
-
-```text
-Namespace
-Secret
-PostgreSQL StatefulSet
-PVC
-Headless Service PostgreSQL
-```
-
-Instalar a baseline Helm:
+### 1. Renderizar a baseline Helm
 
 ```bash
-helm install symfony-lab \
+helm template symfony-lab \
   ./helm/app-lab \
   -n s78-lab \
   -f helm/values/values-good.yaml \
-  --wait \
-  --timeout 3m
+  > /tmp/symfony-good.yaml
 ```
 
-## Health gate obrigatório
+### 2. Comparar com o estado atual
 
 ```bash
+kubectl diff -n s78-lab -f /tmp/symfony-good.yaml || true
+```
+
+Antes de avançar, confirmar que não existem alterações inesperadas em:
+
+```text
+selector
+replicas
+image
+readinessProbe
+livenessProbe
+resources
+strategy
+service.selector
+service.port
+```
+
+É esperado surgirem labels Helm e a label `app.kubernetes.io/instance` no Pod template.
+
+### 3. Transferir ownership para Helm
+
+```bash
+helm upgrade --install symfony-lab \
+  ./helm/app-lab \
+  -n s78-lab \
+  -f helm/values/values-good.yaml \
+  --take-ownership \
+  --wait \
+  --timeout 5m
+```
+
+### 4. Validar a baseline Helm
+
+```bash
+kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
 helm list -n s78-lab
 helm history symfony-lab -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab
 kubectl get pods -n s78-lab -o wide
 kubectl get endpointslices -n s78-lab
 ```
 
-**Não avançar** para a release defeituosa se a baseline Helm não estiver saudável.
+Confirmar ownership:
+
+```bash
+kubectl get deployment symfony-demo -n s78-lab \
+  -o jsonpath='managed-by={.metadata.labels.app\.kubernetes\.io/managed-by}{"  release="}{.metadata.annotations.meta\.helm\.sh/release-name}{"  namespace="}{.metadata.annotations.meta\.helm\.sh/release-namespace}{"\n"}'
+```
+
+Resultado esperado:
+
+```text
+managed-by=Helm  release=symfony-lab  namespace=s78-lab
+```
+
+**Não avançar** para a release defeituosa se as duas réplicas não estiverem `Running` e `Ready` e se o Service não tiver dois endpoints prontos.
 
 Preencher **CP7** em `folha_evidencias.md`.
 
@@ -596,7 +669,7 @@ Preencher **CP7** em `folha_evidencias.md`.
 
 # CP8 — Incidente 4: release defeituosa e rollback
 
-Entregar:
+Entregar aos formandos:
 
 ```text
 incidents/04-release.md
@@ -613,13 +686,7 @@ helm upgrade symfony-lab \
   --timeout 90s
 ```
 
-O ficheiro defeituoso utiliza deliberadamente:
-
-```text
-registry.invalid/s78/symfony-demo
-```
-
-Com a estratégia de rollout do laboratório, uma réplica anterior permanece disponível enquanto o novo Pod deverá evidenciar a falha de obtenção da imagem.
+O comando é esperado falhar dentro do exercício. Não abrir previamente `values-broken.yaml`: a causa deve ser encontrada por evidência do cluster.
 
 ## Diagnóstico
 
@@ -633,12 +700,13 @@ kubectl get events -n s78-lab --sort-by=.lastTimestamp
 kubectl describe pod <NOVO_POD> -n s78-lab
 ```
 
-Sintomas esperados incluem:
+Aplicar sempre:
 
 ```text
-ErrImagePull
-ImagePullBackOff
+Sintoma → Evidência → Hipótese → Teste → Causa raiz
 ```
+
+Não editar manualmente o Deployment para corrigir a release.
 
 ## Rollback
 
@@ -659,72 +727,101 @@ Validar:
 ```bash
 helm history symfony-lab -n s78-lab
 kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
-kubectl get pods -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
 kubectl get endpointslices -n s78-lab
 ```
 
-Fluxo:
+Mensagem-chave:
 
 ```text
-release candidata
-   ↓
-falha
-   ↓
-evidência
-   ↓
-causa raiz
-   ↓
-rollback
-   ↓
-validação
+rollback restaura o estado de uma revisão anterior
+mas cria uma nova revisão no histórico
 ```
 
 Preencher **CP8** em `folha_evidencias.md`.
 
 ---
 
-# CP9 — Alterar um Custom Resource e observar reconciliação
+# CP9 — Alterar um Custom Resource e provar reconciliação
 
-Consultar a regra criada no início:
+O objetivo não é apenas provar que a API Kubernetes aceitou a alteração. É provar que a alteração chegou ao sistema gerido pelo Operator.
 
-```bash
-kubectl get prometheusrule s78-lab-rules -n monitoring -o yaml
-```
-
-Alterar um campo não destrutivo de `monitoring/prometheus-rule.yaml`, por exemplo:
-
-```text
-annotations.summary
-```
-
-ou:
-
-```text
-for: 1m
-```
-
-Aplicar novamente:
+### 1. Criar uma cópia temporária da regra
 
 ```bash
-kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s78-lab-rules -n monitoring -o yaml
+cp monitoring/prometheus-rule.yaml /tmp/prometheus-rule-reconcile.yaml
+
+sed -i \
+  's/Existem réplicas indisponíveis no Deployment symfony-demo/Reconciliação observada: existem réplicas indisponíveis no Deployment symfony-demo/' \
+  /tmp/prometheus-rule-reconcile.yaml
 ```
 
-Relacionar:
+### 2. Registar a versão antes e depois
+
+```bash
+kubectl get prometheusrule s78-lab-rules -n monitoring \
+  -o jsonpath='generation={.metadata.generation} resourceVersion={.metadata.resourceVersion}{"\n"}'
+
+kubectl apply -f /tmp/prometheus-rule-reconcile.yaml
+
+kubectl get prometheusrule s78-lab-rules -n monitoring \
+  -o jsonpath='generation={.metadata.generation} resourceVersion={.metadata.resourceVersion}{"\n"}'
+```
+
+A `generation` deverá aumentar, provando que o estado desejado do CR mudou.
+
+### 3. Provar que o Prometheus recebeu a alteração
+
+Num terminal:
+
+```bash
+kubectl port-forward \
+  -n monitoring \
+  svc/monitoring-kube-prometheus-prometheus \
+  9090:9090
+```
+
+Noutro terminal da mesma máquina:
+
+```bash
+curl -sS http://127.0.0.1:9090/api/v1/rules \
+  | python3 -c '
+import sys, json
+data=json.load(sys.stdin)
+for group in data.get("data", {}).get("groups", []):
+    for rule in group.get("rules", []):
+        if rule.get("name") == "SymfonyDeploymentUnavailable":
+            print("name       =", rule.get("name"))
+            print("state      =", rule.get("state"))
+            print("query      =", rule.get("query"))
+            print("summary    =", rule.get("annotations", {}).get("summary"))
+'
+```
+
+A nova `summary` deve aparecer na API do Prometheus.
+
+Se a aplicação estiver saudável, `state=inactive` é esperado: a regra está carregada, mas a condição de alerta é falsa.
+
+Relação a consolidar:
 
 ```text
 CRD
  ↓
-Custom Resource
+Custom Resource alterado
  ↓
-estado desejado alterado
- ↓
-Controller / Operator observa
+Operator / Controller observa
  ↓
 reconciliação
+ ↓
+Prometheus carrega o novo estado
 ```
 
-Não é objetivo programar um Operator.
+### 4. Repor a regra original
+
+```bash
+kubectl apply -f monitoring/prometheus-rule.yaml
+```
 
 Preencher **CP9** em `folha_evidencias.md`.
 
