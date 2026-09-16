@@ -1,4 +1,4 @@
-# Folha de Evidências — Laboratório Integrado Sessões 7 e 8
+# Folha de Evidências — Laboratório Integrado Sessão 7
 
 ## Como utilizar esta folha
 
@@ -60,7 +60,7 @@ rollout status → observar convergência
 | Verificação acompanhada | Evidência observada | OK? |
 |---|---|:---:|
 | Repositório descarregado | | |
-| Diretoria `sessao-07-08/` disponível | | |
+| Diretoria `sessao-07/` disponível | | |
 | Chart `kube-prometheus-stack-91.4.1.tgz` disponível | | |
 | `precheck.sh` concluído | | |
 | PostgreSQL `Running` e `Ready` | | |
@@ -258,7 +258,7 @@ ownership → quem passa a gerir os objetos
 | Verificação acompanhada | Evidência observada | OK? |
 |---|---|:---:|
 | `helm template` renderizado | | |
-| `kubectl diff -n s78-lab` analisado | | |
+| `kubectl diff -n s7-lab` analisado | | |
 | Alterações funcionais inesperadas ausentes | | |
 | `--take-ownership` executado | | |
 | Deployment gerido por Helm | | |
