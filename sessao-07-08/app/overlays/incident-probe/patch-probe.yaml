@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: symfony-demo
+spec:
+  template:
+    spec:
+      containers:
+        - name: symfony
+          readinessProbe:
+            httpGet:
+              path: /ready-inexistente
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 2
