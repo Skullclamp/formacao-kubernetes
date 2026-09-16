@@ -103,11 +103,11 @@ revision 3 → rollback ou novo upgrade
 Executar em conjunto:
 
 ```bash
-helm list -n s78-lab
-helm history symfony-lab -n s78-lab
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab \
+helm list -n s7-lab
+helm history symfony-lab -n s7-lab
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -153,7 +153,7 @@ Executar:
 ```bash
 helm upgrade symfony-lab \
   ./helm/app-lab \
-  -n s78-lab \
+  -n s7-lab \
   -f helm/values/values-broken.yaml \
   --wait \
   --timeout 90s
@@ -171,7 +171,7 @@ helm upgrade symfony-lab
 -f helm/values/values-broken.yaml
 → fornece os valores da release candidata
 
--n s78-lab
+-n s7-lab
 → Namespace da release
 
 --wait
@@ -190,14 +190,14 @@ Neste exercício é esperado que a candidata não fique operacional dentro do te
 Depois da falha do comando, executar em conjunto:
 
 ```bash
-helm status symfony-lab -n s78-lab
-helm history symfony-lab -n s78-lab
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab \
+helm status symfony-lab -n s7-lab
+helm history symfony-lab -n s7-lab
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
+kubectl get events -n s7-lab --sort-by=.lastTimestamp
 ```
 
 ## O que observar
@@ -227,10 +227,10 @@ POD=<NOVO_POD>
 Executar:
 
 ```bash
-kubectl describe pod "$POD" -n s78-lab
-kubectl get pod "$POD" -n s78-lab \
+kubectl describe pod "$POD" -n s7-lab
+kubectl get pod "$POD" -n s7-lab \
   -o jsonpath='{.spec.containers[0].image}{"\n"}'
-kubectl get deployment symfony-demo -n s78-lab \
+kubectl get deployment symfony-demo -n s7-lab \
   -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 ```
 
@@ -287,7 +287,7 @@ Por isso, a recuperação deve ser feita através do mecanismo que gere a releas
 Primeiro confirmar novamente o histórico:
 
 ```bash
-helm history symfony-lab -n s78-lab
+helm history symfony-lab -n s7-lab
 ```
 
 O formador pergunta:
@@ -301,7 +301,7 @@ Depois executar:
 
 ```bash
 helm rollback symfony-lab <REVISAO_BOA> \
-  -n s78-lab \
+  -n s7-lab \
   --wait \
   --timeout 3m
 ```
@@ -329,14 +329,14 @@ helm rollback
 Executar:
 
 ```bash
-helm history symfony-lab -n s78-lab
-helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s7-lab
+helm status symfony-lab -n s7-lab
 kubectl rollout status deployment/symfony-demo \
-  -n s78-lab \
+  -n s7-lab \
   --timeout=180s
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab \
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
