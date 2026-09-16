@@ -72,7 +72,9 @@ fi
 if command -v helm >/dev/null 2>&1; then
   helm version --short || true
 
-  if helm upgrade --help 2>/dev/null | grep -q -- '--take-ownership'; then
+  # Tal como no teste do CNI, evitamos `grep -q` sob pipefail para não
+  # transformar um eventual SIGPIPE do comando a montante num falso negativo.
+  if helm upgrade --help 2>/dev/null | grep -- '--take-ownership' >/dev/null; then
     ok 'Helm suporta --take-ownership'
   else
     err 'Helm não suporta --take-ownership; atualizar Helm antes do laboratório'
