@@ -24,9 +24,9 @@ fi
 if [ "$api_ok" -eq 1 ]; then
   ready_workers=$(kubectl get nodes --no-headers 2>/dev/null | awk '$2 == "Ready" && $3 !~ /control-plane|master/ {c++} END {print c+0}')
   if [ "$ready_workers" -ge 2 ]; then
-    ok "pelo menos 2 Worker Nodes Ready e schedulable ($ready_workers)"
+    ok "pelo menos 2 Worker Nodes Ready ($ready_workers)"
   else
-    err "são necessários pelo menos 2 Worker Nodes Ready e schedulable; encontrados: $ready_workers"
+    err "são necessários pelo menos 2 Worker Nodes Ready; encontrados: $ready_workers"
   fi
 
   kubectl get storageclass local-path >/dev/null 2>&1 \
