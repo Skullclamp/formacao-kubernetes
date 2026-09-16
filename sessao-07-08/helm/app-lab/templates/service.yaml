@@ -8,9 +8,11 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   selector:
+    # Tem de coincidir com a label do Pod template do Deployment.
     app: symfony-demo
   ports:
     - name: http
       port: {{ .Values.service.port }}
+      # Refere a porta nomeada `http` declarada no container.
       targetPort: http
       protocol: TCP
