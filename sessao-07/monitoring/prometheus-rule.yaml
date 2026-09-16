@@ -1,7 +1,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: s78-lab-rules
+  name: s7-lab-rules
   namespace: monitoring
   labels:
     # Tem de coincidir com prometheus.prometheusSpec.ruleSelector
@@ -9,16 +9,15 @@ metadata:
     release: monitoring
 spec:
   groups:
-    - name: s78-lab.rules
+    - name: s7-lab.rules
       rules:
         - alert: SymfonyDeploymentUnavailable
-          # Esta métrica é fornecida por kube-state-metrics, mantido ativo
-          # explicitamente no values-lab.yaml.
-          expr: kube_deployment_status_replicas_unavailable{namespace="s78-lab",deployment="symfony-demo"} > 0
+          # Esta métrica é fornecida por kube-state-metrics.
+          expr: kube_deployment_status_replicas_unavailable{namespace="s7-lab",deployment="symfony-demo"} > 0
           for: 1m
           labels:
             severity: warning
-            training: sessao-07-08
+            training: sessao-07
           annotations:
             summary: "Existem réplicas indisponíveis no Deployment symfony-demo"
-            description: "O Deployment symfony-demo no namespace s78-lab apresenta pelo menos uma réplica indisponível durante mais de 1 minuto."
+            description: "O Deployment symfony-demo no namespace s7-lab apresenta pelo menos uma réplica indisponível durante mais de 1 minuto."
