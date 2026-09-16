@@ -1,31 +1,48 @@
-# Pacotes externos pré-validados
+# Pacotes externos validados
 
-Esta diretoria destina-se a guardar dependências externas preparadas **antes da formação**.
+Esta diretoria guarda dependências externas utilizadas no laboratório.
 
-Para o laboratório de monitorização, o formador deve colocar aqui uma versão previamente testada do chart `kube-prometheus-stack`.
+Para as Sessões 7 e 8, a versão de `kube-prometheus-stack` validada no cluster real da formação é:
 
-Exemplo de preparação:
+```text
+91.4.1
+```
+
+## Download pelos formandos no CP1
+
+Depois de descarregar o repositório, cada formando prepara o pacote com:
 
 ```bash
+cd ~/formacao-kubernetes/sessao-07-08
 chmod +x monitoring/prepare-chart.sh
-./monitoring/prepare-chart.sh <VERSAO_VALIDADA>
+./monitoring/prepare-chart.sh 91.4.1
 ```
 
 Resultado esperado:
 
 ```text
 packages/
-└── kube-prometheus-stack-<VERSAO_VALIDADA>.tgz
+├── README.md
+└── kube-prometheus-stack-91.4.1.tgz
 ```
 
-Durante a sessão, instalar a partir do pacote local para reduzir a dependência da Internet:
+Confirmar:
 
 ```bash
-helm install monitoring \
-  ./packages/kube-prometheus-stack-<VERSAO_VALIDADA>.tgz \
-  --namespace monitoring \
-  --create-namespace \
-  -f monitoring/values-lab.yaml
+ls -lh packages/kube-prometheus-stack-91.4.1.tgz
+helm show chart packages/kube-prometheus-stack-91.4.1.tgz
 ```
 
-> A versão não é fixada neste repositório: deve ser escolhida, testada e congelada pelo formador para o ambiente concreto da formação.
+Durante o laboratório, instalar sempre a partir do pacote local:
+
+```bash
+helm upgrade --install monitoring \
+  packages/kube-prometheus-stack-91.4.1.tgz \
+  --namespace monitoring \
+  --create-namespace \
+  -f monitoring/values-lab.yaml \
+  --wait \
+  --timeout 10m
+```
+
+> Se a sessão tiver de decorrer sem acesso à Internet, o formador deve disponibilizar previamente o ficheiro `kube-prometheus-stack-91.4.1.tgz`. O download não substitui a validação: esta versão foi testada no cluster de referência antes de ser adotada para o laboratório.
