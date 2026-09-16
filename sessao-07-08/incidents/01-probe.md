@@ -1,8 +1,8 @@
-# Incidente 1 — Aplicação em execução, mas indisponível
+# Incidente 1 — Rollout bloqueado: nova réplica `Running` mas não `Ready`
 
 ## Situação entregue ao formando
 
-Após uma alteração de configuração, os Pods da aplicação continuam em estado `Running`, mas deixam de ficar disponíveis para receber tráfego.
+Após uma alteração de configuração, o Deployment inicia uma atualização. A aplicação continua parcialmente disponível, mas o rollout não termina: uma nova réplica está em execução e não fica pronta para receber tráfego.
 
 Não é fornecida a causa.
 
@@ -14,18 +14,32 @@ Aplicar o método:
 Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção → Validação
 ```
 
+E demonstrar duas ideias:
+
+```text
+Running ≠ Ready
+
+readiness correta
+      ↓
+protege os endpoints do Service
+      ↓
+evita enviar tráfego para uma réplica não pronta
+```
+
 ## Regras
 
 - Não editar recursos diretamente com `kubectl edit`.
 - Recolher evidência antes de alterar a configuração.
 - Registar pelo menos três comandos utilizados no diagnóstico.
+- Confirmar se o Service continua a ter endpoints utilizáveis.
 - A correção deve repor a baseline declarativa conhecida como boa.
 
 ## Comandos de arranque sugeridos
 
 ```bash
-kubectl get pods -n s78-lab
 kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get endpointslices -n s78-lab
 kubectl get events -n s78-lab --sort-by=.lastTimestamp
 ```
 
@@ -36,7 +50,11 @@ Utilizar `describe` e `logs` se necessário.
 | Campo | Registo |
 |---|---|
 | Sintoma | |
-| Evidência inicial | |
+| Estado do rollout | |
+| Réplica antiga disponível? | |
+| Nova réplica `Running`? | |
+| Nova réplica `Ready`? | |
+| Endpoints do Service | |
 | Hipótese | |
 | Teste | |
 | Causa raiz | |
@@ -45,4 +63,9 @@ Utilizar `describe` e `logs` se necessário.
 
 ## Critério de conclusão
 
-O incidente só termina quando as duas réplicas estiverem simultaneamente `Running` e `Ready`, e a causa for explicada com base em evidência observada no cluster.
+O incidente termina quando:
+
+- as duas réplicas estão novamente `Running` e `Ready`;
+- o rollout termina com sucesso;
+- o Service apresenta os endpoints esperados;
+- o formando consegue explicar, com evidência, por que a réplica defeituosa não recebeu tráfego.
