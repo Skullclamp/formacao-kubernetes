@@ -3,6 +3,8 @@ kind: StatefulSet
 metadata:
   name: postgres
 spec:
+  # O serviceName liga o StatefulSet ao Headless Service `postgres`,
+  # assegurando identidade de rede estável para o Pod stateful.
   serviceName: postgres
   replicas: 1
   selector:
@@ -36,6 +38,8 @@ spec:
                 secretKeyRef:
                   name: postgres-credentials
                   key: POSTGRES_PASSWORD
+          # A readiness confirma que PostgreSQL aceita ligações antes de ser
+          # considerado pronto pelas dependências do laboratório.
           readinessProbe:
             exec:
               command:
@@ -61,7 +65,9 @@ spec:
         name: data
       spec:
         accessModes:
+          # RWO é adequado ao único Pod PostgreSQL deste cenário pedagógico.
           - ReadWriteOnce
+        # O precheck confirma explicitamente esta StorageClass.
         storageClassName: local-path
         resources:
           requests:
