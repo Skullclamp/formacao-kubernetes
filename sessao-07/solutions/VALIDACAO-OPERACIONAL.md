@@ -1,4 +1,4 @@
-# Validação Operacional End-to-End — Laboratório Integrado Sessões 7 e 8
+# Validação Operacional End-to-End — Laboratório Integrado Sessão 7
 
 > Documento de ensaio do formador. Executar **antes da formação**, no cluster real que será usado em aula.
 >
@@ -66,7 +66,7 @@ Os tempos apresentados abaixo são **orçamento de ensaio**, não tempos garanti
 ## Executar
 
 ```bash
-cd ~/formacao-kubernetes/sessao-07-08
+cd ~/formacao-kubernetes/sessao-07
 chmod +x 00-precheck/precheck.sh monitoring/prepare-chart.sh
 ./00-precheck/precheck.sh
 ```
@@ -117,26 +117,26 @@ ls -lh packages/kube-prometheus-stack-*.tgz
 ## Renderizar
 
 ```bash
-kubectl kustomize app/overlays/normal/ > /tmp/s78-rendered.yaml
-kubectl apply --dry-run=client -f /tmp/s78-rendered.yaml >/dev/null
+kubectl kustomize app/overlays/normal/ > /tmp/s7-rendered.yaml
+kubectl apply --dry-run=client -f /tmp/s7-rendered.yaml >/dev/null
 ```
 
 ## Aplicar
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl rollout status statefulset/postgres -n s78-lab --timeout=180s
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
+kubectl rollout status statefulset/postgres -n s7-lab --timeout=180s
+kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
 ```
 
 ## Evidência
 
 ```bash
-kubectl get pods -n s78-lab -o wide
-kubectl get pvc -n s78-lab
-kubectl get svc -n s78-lab
-kubectl get endpointslices -n s78-lab
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
+kubectl get pods -n s7-lab -o wide
+kubectl get pvc -n s7-lab
+kubectl get svc -n s7-lab
+kubectl get endpointslices -n s7-lab
+kubectl get events -n s7-lab --sort-by=.lastTimestamp
 ```
 
 ## PASS
@@ -206,7 +206,7 @@ Aplicar a regra:
 
 ```bash
 kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s78-lab-rules -n monitoring -o yaml
+kubectl get prometheusrule s7-lab-rules -n monitoring -o yaml
 ```
 
 ## PASS
@@ -217,7 +217,7 @@ kubectl get prometheusrule s78-lab-rules -n monitoring -o yaml
 - StatefulSet/Pod Prometheus criado pelo Operator;
 - `kube-state-metrics` em execução;
 - CRDs `monitoring.coreos.com` presentes;
-- `PrometheusRule/s78-lab-rules` aceite pela API.
+- `PrometheusRule/s7-lab-rules` aceite pela API.
 
 ## Verificação de capacidade
 
@@ -252,9 +252,9 @@ Se Metrics Server não existir, registar apenas requests/limits e utilização o
 ## Health gate
 
 ```bash
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab
 ```
 
 Confirmar 2/2 réplicas Ready antes da falha.
@@ -268,28 +268,28 @@ kubectl apply -k app/overlays/incident-probe/
 Observar rollout:
 
 ```bash
-kubectl get pods -n s78-lab -w
+kubectl get pods -n s7-lab -w
 ```
 
 Noutro terminal:
 
 ```bash
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get endpointslices -n s78-lab -o yaml
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get endpointslices -n s7-lab -o yaml
+kubectl get events -n s7-lab --sort-by=.lastTimestamp
 ```
 
 Identificar o Pod novo:
 
 ```bash
-kubectl get pods -n s78-lab --sort-by=.metadata.creationTimestamp -o wide
+kubectl get pods -n s7-lab --sort-by=.metadata.creationTimestamp -o wide
 ```
 
 Depois:
 
 ```bash
-kubectl describe pod <NOVO_POD> -n s78-lab
-kubectl logs <NOVO_POD> -n s78-lab
+kubectl describe pod <NOVO_POD> -n s7-lab
+kubectl logs <NOVO_POD> -n s7-lab
 ```
 
 ## PASS
@@ -307,9 +307,9 @@ A evidência deve apontar para `/ready-inexistente` e falha da readiness probe.
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
-kubectl get pods -n s78-lab
-kubectl get endpointslices -n s78-lab
+kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
+kubectl get pods -n s7-lab
+kubectl get endpointslices -n s7-lab
 ```
 
 ## Contingência
@@ -334,9 +334,9 @@ kubectl apply -k app/overlays/incident-service/
 ## Evidência
 
 ```bash
-kubectl get pods -n s78-lab --show-labels
-kubectl get svc symfony-demo -n s78-lab -o yaml
-kubectl get endpointslices -n s78-lab -o yaml
+kubectl get pods -n s7-lab --show-labels
+kubectl get svc symfony-demo -n s7-lab -o yaml
+kubectl get endpointslices -n s7-lab -o yaml
 ```
 
 ## PASS
@@ -350,7 +350,7 @@ kubectl get endpointslices -n s78-lab -o yaml
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl get endpointslices -n s78-lab -o yaml
+kubectl get endpointslices -n s7-lab -o yaml
 ```
 
 ## Contingência
@@ -370,9 +370,9 @@ Se os Pods também deixarem de estar Ready, existe uma falha residual de CP3. Re
 ## Health gate
 
 ```bash
-kubectl get pod postgres-0 -n s78-lab -o wide
-kubectl get pods -n s78-lab -l app=symfony-demo -o wide
-kubectl get endpointslices -n s78-lab
+kubectl get pod postgres-0 -n s7-lab -o wide
+kubectl get pods -n s7-lab -l app=symfony-demo -o wide
+kubectl get endpointslices -n s7-lab
 ```
 
 Selecionar o Worker com uma réplica Symfony **sem** `postgres-0`.
@@ -401,8 +401,8 @@ kubectl get nodes -w
 Noutro terminal:
 
 ```bash
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab -o yaml
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab -o yaml
 kubectl get events -A --sort-by=.lastTimestamp
 ```
 
@@ -433,9 +433,9 @@ Depois:
 
 ```bash
 kubectl get nodes
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=300s
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
+kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=300s
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab
 ```
 
 ## Contingência temporal
@@ -493,21 +493,21 @@ Não executar falha destrutiva ou restore de `etcd`.
 ## Confirmar baseline antes da transição
 
 ```bash
-kubectl get deployment,svc,pods -n s78-lab
-kubectl get statefulset,pvc -n s78-lab
+kubectl get deployment,svc,pods -n s7-lab
+kubectl get statefulset,pvc -n s7-lab
 ```
 
 ## Remover apenas ownership Kustomize da aplicação Web
 
 ```bash
-kubectl delete deployment symfony-demo -n s78-lab
-kubectl delete service symfony-demo -n s78-lab
+kubectl delete deployment symfony-demo -n s7-lab
+kubectl delete service symfony-demo -n s7-lab
 ```
 
 Confirmar que PostgreSQL permanece:
 
 ```bash
-kubectl get statefulset,pod,pvc,secret,svc -n s78-lab
+kubectl get statefulset,pod,pvc,secret,svc -n s7-lab
 ```
 
 ## Instalar Helm
@@ -515,7 +515,7 @@ kubectl get statefulset,pod,pvc,secret,svc -n s78-lab
 ```bash
 helm install symfony-lab \
   ./helm/app-lab \
-  -n s78-lab \
+  -n s7-lab \
   -f helm/values/values-good.yaml \
   --wait \
   --timeout 3m
@@ -545,9 +545,9 @@ Existe uma pequena janela de indisponibilidade entre a remoção dos objetos Kus
 ## Health gate
 
 ```bash
-helm history symfony-lab -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
+helm history symfony-lab -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab
 ```
 
 Não avançar sem baseline saudável.
@@ -557,7 +557,7 @@ Não avançar sem baseline saudável.
 ```bash
 helm upgrade symfony-lab \
   ./helm/app-lab \
-  -n s78-lab \
+  -n s7-lab \
   -f helm/values/values-broken.yaml \
   --wait \
   --timeout 90s
@@ -568,12 +568,12 @@ helm upgrade symfony-lab \
 ## Evidência
 
 ```bash
-helm status symfony-lab -n s78-lab
-helm history symfony-lab -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab -o yaml
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
-kubectl describe pod <NOVO_POD> -n s78-lab
+helm status symfony-lab -n s7-lab
+helm history symfony-lab -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab -o yaml
+kubectl get events -n s7-lab --sort-by=.lastTimestamp
+kubectl describe pod <NOVO_POD> -n s7-lab
 ```
 
 ## PASS
@@ -589,16 +589,16 @@ histórico Helm contém revisão candidata falhada
 Identificar a revisão boa no histórico e só depois executar:
 
 ```bash
-helm rollback symfony-lab <REVISAO_BOA> -n s78-lab --wait --timeout 3m
+helm rollback symfony-lab <REVISAO_BOA> -n s7-lab --wait --timeout 3m
 ```
 
 Validar:
 
 ```bash
-helm history symfony-lab -n s78-lab
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
-kubectl get pods -n s78-lab
-kubectl get endpointslices -n s78-lab
+helm history symfony-lab -n s7-lab
+kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
+kubectl get pods -n s7-lab
+kubectl get endpointslices -n s7-lab
 ```
 
 ## Contingência
@@ -617,7 +617,7 @@ Se a falha observada for `Pending` em vez de `ImagePullBackOff`, investigar sche
 ## Estado inicial
 
 ```bash
-kubectl get prometheusrule s78-lab-rules -n monitoring -o yaml
+kubectl get prometheusrule s7-lab-rules -n monitoring -o yaml
 kubectl get prometheus -n monitoring
 kubectl get statefulset -n monitoring
 kubectl get pods -n monitoring
@@ -637,7 +637,7 @@ Aplicar:
 
 ```bash
 kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s78-lab-rules -n monitoring -o yaml
+kubectl get prometheusrule s7-lab-rules -n monitoring -o yaml
 ```
 
 ## Observar o Controller/Operator
@@ -673,18 +673,18 @@ kubectl logs -n monitoring <POD-OPERATOR> --since=5m
 **Orçamento:** 5–10 min
 
 ```bash
-helm uninstall symfony-lab -n s78-lab || true
+helm uninstall symfony-lab -n s7-lab || true
 helm uninstall monitoring -n monitoring || true
 kubectl delete namespace monitoring --ignore-not-found
-kubectl delete namespace s78-lab --ignore-not-found
+kubectl delete namespace s7-lab --ignore-not-found
 ```
 
 Validar:
 
 ```bash
-kubectl get namespace s78-lab monitoring 2>/dev/null || true
+kubectl get namespace s7-lab monitoring 2>/dev/null || true
 helm list -A
-kubectl get pods -A | grep -E 's78|monitoring' || true
+kubectl get pods -A | grep -E 's7|monitoring' || true
 ```
 
 Não remover automaticamente CRDs partilháveis do Prometheus Operator sem confirmar utilização noutros namespaces.
