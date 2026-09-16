@@ -3,6 +3,7 @@ set -euo pipefail
 
 fail=0
 api_ok=0
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 ok()   { printf 'OK   %s\n' "$1"; }
 warn() { printf 'WARN %s\n' "$1"; }
@@ -10,6 +11,19 @@ err()  { printf 'ERRO %s\n' "$1"; fail=1; }
 
 command -v kubectl >/dev/null 2>&1 && ok 'kubectl disponível' || err 'kubectl não encontrado'
 command -v helm >/dev/null 2>&1 && ok 'Helm disponível' || err 'Helm não encontrado'
+
+# O laboratório foi desenhado para instalar o Operator a partir de um pacote
+# previamente descarregado e validado, evitando dependência da Internet em aula.
+shopt -s nullglob
+monitoring_charts=("$ROOT_DIR"/packages/kube-prometheus-stack-*.tgz)
+shopt -u nullglob
+if [ "${#monitoring_charts[@]}" -eq 1 ]; then
+  ok "chart kube-prometheus-stack local encontrado: $(basename "${monitoring_charts[0]}")"
+elif [ "${#monitoring_charts[@]}" -eq 0 ]; then
+  err 'chart kube-prometheus-stack local não encontrado em packages/'
+else
+  warn "existem vários charts kube-prometheus-stack em packages/ (${#monitoring_charts[@]}); selecionar explicitamente a versão validada no guião"
+fi
 
 if command -v kubectl >/dev/null 2>&1; then
   if kubectl cluster-info >/dev/null 2>&1; then
