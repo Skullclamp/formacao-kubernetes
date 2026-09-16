@@ -27,6 +27,10 @@ O que significam os comandos e flags relevantes?
 Que evidência prova o resultado?
 ```
 
+Este laboratório é realizado de forma **acompanhada pelo formador**. O formador introduz cada conceito, explica os comandos e flags relevantes e orienta a interpretação dos resultados observados no cluster. Os formandos executam os passos, acompanham o comportamento do sistema e participam ativamente no diagnóstico, correção e validação.
+
+Os incidentes **não são exercícios autónomos de avaliação**. A causa raiz não é revelada no início para permitir praticar troubleshooting, mas o diagnóstico é conduzido e discutido em conjunto. O objetivo é desenvolver raciocínio operacional e hábitos de observação, não testar quem consegue descobrir sozinho um problema escondido.
+
 Nos incidentes, o método obrigatório é:
 
 ```text
