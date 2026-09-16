@@ -1,7 +1,7 @@
-# Laboratório Integrado — Sessões 7 e 8
+# Laboratório Integrado — Sessão 7
 ## Continuidade, Troubleshooting e Operação Avançada de Kubernetes
 
-**Sessões:** 7 e 8 de 10  
+**Sessão:** 7 de 10  
 **Nível:** intermédio  
 **Duração:** 4 horas  
 **Topologia:** 1 Control Plane + 2 Worker Nodes  
@@ -9,11 +9,11 @@
 **CNI:** Calico  
 **StorageClass:** `local-path`  
 **Aplicação:** Symfony Demo + PostgreSQL 16  
-**Namespace:** `s78-lab`  
+**Namespace:** `s7-lab`  
 **Operator:** Prometheus Operator através de `kube-prometheus-stack`  
 **Chart validado:** `kube-prometheus-stack` 91.4.1
 
-Este documento é o **laboratório integrado das Sessões 7 e 8**. O objetivo não é executar comandos mecanicamente. Em cada checkpoint, o formando deve conseguir explicar:
+Este documento é o **laboratório integrado da Sessão 7**. O objetivo não é executar comandos mecanicamente. Em cada checkpoint, o formando deve conseguir explicar:
 
 ```text
 O que estou a fazer?
@@ -97,10 +97,10 @@ Nem todas as flags são repetidas do zero em cada checkpoint. Em cada secção s
 
 # Estrutura dos materiais
 
-A partir da diretoria `sessao-07-08/`:
+A partir da diretoria `sessao-07/`:
 
 ```text
-sessao-07-08/
+sessao-07/
 ├── lab-integrado.md
 ├── folha_evidencias.md
 ├── 00-precheck/
@@ -362,7 +362,7 @@ O Kustomize é **declarativo**: descrevemos o estado pretendido e deixamos o Kub
 ```bash
 cd ~
 git clone --depth 1 https://github.com/Skullclamp/formacao-kubernetes.git
-cd ~/formacao-kubernetes/sessao-07-08
+cd ~/formacao-kubernetes/sessao-07
 ```
 
 Confirmar os materiais:
@@ -384,7 +384,7 @@ git clone
 --depth 1
 → descarrega apenas o estado mais recente do histórico; reduz tempo e espaço para a formação
 
-cd ~/formacao-kubernetes/sessao-07-08
+cd ~/formacao-kubernetes/sessao-07
 → entra na diretoria a partir da qual os caminhos relativos do laboratório são válidos
 
 ls -1
@@ -489,8 +489,8 @@ kubectl apply
 ## 1.6. Aguardar convergência
 
 ```bash
-kubectl rollout status statefulset/postgres -n s78-lab --timeout=180s
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
+kubectl rollout status statefulset/postgres -n s7-lab --timeout=180s
+kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
 ```
 
 ### Conceitos: Deployment e StatefulSet
@@ -505,7 +505,7 @@ Um **StatefulSet** é usado para workloads que necessitam de identidade estável
 rollout status
 → acompanha o progresso da atualização/convergência do workload
 
--n s78-lab
+-n s7-lab
 → consulta o objeto no Namespace do laboratório
 
 --timeout=180s
@@ -516,11 +516,11 @@ rollout status
 
 ```bash
 kubectl get nodes -o wide
-kubectl get pods -n s78-lab -o wide
-kubectl get svc -n s78-lab
-kubectl get endpointslices -n s78-lab
-kubectl get pvc -n s78-lab
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
+kubectl get pods -n s7-lab -o wide
+kubectl get svc -n s7-lab
+kubectl get endpointslices -n s7-lab
+kubectl get pvc -n s7-lab
+kubectl get events -n s7-lab --sort-by=.lastTimestamp
 ```
 
 ### Conceitos a observar
@@ -584,11 +584,11 @@ Isto permite atualizar uma réplica de cada vez sem criar um deadlock de schedul
 
 Instalar a stack de monitorização através de Helm, identificar a extensão da API Kubernetes criada pelo Prometheus Operator e criar uma regra de monitorização que será usada durante os incidentes.
 
-**Executar em:** terminal administrativo, dentro de `sessao-07-08/`.
+**Executar em:** terminal administrativo, dentro de `sessao-07/`.
 
 ## O que estamos a fazer e porquê
 
-Este checkpoint liga três conceitos da Sessão 8:
+Este checkpoint liga três conceitos da Sessão 7:
 
 ```text
 Helm
@@ -666,7 +666,7 @@ CRD PrometheusRule
         ↓
 define o tipo
         ↓
-PrometheusRule s78-lab-rules
+PrometheusRule s7-lab-rules
         ↓
 é uma instância desse tipo
 ```
@@ -780,8 +780,8 @@ StatefulSet e Pods reconciliados
 
 ```bash
 kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s78-lab-rules -n monitoring
-kubectl describe prometheusrule s78-lab-rules -n monitoring
+kubectl get prometheusrule s7-lab-rules -n monitoring
+kubectl describe prometheusrule s7-lab-rules -n monitoring
 ```
 
 ### O que estamos a criar
@@ -883,10 +883,10 @@ nova réplica     → Running / NotReady
 ## 3.1. Recolher evidência inicial
 
 ```bash
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab
+kubectl get events -n s7-lab --sort-by=.lastTimestamp
 ```
 
 ### O que observar
@@ -902,8 +902,8 @@ kubectl get events -n s78-lab --sort-by=.lastTimestamp
 Quando a hipótese justificar:
 
 ```bash
-kubectl describe pod <NOVO_POD> -n s78-lab
-kubectl logs <NOVO_POD> -n s78-lab
+kubectl describe pod <NOVO_POD> -n s7-lab
+kubectl logs <NOVO_POD> -n s7-lab
 ```
 
 ### Como interpretar
@@ -922,9 +922,9 @@ Nem todos os problemas aparecem nos logs da aplicação. Uma probe pode estar ma
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
-kubectl get pods -n s78-lab
-kubectl get endpointslices -n s78-lab
+kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
+kubectl get pods -n s7-lab
+kubectl get endpointslices -n s7-lab
 ```
 
 ### O que prova a recuperação
@@ -1019,9 +1019,9 @@ backends → ausentes
 ## 4.1. Diagnóstico
 
 ```bash
-kubectl get pods -n s78-lab --show-labels
-kubectl get svc symfony-demo -n s78-lab -o yaml
-kubectl get endpointslices -n s78-lab
+kubectl get pods -n s7-lab --show-labels
+kubectl get svc symfony-demo -n s7-lab -o yaml
+kubectl get endpointslices -n s7-lab
 ```
 
 ### Como interpretar os comandos e flags
@@ -1053,7 +1053,7 @@ EndpointSlice
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl get endpointslices -n s78-lab
+kubectl get endpointslices -n s7-lab
 ```
 
 ### CHECKPOINT CP4
@@ -1118,9 +1118,9 @@ capacidade real disponível
 ## 5.1. Health gate antes da falha
 
 ```bash
-kubectl get pod postgres-0 -n s78-lab -o wide
-kubectl get pods -n s78-lab -l app=symfony-demo -o wide
-kubectl get endpointslices -n s78-lab
+kubectl get pod postgres-0 -n s7-lab -o wide
+kubectl get pods -n s7-lab -l app=symfony-demo -o wide
+kubectl get endpointslices -n s7-lab
 ```
 
 ### Como interpretar a flag `-l`
@@ -1161,8 +1161,8 @@ kubectl get nodes -w
 Noutro terminal:
 
 ```bash
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab
 kubectl get events -A --sort-by=.lastTimestamp
 ```
 
@@ -1219,9 +1219,9 @@ No terminal administrativo:
 
 ```bash
 kubectl get nodes
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=300s
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
+kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=300s
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab
 ```
 
 ### O que prova a recuperação
@@ -1356,7 +1356,7 @@ O formando deve conseguir responder:
 
 Transferir a gestão do Deployment e Service Symfony de uma baseline aplicada com Kustomize para uma release Helm, sem apagar os objetos existentes e sem criar uma interrupção artificial.
 
-**Executar em:** terminal administrativo, dentro de `sessao-07-08/`.
+**Executar em:** terminal administrativo, dentro de `sessao-07/`.
 
 ## O que estamos a fazer e porquê
 
@@ -1411,7 +1411,7 @@ validar rollout e endpoints
 ```bash
 helm template symfony-lab \
   ./helm/app-lab \
-  -n s78-lab \
+  -n s7-lab \
   -f helm/values/values-good.yaml \
   > /tmp/symfony-good.yaml
 ```
@@ -1428,7 +1428,7 @@ symfony-lab
 ./helm/app-lab
 → diretoria do chart local
 
--n s78-lab
+-n s7-lab
 → define o Namespace usado na renderização
 
 -f helm/values/values-good.yaml
@@ -1441,7 +1441,7 @@ symfony-lab
 ## 7.2. Comparar com o estado atual
 
 ```bash
-kubectl diff -n s78-lab -f /tmp/symfony-good.yaml || true
+kubectl diff -n s7-lab -f /tmp/symfony-good.yaml || true
 ```
 
 ### Conceito: diff declarativo
@@ -1473,7 +1473,7 @@ service.port
 ```bash
 helm upgrade --install symfony-lab \
   ./helm/app-lab \
-  -n s78-lab \
+  -n s7-lab \
   -f helm/values/values-good.yaml \
   --take-ownership \
   --wait \
@@ -1501,12 +1501,12 @@ upgrade --install
 ## 7.4. Validar a baseline Helm
 
 ```bash
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
-helm list -n s78-lab
-helm history symfony-lab -n s78-lab
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
+kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
+helm list -n s7-lab
+helm history symfony-lab -n s7-lab
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab
 ```
 
 ### `helm list` vs `helm history`
@@ -1522,7 +1522,7 @@ helm history
 Confirmar ownership:
 
 ```bash
-kubectl get deployment symfony-demo -n s78-lab \
+kubectl get deployment symfony-demo -n s7-lab \
   -o jsonpath='managed-by={.metadata.labels.app\.kubernetes\.io/managed-by}{"  release="}{.metadata.annotations.meta\.helm\.sh/release-name}{"  namespace="}{.metadata.annotations.meta\.helm\.sh/release-namespace}{"\n"}'
 ```
 
@@ -1533,7 +1533,7 @@ JSONPath permite extrair apenas os campos relevantes de um objeto devolvido pela
 Resultado esperado:
 
 ```text
-managed-by=Helm  release=symfony-lab  namespace=s78-lab
+managed-by=Helm  release=symfony-lab  namespace=s7-lab
 ```
 
 ### CHECKPOINT CP7
@@ -1605,7 +1605,7 @@ nova rev. deployed com estado recuperado
 ```bash
 helm upgrade symfony-lab \
   ./helm/app-lab \
-  -n s78-lab \
+  -n s7-lab \
   -f helm/values/values-broken.yaml \
   --wait \
   --timeout 90s
@@ -1629,13 +1629,13 @@ O comando é esperado falhar no exercício. A falha do comando é o **sintoma in
 ## 8.2. Diagnosticar
 
 ```bash
-helm status symfony-lab -n s78-lab
-helm history symfony-lab -n s78-lab
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
-kubectl describe pod <NOVO_POD> -n s78-lab
+helm status symfony-lab -n s7-lab
+helm history symfony-lab -n s7-lab
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab
+kubectl get events -n s7-lab --sort-by=.lastTimestamp
+kubectl describe pod <NOVO_POD> -n s7-lab
 ```
 
 ### O que cada comando responde
@@ -1684,7 +1684,7 @@ O exercício pretende recuperar através do mecanismo que gere a aplicação, pr
 ## 8.3. Identificar a revisão boa
 
 ```bash
-helm history symfony-lab -n s78-lab
+helm history symfony-lab -n s7-lab
 ```
 
 Não assumir que a revisão boa é sempre `1`. Identificá-la pelo histórico observado.
@@ -1692,7 +1692,7 @@ Não assumir que a revisão boa é sempre `1`. Identificá-la pelo histórico ob
 ## 8.4. Executar rollback
 
 ```bash
-helm rollback symfony-lab <REVISAO_BOA> -n s78-lab --wait --timeout 3m
+helm rollback symfony-lab <REVISAO_BOA> -n s7-lab --wait --timeout 3m
 ```
 
 ### Como interpretar
@@ -1711,11 +1711,11 @@ helm rollback symfony-lab <REVISAO_BOA>
 ## 8.5. Validar recuperação
 
 ```bash
-helm history symfony-lab -n s78-lab
-kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab
+helm history symfony-lab -n s7-lab
+kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab
 ```
 
 ### Estado esperado
@@ -1811,12 +1811,12 @@ s/texto_antigo/texto_novo/
 ## 9.2. Registar versão antes e depois
 
 ```bash
-kubectl get prometheusrule s78-lab-rules -n monitoring \
+kubectl get prometheusrule s7-lab-rules -n monitoring \
   -o jsonpath='generation={.metadata.generation} resourceVersion={.metadata.resourceVersion}{"\n"}'
 
 kubectl apply -f /tmp/prometheus-rule-reconcile.yaml
 
-kubectl get prometheusrule s78-lab-rules -n monitoring \
+kubectl get prometheusrule s7-lab-rules -n monitoring \
   -o jsonpath='generation={.metadata.generation} resourceVersion={.metadata.resourceVersion}{"\n"}'
 ```
 
@@ -1960,7 +1960,7 @@ Custom Resource + Controller/Operator → reconciliação
 release defeituosa → diagnóstico → rollback → validação
 ```
 
-## Relações essenciais da Sessão 8
+## Relações essenciais da Sessão 7
 
 ```text
 Kustomize
@@ -1996,10 +1996,10 @@ Sem validação após a correção não há recuperação demonstrada.
 Remover os recursos do laboratório quando já não forem necessários, preservando deliberadamente CRDs que possam ser partilhados por outros componentes.
 
 ```bash
-helm uninstall symfony-lab -n s78-lab || true
+helm uninstall symfony-lab -n s7-lab || true
 helm uninstall monitoring -n monitoring || true
 kubectl delete namespace monitoring --ignore-not-found
-kubectl delete namespace s78-lab --ignore-not-found
+kubectl delete namespace s7-lab --ignore-not-found
 ```
 
 ### Como interpretar
