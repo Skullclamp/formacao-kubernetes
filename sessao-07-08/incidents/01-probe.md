@@ -1,114 +1,105 @@
 # Incidente 1 — Rollout bloqueado: nova réplica `Running` mas não `Ready`
 
-## Situação entregue ao formando
+## Como utilizar este incidente
 
-Após uma alteração de configuração, o Deployment inicia uma atualização. A aplicação continua parcialmente disponível, mas o rollout não termina: uma nova réplica aparece em execução e não fica pronta para receber tráfego.
+Este incidente faz parte de um **laboratório acompanhado**. Não é uma ficha autónoma para o formando resolver sozinho.
 
-A causa **não é fornecida**. O objetivo é chegar a ela através de evidência.
+O formador conduz a turma passo a passo:
+
+```text
+observar
+  ↓
+interpretar em conjunto
+  ↓
+formular uma hipótese
+  ↓
+testar a hipótese
+  ↓
+identificar a causa raiz
+  ↓
+corrigir
+  ↓
+validar
+```
+
+A causa não é revelada no início, para permitir praticar troubleshooting, mas o formador orienta a recolha e interpretação da evidência em cada etapa.
 
 ---
 
-## Objetivo
+## Situação
 
-Aplicar o método de troubleshooting usado ao longo da formação:
+Após uma alteração de configuração, o Deployment inicia uma atualização. A aplicação continua parcialmente disponível, mas o rollout não termina: uma nova réplica aparece em execução e não fica pronta para receber tráfego.
 
-```text
-Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção → Validação
-```
+## Objetivo pedagógico
 
-No final, o formando deve conseguir explicar por que razão:
+Compreender e observar, no cluster real:
 
 ```text
 Running ≠ Ready
 ```
 
-e como uma `readinessProbe` influencia simultaneamente:
+E relacionar:
 
 ```text
-Pod
- ↓
-condição Ready
- ↓
+readinessProbe
+      ↓
+condição Ready do Pod
+      ↓
 EndpointSlice
- ↓
+      ↓
 tráfego do Service
 
         e
 
 Deployment
- ↓
+      ↓
 progressão do rollout
 ```
 
 ---
 
-## Conceitos a compreender antes de diagnosticar
+# 1. Conceitos antes de executar comandos
 
-### `Running`
+## `Running`
 
-`Running` indica que o Pod foi agendado e que pelo menos um container foi iniciado ou está em processo de execução. **Não significa que a aplicação esteja pronta para servir tráfego.**
+`Running` indica que o Pod foi agendado e que o container está em execução ou iniciou a sua execução. Não significa que a aplicação esteja preparada para receber tráfego.
 
-### `Ready`
+## `Ready`
 
-A condição `Ready` indica se o Pod pode ser considerado apto para receber tráfego através de Services que o selecionem.
+`Ready` indica se o Pod está apto a participar no serviço. Um Pod pode estar `Running` e simultaneamente `NotReady`.
 
-### `readinessProbe`
+## `readinessProbe`
 
-A `readinessProbe` é um teste periódico usado pelo kubelet para determinar se o container está pronto para participar no serviço.
+A `readinessProbe` é executada pelo kubelet para determinar se a aplicação está pronta para receber pedidos.
 
 Se a probe falhar:
 
 ```text
-processo pode continuar a executar
+container continua em execução
         ↓
 Pod pode continuar Running
         ↓
 Pod fica NotReady
         ↓
-endpoint deixa de ser elegível para tráfego
+endpoint fica não elegível para tráfego
 ```
 
-Isto é diferente de uma `livenessProbe`, cujo objetivo é determinar se o container deve ser reiniciado.
+Isto é diferente da `livenessProbe`: uma falha de liveness pode levar ao reinício do container.
 
-### Rollout do Deployment
+## Estratégia do Deployment
 
-Um Deployment tenta aproximar continuamente o estado real do estado desejado. Durante uma atualização, Kubernetes cria/substitui réplicas de acordo com a estratégia definida.
-
-Neste laboratório é usada deliberadamente:
+Neste laboratório o Deployment usa:
 
 ```yaml
 maxSurge: 0
 maxUnavailable: 1
 ```
 
-Com duas réplicas e anti-affinity obrigatória entre Workers, isto permite substituir uma réplica de cada vez sem tentar criar uma terceira réplica que não teria onde ser colocada.
-
-Consequência importante para este incidente:
-
-```text
-uma réplica antiga pode continuar Ready
-        +
-uma nova réplica pode ficar NotReady
-        ↓
-serviço parcialmente disponível
-        +
-rollout bloqueado
-```
+Com dois Workers e anti-affinity obrigatória, esta estratégia substitui uma réplica de cada vez. Durante uma atualização problemática pode permanecer uma réplica antiga disponível enquanto a nova réplica não fica pronta.
 
 ---
 
-## Regras do incidente
-
-- Não usar `kubectl edit` para corrigir o problema.
-- Não abrir imediatamente os manifests do incidente à procura da resposta.
-- Recolher evidência antes de alterar configuração.
-- Registar pelo menos três comandos utilizados no diagnóstico.
-- Confirmar as condições `ready` dos endpoints, não apenas a existência do EndpointSlice.
-- A correção deve repor a baseline declarativa conhecida como boa.
-
----
-
-# 1. Confirmar o sintoma
+# 2. Observar o sintoma — executar em conjunto
 
 ```bash
 kubectl get deployment symfony-demo -n s78-lab
@@ -116,244 +107,161 @@ kubectl get pods -n s78-lab -o wide
 kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
-```
-
-### Como interpretar os comandos e flags
-
-```text
-kubectl get deployment symfony-demo
-→ consulta o estado agregado do Deployment
-
--n s78-lab
-→ limita a operação ao Namespace do laboratório
-
-kubectl get pods
-→ mostra o estado individual das réplicas
-
--o wide
-→ acrescenta Node, IP e outros dados úteis para distinguir as réplicas
-
-kubectl get endpointslices
-→ consulta os backends atualmente associados aos Services
-
--l kubernetes.io/service-name=symfony-demo
-→ filtra apenas o EndpointSlice pertencente ao Service symfony-demo
-
--o yaml
-→ mostra todos os campos, incluindo conditions.ready e conditions.serving
-```
-
-### O que observar
-
-No Deployment, distinguir:
-
-```text
-READY
-UP-TO-DATE
-AVAILABLE
-```
-
-Nos Pods, comparar:
-
-```text
-STATUS
-READY
-AGE
-NODE
-```
-
-No EndpointSlice, observar especialmente:
-
-```yaml
-conditions:
-  ready: true|false
-  serving: true|false
-```
-
-**Pergunta:** se um Pod aparece `Running` mas o endpoint correspondente tem `ready: false`, o que é que isso prova?
-
----
-
-# 2. Recolher Events
-
-```bash
 kubectl get events -n s78-lab --sort-by=.lastTimestamp
 ```
 
-### O que significa
+## O que significam os comandos e flags
 
 ```text
-get events
-→ consulta acontecimentos registados pelos componentes Kubernetes
+kubectl get deployment
+→ mostra o estado desejado e disponível do Deployment
+
+-n s78-lab
+→ executa a consulta no Namespace do laboratório
+
+kubectl get pods -o wide
+→ acrescenta IP e Node; ajuda a identificar a réplica antiga e a nova
+
+-l kubernetes.io/service-name=symfony-demo
+→ filtra apenas o EndpointSlice pertencente ao Service Symfony
+
+-o yaml
+→ permite observar condições detalhadas dos endpoints
 
 --sort-by=.lastTimestamp
-→ ordena cronologicamente pelo instante mais recente conhecido do Event
+→ ordena os Events temporalmente para facilitar a análise do incidente
 ```
 
-Os Events podem revelar problemas de scheduling, probes, imagens ou lifecycle, mas **a ausência de um Event explícito não prova ausência de problema**.
+## O que o formador pede para observar
+
+Em conjunto, identificar:
+
+```text
+Deployment → quantas réplicas Ready/Available?
+Pod antigo → continua Ready?
+Pod novo   → Running? Ready?
+Endpoint   → ready=true ou ready=false?
+Events     → existe evidência relacionada com probes ou rollout?
+```
+
+### Checkpoint acompanhado
+
+Antes de avançar, a turma deve conseguir explicar por que razão `Running` não chega para concluir que a aplicação está saudável.
 
 ---
 
-# 3. Inspecionar a réplica afetada
+# 3. Recolher evidência do Pod afetado
 
-Identificar primeiro o Pod que não está `Ready`:
-
-```bash
-kubectl get pods -n s78-lab
-```
-
-Depois:
+O formador identifica com a turma o Pod novo e define a variável:
 
 ```bash
-kubectl describe pod <NOVO_POD> -n s78-lab
+POD=<NOVO_POD>
 ```
 
-Se necessário:
+Depois executar:
 
 ```bash
-kubectl logs <NOVO_POD> -n s78-lab
+kubectl describe pod "$POD" -n s78-lab
+kubectl logs "$POD" -n s78-lab
 ```
 
-### Como interpretar
-
-`kubectl describe pod` combina vários tipos de evidência num único output:
+## Como interpretar
 
 ```text
-estado dos containers
-imagem utilizada
-probes configuradas
-condições do Pod
-Events associados
+kubectl describe pod
+→ mostra estado, probes, condições, imagem, Node e Events associados ao Pod
+
+kubectl logs
+→ mostra o stdout/stderr da aplicação; serve para distinguir problema da aplicação de problema de prontidão/configuração
 ```
 
-`kubectl logs` mostra a saída produzida pela aplicação. É útil para distinguir, por exemplo:
-
-```text
-aplicação arrancou mas não está Ready
-        ≠
-aplicação terminou com erro
-```
-
-### Questões de análise
-
-- O container está efetivamente em execução?
-- Qual é a condição `Ready`?
-- Existe uma probe configurada?
-- Que tipo de probe é?
-- Que endpoint/porta é testado?
-- O `describe` mostra falhas repetidas?
-- Os logs indicam falha da aplicação ou a aplicação parece estar funcional?
-
-Não saltar diretamente da primeira mensagem de erro para a causa raiz. Formular uma hipótese e procurar um teste que a confirme ou rejeite.
+O formador orienta a turma a procurar evidência que explique por que o Pod está `Running` mas não `Ready`.
 
 ---
 
 # 4. Formular e testar a hipótese
 
-Registar explicitamente:
+A turma regista uma hipótese baseada na evidência recolhida.
+
+Perguntas guiadas pelo formador:
 
 ```text
-Sintoma:
-
-Evidência:
-
-Hipótese:
-
-Teste que confirma/rejeita a hipótese:
+A aplicação arrancou?
+A readiness probe está a responder com sucesso?
+O endpoint testado pela probe existe?
+O problema está no processo ou apenas na prontidão?
+O Service está corretamente a excluir a réplica não pronta?
 ```
 
-Uma hipótese só deve ser promovida a **causa raiz** quando existir evidência suficiente.
+Só depois de existir evidência suficiente se identifica a causa raiz.
 
 ---
 
 # 5. Recuperar a baseline declarativa
 
-Depois de identificada a causa raiz, repor a configuração conhecida como boa:
+A correção do laboratório não é feita com `kubectl edit`. Reaplica-se o estado conhecido como bom:
 
 ```bash
 kubectl apply -k app/overlays/normal/
-
 kubectl rollout status deployment/symfony-demo \
   -n s78-lab \
   --timeout=180s
 ```
 
-### Como interpretar
-
-```text
-apply -k app/overlays/normal/
-→ renderiza e aplica o overlay Kustomize conhecido como bom
-
-rollout status deployment/symfony-demo
-→ acompanha a convergência do Deployment
-
---timeout=180s
-→ termina com erro se a convergência não for observada no prazo indicado
-```
-
-Não considerar a recuperação concluída apenas porque `apply` terminou sem erro.
-
----
-
-# 6. Validar a recuperação
+Depois validar:
 
 ```bash
-kubectl get deployment symfony-demo -n s78-lab
 kubectl get pods -n s78-lab -o wide
 kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
 
-A validação deve demonstrar:
+## Flags importantes
 
 ```text
-Deployment  → 2/2 Ready
-Pods        → 2 × Running / Ready
-Endpoints   → 2 × ready=true
-Rollout     → concluído
+-k app/overlays/normal/
+→ aplica o resultado da configuração Kustomize dessa diretoria
+
+rollout status
+→ acompanha a convergência do Deployment
+
+--timeout=180s
+→ limita a espera a 180 segundos
 ```
 
 ---
 
-## Registo do incidente
+# 6. Validação final acompanhada
+
+O incidente só termina quando a turma confirmar:
+
+```text
+Deployment          → 2/2 Ready
+Pods Symfony        → 2 × Running / Ready
+EndpointSlice       → 2 endpoints ready=true
+rollout             → concluído com sucesso
+```
+
+## Registo na folha de evidências
+
+Registar apenas a evidência essencial observada durante a execução acompanhada:
 
 | Campo | Registo |
 |---|---|
-| Sintoma | |
-| Estado do rollout | |
-| Réplica antiga disponível? | |
-| Nova réplica `Running`? | |
-| Nova réplica `Ready`? | |
-| Condições dos endpoints | |
+| Sintoma observado | |
 | Evidência principal | |
-| Hipótese | |
-| Teste | |
-| Causa raiz | |
-| Correção declarativa | |
-| Evidência de recuperação | |
+| Hipótese formulada | |
+| Teste utilizado | |
+| Causa raiz identificada | |
+| Correção aplicada | |
+| Evidência após recuperação | |
 
----
-
-## CHECKPOINT — Incidente 1 concluído
-
-Não avançar enquanto não for possível demonstrar com evidência:
-
-```text
-2 réplicas Running
-2 réplicas Ready
-2 endpoints ready=true
-rollout concluído
-```
-
-E explicar:
+## Síntese a consolidar
 
 ```text
 Running ≠ Ready
-
-readiness
-   ↓
-protege o tráfego
-   +
-protege a progressão do rollout
+readiness protege o tráfego
+readiness também influencia o rollout
+uma correção só está concluída depois de validada
 ```
