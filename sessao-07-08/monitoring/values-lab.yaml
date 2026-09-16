@@ -1,6 +1,7 @@
-# Valores mínimos para kube-prometheus-stack no laboratório.
+# Valores reduzidos para kube-prometheus-stack no laboratório.
 # O chart deve ser descarregado e validado pelo formador antes da sessão.
 
+# As regras predefinidas são desativadas para reduzir ruído e consumo.
 defaultRules:
   create: false
 
@@ -9,6 +10,11 @@ grafana:
 
 alertmanager:
   enabled: false
+
+# A regra pedagógica usa métricas kube_deployment_status_*.
+# Mantemos kube-state-metrics explicitamente ativo.
+kubeStateMetrics:
+  enabled: true
 
 prometheusOperator:
   resources:
@@ -24,6 +30,13 @@ prometheus:
     retention: 2h
     scrapeInterval: 30s
     evaluationInterval: 30s
+
+    # Seleção explícita dos PrometheusRule usados no laboratório.
+    # O ficheiro prometheus-rule.yaml usa exatamente esta label.
+    ruleSelector:
+      matchLabels:
+        release: monitoring
+
     resources:
       requests:
         cpu: 150m
