@@ -2,9 +2,12 @@
 
 ## Continuidade, Troubleshooting e Operação Avançada de Kubernetes
 
-Este laboratório integra numa única sessão prática os conteúdos das Sessões 7 e 8 da formação **Mini MBA em Orquestração de Containers com Kubernetes**.
+Laboratório de 4 horas que integra:
 
-A progressão pedagógica é:
+- **Sessão 7:** Alta Disponibilidade, monitorização, troubleshooting e recuperação;
+- **Sessão 8:** Helm, Kustomize, releases, CRDs, Custom Resources, Controllers e Operators.
+
+Progressão pedagógica:
 
 ```text
 OBSERVAR
@@ -26,472 +29,275 @@ RECONCILIAR
 VALIDAR
 ```
 
-O laboratório combina:
-
-- Alta Disponibilidade, monitorização e troubleshooting;
-- diagnóstico estruturado de incidentes;
-- recuperação de workloads;
-- distinção entre HA, persistência, backup e recuperação;
-- Kustomize;
-- Helm;
-- releases, upgrades e rollbacks;
-- CRDs;
-- Custom Resources;
-- Controllers;
-- Operators;
-- extensão da Kubernetes API.
-
 ---
 
-## 1. Identificação
+## 1. Ambiente de referência
 
 | Elemento | Definição |
 |---|---|
-| Formação | Mini MBA em Orquestração de Containers com Kubernetes |
-| Laboratório | Integrado — Sessões 7 e 8 |
-| Duração | 4 horas / 240 minutos |
-| Nível | Intermédio |
-| N.º estimado de formandos | Até 5 |
-| Ambiente | Kubernetes on-premises em VMs Ubuntu |
-| Topologia base | 1 Control Plane + 2 Worker Nodes |
+| Namespace | `s78-lab` |
+| Cluster | 1 Control Plane + 2 Worker Nodes |
 | Runtime | `containerd` |
 | CNI | Calico |
-| Aplicação | Symfony Demo + PostgreSQL 16 |
-| Ferramentas | `kubectl`, Helm e Kustomize |
-| Componente avançado previsto | Prometheus Operator |
-| Metodologia | Cenário → sintoma → evidência → hipótese → teste → correção → validação |
+| StorageClass | `local-path` |
+| Aplicação | Symfony Demo |
+| Imagem | `ghcr.io/skullclamp/symfony-demo:1.0.0` |
+| Base de dados | PostgreSQL 16 |
+| Ferramentas | `kubectl`, Kustomize integrado, Helm |
+| Operador | Prometheus Operator através de `kube-prometheus-stack` |
+
+As credenciais existentes neste laboratório são deliberadamente fictícias e destinam-se apenas à formação.
 
 ---
 
-## 2. Cenário
-
-Os formandos assumem a administração de um cluster onde está em execução uma aplicação Web.
-
-```text
-                   Utilizador
-                       │
-                       ▼
-                 Service / Ingress
-                       │
-                       ▼
-                 Symfony Demo
-                  Deployment
-                  Pod      Pod
-                       │
-                       ▼
-                  PostgreSQL
-                       │
-                       ▼
-                      PVC
-
-                Kubernetes Cluster
-
-          Control Plane
-               │
-       ┌───────┴────────┐
-       ▼                ▼
-   Worker 01         Worker 02
-```
-
-Durante uma janela de manutenção será necessário:
-
-```text
-validar cluster
-      ↓
-gerir configuração com Kustomize
-      ↓
-instalar monitoring/operator com Helm
-      ↓
-provocar falhas
-      ↓
-diagnosticar
-      ↓
-recuperar
-      ↓
-executar upgrade
-      ↓
-detetar release defeituosa
-      ↓
-rollback
-      ↓
-trabalhar CRD / Custom Resource
-      ↓
-observar reconciliação
-```
-
-### Questão orientadora
-
-> Conseguimos detetar uma degradação, encontrar a causa raiz, recuperar o serviço e gerir a evolução do cluster através de mecanismos declarativos e controladores Kubernetes?
-
----
-
-## 3. Objetivos práticos
-
-No final do laboratório, o formando deverá conseguir:
-
-1. Validar o estado inicial de um cluster.
-2. Aplicar um método estruturado de troubleshooting.
-3. Utilizar `get`, `describe`, `logs` e `events` como fontes de evidência.
-4. Distinguir sintoma de causa raiz.
-5. Diagnosticar uma probe incorreta.
-6. Diagnosticar um problema de Service/selector.
-7. Analisar o impacto de um Worker `NotReady`.
-8. Observar mecanismos de recuperação de workloads.
-9. Explicar porque **HA ≠ backup**.
-10. Identificar o papel do `etcd`.
-11. Utilizar Kustomize para gerir variantes de configuração.
-12. Instalar e consultar uma release Helm.
-13. Executar `upgrade`, consultar histórico e realizar `rollback`.
-14. Identificar CRDs adicionadas ao cluster.
-15. Distinguir CRD de Custom Resource.
-16. Identificar o Controller/Operator responsável pela reconciliação.
-17. Modificar um Custom Resource e observar a reconciliação.
-18. Validar tecnicamente a recuperação final do ambiente.
-
----
-
-## 4. Distribuição temporal
-
-| Tempo | Atividade |
-|---:|---|
-| 15 min | Bloco 1 — Baseline e recolha de evidência |
-| 25 min | Bloco 2 — Gestão declarativa com Kustomize |
-| 35 min | Bloco 3 — Helm + Prometheus Operator + CRDs |
-| 30 min | Incidente 1 — Readiness probe incorreta |
-| 15 min | **Intervalo** |
-| 25 min | Incidente 2 — Service / selector incorreto |
-| 35 min | Incidente 3 — Node `NotReady`, recuperação e HA |
-| 35 min | Incidente 4 — Upgrade Helm defeituoso e rollback |
-| 25 min | Custom Resource, reconciliação, síntese e limpeza |
-| **240 min** | **Total** |
-
----
-
-## 5. Estrutura prevista dos recursos
-
-Os ficheiros operacionais serão desenvolvidos posteriormente mantendo esta organização:
+## 2. Estrutura
 
 ```text
 sessao-07-08/
-│
 ├── README.md
 ├── 00-precheck/
 │   └── precheck.sh
-│
 ├── app/
 │   ├── base/
+│   │   ├── namespace.yaml
+│   │   ├── postgres-secret.yaml
+│   │   ├── postgres-service.yaml
+│   │   ├── postgres-statefulset.yaml
 │   │   ├── deployment.yaml
 │   │   ├── service.yaml
 │   │   └── kustomization.yaml
-│   │
 │   └── overlays/
 │       ├── normal/
+│       │   └── kustomization.yaml
 │       ├── incident-probe/
+│       │   ├── kustomization.yaml
+│       │   └── patch-probe.yaml
 │       └── incident-service/
-│
+│           ├── kustomization.yaml
+│           └── patch-service.yaml
 ├── helm/
 │   ├── app-lab/
+│   │   ├── Chart.yaml
+│   │   ├── values.yaml
+│   │   └── templates/
+│   │       ├── deployment.yaml
+│   │       └── service.yaml
 │   └── values/
 │       ├── values-good.yaml
 │       └── values-broken.yaml
-│
 ├── monitoring/
 │   ├── values-lab.yaml
-│   └── prometheus-rule.yaml
-│
+│   ├── prometheus-rule.yaml
+│   └── prepare-chart.sh
+├── packages/
+│   └── README.md
 ├── incidents/
 │   ├── 01-probe.md
 │   ├── 02-service.md
 │   ├── 03-node.md
 │   └── 04-release.md
-│
 └── solutions/
     └── SOLUCOES-FORMADOR.md
 ```
 
-As soluções não deverão ser disponibilizadas inicialmente aos formandos.
+---
+
+## 3. Distribuição das 4 horas
+
+| Tempo | Atividade |
+|---:|---|
+| 15 min | Baseline e recolha de evidência |
+| 25 min | Kustomize e gestão declarativa |
+| 35 min | Helm + Prometheus Operator + CRDs |
+| 30 min | Incidente 1 — Pod `Running` mas não `Ready` |
+| 15 min | **Intervalo** |
+| 25 min | Incidente 2 — Service sem endpoints |
+| 35 min | Incidente 3 — Worker `NotReady` |
+| 35 min | Incidente 4 — release defeituosa e rollback |
+| 25 min | Custom Resource, reconciliação, síntese e limpeza |
+| **240 min** | **Total** |
 
 ---
 
-# 6. Bloco 1 — Estado inicial do cluster
+## 4. Pré-validação
 
-**Tempo:** 15 minutos
-
-Regra operacional:
-
-> Antes de alterar, observar.
-
-### Consultar o ambiente
+Executar a partir desta diretoria:
 
 ```bash
-kubectl config current-context
-kubectl get nodes -o wide
-kubectl get pods -A
-kubectl get deployments -A
-kubectl get svc -A
-kubectl get pvc -A
-kubectl get events -A --sort-by=.lastTimestamp
+chmod +x 00-precheck/precheck.sh monitoring/prepare-chart.sh
+./00-precheck/precheck.sh
 ```
 
-Os formandos deverão registar:
+O precheck valida, entre outros pontos:
 
-| Questão | Evidência |
-|---|---|
-| Quantos Nodes estão `Ready`? | |
-| Onde corre a aplicação? | |
-| Quantas réplicas existem? | |
-| Todos os Pods estão `Ready`? | |
-| O PVC está `Bound`? | |
-| Existem Events anómalos? | |
-
-Mensagem-chave:
-
-```text
-"Está a funcionar"
-       ≠
-"Tenho evidência de que está saudável"
-```
+- acesso à Kubernetes API;
+- pelo menos dois Worker Nodes `Ready`;
+- `local-path` disponível;
+- presença de Calico;
+- `kubectl kustomize`;
+- Helm.
 
 ---
 
-# 7. Bloco 2 — Gestão declarativa com Kustomize
+## 5. Criar a baseline com Kustomize
 
-**Tempo:** 25 minutos
-
-O objetivo é mostrar que variantes de configuração não devem depender de edição manual no cluster.
-
-### Estrutura
-
-```text
-app/
-├── base/
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   └── kustomization.yaml
-│
-└── overlays/
-    └── normal/
-        └── kustomization.yaml
-```
-
-### Visualizar o resultado
+Visualizar primeiro:
 
 ```bash
 kubectl kustomize app/overlays/normal/
 ```
 
-### Aplicar
+Aplicar:
 
 ```bash
 kubectl apply -k app/overlays/normal/
 ```
 
-### Validar
+Aguardar:
 
 ```bash
-kubectl get all -n s78-lab
+kubectl rollout status statefulset/postgres -n s78-lab --timeout=180s
+kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
+```
+
+Recolher evidência:
+
+```bash
+kubectl get nodes -o wide
 kubectl get pods -n s78-lab -o wide
+kubectl get svc -n s78-lab
+kubectl get endpointslices -n s78-lab
+kubectl get pvc -n s78-lab
+kubectl get events -n s78-lab --sort-by=.lastTimestamp
 ```
 
-Relação conceptual:
-
-```text
-Base
-  +
-Overlay
-  ↓
-manifest final
-  ↓
-Kubernetes API
-```
-
-Neste ponto é estabelecida a **baseline conhecida como boa**.
+A Pod Anti-Affinity do Deployment procura garantir uma réplica Symfony em cada Worker.
 
 ---
 
-# 8. Bloco 3 — Helm + Operator + CRDs
+## 6. Preparar e instalar monitorização
 
-**Tempo:** 35 minutos
+O laboratório evita depender da Internet durante a formação. O formador deve escolher e validar previamente uma versão do `kube-prometheus-stack`.
 
-Para evitar dependência da Internet durante a formação, o formador deverá disponibilizar previamente o chart Helm, imagens e versões validadas para o ambiente.
+Antes da sessão:
 
-### Instalação conceptual
+```bash
+./monitoring/prepare-chart.sh <VERSAO_VALIDADA>
+```
+
+Durante a sessão:
 
 ```bash
 helm install monitoring \
   ./packages/kube-prometheus-stack-<VERSAO_VALIDADA>.tgz \
   --namespace monitoring \
   --create-namespace \
-  -f monitoring/values-lab.yaml
+  -f monitoring/values-lab.yaml \
+  --wait \
+  --timeout 5m
 ```
 
-### Consultar a release
+Explorar:
 
 ```bash
 helm list -n monitoring
-helm status monitoring -n monitoring
 kubectl get pods -n monitoring
-```
-
-### Descobrir extensões da API
-
-```bash
-kubectl get crd
 kubectl get crd | grep monitoring.coreos.com
+kubectl get prometheus -A
 ```
 
-Os formandos deverão identificar recursos como:
-
-```text
-Prometheus
-ServiceMonitor
-PrometheusRule
-Alertmanager
-```
-
-Relação a consolidar:
+Relação conceptual:
 
 ```text
 CRD
- │
- └── define um novo tipo na API
-             │
-             ▼
-       Custom Resource
-             │
-             ▼
-          Operator
-             │
-       observa alterações
-             │
-             ▼
-         reconciliação
+ ↓
+define um novo tipo na API
+ ↓
+Custom Resource
+ ↓
+instância desse tipo
+ ↓
+Controller / Operator
+ ↓
+reconciliação
 ```
 
 ---
 
-# 9. Incidente 1 — A aplicação corre, mas não está Ready
+## 7. Incidente 1 — Readiness
 
-**Tempo:** 30 minutos
-
-O formador aplica o overlay defeituoso:
+O formador provoca o incidente:
 
 ```bash
 kubectl apply -k app/overlays/incident-probe/
 ```
 
-Sintoma esperado:
+Entregar ao formando:
 
 ```text
-Pod Running
-mas
-READY 0/1
+incidents/01-probe.md
 ```
 
-O formando recebe apenas o sintoma e deverá aplicar:
-
-```text
-Sintoma
- ↓
-Evidência
- ↓
-Hipótese
- ↓
-Teste
- ↓
-Causa raiz
- ↓
-Correção
- ↓
-Validação
-```
-
-### Recolher evidência
-
-```bash
-kubectl get pods -n s78-lab
-kubectl describe pod <POD> -n s78-lab
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
-kubectl logs <POD> -n s78-lab
-```
-
-A causa preparada será uma **readiness probe incorreta**.
-
-### Recuperar
+Após o diagnóstico, repor a baseline:
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl rollout status deployment/symfony-demo -n s78-lab
-kubectl get pods -n s78-lab
+kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
 ```
 
-Critério de sucesso:
+Mensagem-chave:
 
 ```text
-Running + Ready
+Running ≠ Ready
 ```
 
 ---
 
-# 10. Incidente 2 — Pods saudáveis, Service sem funcionar
+## 8. Incidente 2 — Service / selector
 
-**Tempo:** 25 minutos
-
-Cenário:
-
-```text
-Pod → Running
-Pod → Ready
-Service → existe
-
-MAS
-
-cliente → Service → falha
-```
-
-### Diagnóstico
+Provocar:
 
 ```bash
-kubectl get pods -n s78-lab --show-labels
-kubectl get svc -n s78-lab -o yaml
-kubectl get endpointslices -n s78-lab
+kubectl apply -k app/overlays/incident-service/
 ```
 
-A causa preparada será um **selector incompatível com as labels dos Pods**.
+Entregar:
 
-### Recuperar
+```text
+incidents/02-service.md
+```
+
+Repor:
 
 ```bash
 kubectl apply -k app/overlays/normal/
 kubectl get endpointslices -n s78-lab
 ```
 
-Relação a validar:
+Mensagem-chave:
 
 ```text
-Service
-  ↓ selector
-labels
-  ↓
-Pods
+Service existente ≠ Service com backends
 ```
 
 ---
 
-# 11. Incidente 3 — Worker Node `NotReady`
+## 9. Incidente 3 — Worker `NotReady`
 
-**Tempo:** 35 minutos
+Entregar:
 
-Se a turma partilhar um único cluster, esta tarefa deverá ser conduzida pelo formador.
-
-### Antes da falha
-
-```bash
-kubectl get pods -n s78-lab -o wide
-kubectl get nodes
+```text
+incidents/03-node.md
 ```
 
-### Falha controlada
+Antes da falha, identificar a distribuição:
+
+```bash
+kubectl get pod postgres-0 -n s78-lab -o wide
+kubectl get pods -n s78-lab -l app=symfony-demo -o wide
+```
+
+Se o cluster for partilhado, **apenas o formador** provoca a falha. Deve escolher o Worker que contém uma réplica Symfony mas **não** `postgres-0`.
 
 No Worker selecionado:
 
@@ -499,153 +305,109 @@ No Worker selecionado:
 sudo systemctl stop kubelet
 ```
 
-### Observar
+Observar:
 
 ```bash
 kubectl get nodes
 kubectl get pods -n s78-lab -o wide
+kubectl get endpointslices -n s78-lab
 kubectl get events -A --sort-by=.lastTimestamp
 ```
 
-Questões de análise:
-
-- O Node passa imediatamente a `NotReady`?
-- O que acontece às réplicas?
-- O Deployment tenta preservar o estado desejado?
-- Existem réplicas noutro Worker?
-- O Service continua com endpoints utilizáveis?
-
-### Recuperar
+Recuperar:
 
 ```bash
 sudo systemctl start kubelet
-kubectl get nodes
-kubectl get pods -n s78-lab -o wide
 ```
 
-### Discussão obrigatória
+Consolidar:
 
 ```text
-2 Pods em 2 Workers
-       ↓
-resiliência de workload
-
-        ≠
-
-Control Plane HA
+resiliência do workload ≠ HA do Control Plane
+HA ≠ backup
+redundância de etcd ≠ snapshot de etcd
 ```
 
-E:
-
-```text
-Alta Disponibilidade
-        ≠
-Backup
-        ≠
-Recuperação
-```
+Não executar restore de `etcd` no cluster principal da formação.
 
 ---
 
-# 12. `etcd` — estado, disponibilidade e recuperação
+## 10. Transição para gestão da aplicação com Helm
 
-Os formandos deverão identificar onde reside o estado do cluster:
-
-```bash
-kubectl get pods -n kube-system | grep etcd
-```
-
-Relação conceptual:
-
-```text
-Kubernetes API
-      ↓
-    etcd
-      ↓
-estado persistente
-do cluster
-```
-
-O snapshot poderá ser demonstrado pelo formador no Control Plane.
-
-> Não executar um restore de `etcd` no cluster principal durante este laboratório.
-
-Mensagem-chave:
-
-```text
-redundância de etcd
-     → disponibilidade
-
-snapshot de etcd
-     → ponto de recuperação
-```
-
----
-
-# 13. Incidente 4 — Helm upgrade defeituoso e rollback
-
-**Tempo:** 35 minutos
-
-### Consultar histórico
+Kustomize e Helm não devem gerir simultaneamente os mesmos objetos. Antes de instalar a aplicação através do chart, remover apenas o Deployment e o Service Symfony criados pela baseline Kustomize:
 
 ```bash
-helm history symfony-lab -n s78-lab
+kubectl delete deployment symfony-demo -n s78-lab
+kubectl delete service symfony-demo -n s78-lab
 ```
 
-### Aplicar versão conhecida como boa
+PostgreSQL, PVC, Secret e Namespace permanecem.
+
+Instalar a primeira release Helm:
 
 ```bash
-helm upgrade symfony-lab \
+helm install symfony-lab \
   ./helm/app-lab \
   -n s78-lab \
-  -f helm/values/values-good.yaml
+  -f helm/values/values-good.yaml \
+  --wait \
+  --timeout 3m
 ```
 
 Validar:
 
 ```bash
+helm list -n s78-lab
 helm history symfony-lab -n s78-lab
 kubectl get pods -n s78-lab
 ```
 
-### Aplicar versão defeituosa
+---
+
+## 11. Incidente 4 — Release candidata e rollback
+
+Entregar:
+
+```text
+incidents/04-release.md
+```
+
+A candidata utiliza deliberadamente `values-broken.yaml`:
 
 ```bash
 helm upgrade symfony-lab \
   ./helm/app-lab \
   -n s78-lab \
-  -f helm/values/values-broken.yaml
+  -f helm/values/values-broken.yaml \
+  --wait \
+  --timeout 90s
 ```
 
-A falha preparada poderá utilizar uma imagem/tag inexistente.
-
-### Recolher evidência
+Recolher evidência:
 
 ```bash
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
 kubectl get pods -n s78-lab
-kubectl describe pod <POD> -n s78-lab
 kubectl get events -n s78-lab --sort-by=.lastTimestamp
-helm history symfony-lab -n s78-lab
 ```
 
-### Rollback
+Depois de identificada a revisão boa:
 
 ```bash
-helm rollback symfony-lab <REVISAO_BOA> -n s78-lab
-kubectl rollout status deployment/symfony-demo -n s78-lab
-helm history symfony-lab -n s78-lab
+helm rollback symfony-lab <REVISAO_BOA> -n s78-lab --wait --timeout 3m
 ```
 
-Fluxo operacional:
+Fluxo:
 
 ```text
-release nova
+release candidata
    ↓
 falha
    ↓
 evidência
    ↓
-decisão
+causa raiz
    ↓
 rollback
    ↓
@@ -654,134 +416,65 @@ validação
 
 ---
 
-# 14. Custom Resource e reconciliação
+## 12. Custom Resource e reconciliação
 
-**Tempo incluído no bloco final:** 25 minutos
-
-### Consultar objetos geridos pelo Prometheus Operator
-
-```bash
-kubectl get prometheus -A
-kubectl get prometheusrule -A
-```
-
-Será fornecido um `PrometheusRule` preparado para o laboratório.
+Depois de instalado o Prometheus Operator:
 
 ```bash
 kubectl apply -f monitoring/prometheus-rule.yaml
 kubectl get prometheusrule -n monitoring
+kubectl describe prometheusrule s78-lab-rules -n monitoring
 ```
 
-Depois será alterado um campo do Custom Resource.
+O `PrometheusRule` permite trabalhar uma instância real de um recurso que não pertence à API Kubernetes base.
 
-O objetivo é observar:
+Pedir ao formando que altere um campo não destrutivo, por exemplo a annotation `summary` ou o tempo `for`, aplique novamente o ficheiro e observe o estado.
+
+---
+
+## 13. Método obrigatório de troubleshooting
+
+Em todos os incidentes:
 
 ```text
-Utilizador
-   ↓
-altera Custom Resource
-   ↓
-Kubernetes API
-   ↓
-Operator observa
-   ↓
-Controller executa lógica
-   ↓
-estado real converge
-   ↓
-estado pretendido
+Sintoma
+  ↓
+Evidência
+  ↓
+Hipótese
+  ↓
+Teste
+  ↓
+Causa raiz
+  ↓
+Correção
+  ↓
+Validação
 ```
 
-Não é objetivo ensinar a programar um Operator.
+Cada cartão de incidente inclui uma grelha de registo. A resolução não é considerada completa apenas porque o serviço voltou a funcionar: o formando deve conseguir explicar a causa com evidência.
 
 ---
 
-# 15. Registo obrigatório de troubleshooting
+## 14. Limpeza
 
-Para cada incidente, o formando deverá preencher:
+```bash
+helm uninstall symfony-lab -n s78-lab || true
+helm uninstall monitoring -n monitoring || true
+kubectl delete namespace monitoring --ignore-not-found
+kubectl delete namespace s78-lab --ignore-not-found
+```
 
-| Campo | Registo |
-|---|---|
-| Sintoma inicial | |
-| Primeira evidência | |
-| Comandos utilizados | |
-| Hipótese | |
-| Teste efetuado | |
-| Causa raiz | |
-| Correção | |
-| Evidência da recuperação | |
-
-O objetivo é impedir que o laboratório se transforme numa simples sequência de comandos copiados.
+As CRDs instaladas pelo chart de monitorização podem permanecer no cluster. Não as remover automaticamente sem confirmar que não são utilizadas por outros componentes.
 
 ---
 
-# 16. Critérios de sucesso
+## 15. Material do formador
 
-| Critério | Evidência |
-|---|---|
-| Cluster validado | Nodes e componentes identificados |
-| Baseline estabelecida | Aplicação operacional antes dos incidentes |
-| Kustomize utilizado | Overlay aplicado |
-| Helm utilizado | Release instalada e histórico consultado |
-| CRDs identificadas | Recursos `monitoring.coreos.com` reconhecidos |
-| Operator identificado | Controller em execução |
-| Probe diagnosticada | Causa encontrada em `describe`/Events |
-| Service diagnosticado | Selector/endpoints verificados |
-| Falha de Node analisada | Impacto observado |
-| Workload recuperado | Réplicas novamente disponíveis |
-| Release defeituosa identificada | Events/estado demonstrados |
-| Rollback executado | Revisão boa recuperada |
-| Custom Resource utilizado | Recurso criado/alterado |
-| Reconciliação compreendida | Alteração observada |
-| HA distinguida de backup | Explicação tecnicamente correta |
-| Troubleshooting documentado | Ficha de incidente preenchida |
-
----
-
-# 17. Incidentes opcionais
-
-Para formandos que concluam antecipadamente:
+A resolução técnica e os resultados esperados estão em:
 
 ```text
-EXTRA A
-Pod → CrashLoopBackOff
-
-EXTRA B
-Pod → Pending
-
-EXTRA C
-DNS interno deixa de resolver
-
-EXTRA D
-NetworkPolicy bloqueia comunicação
+solutions/SOLUCOES-FORMADOR.md
 ```
 
-Nos exercícios extra, o formando recebe apenas o sintoma. Não recebe a solução nem a sequência de comandos.
-
----
-
-## Resultado pedagógico esperado
-
-O laboratório deverá terminar com o formando a compreender e praticar o seguinte percurso:
-
-```text
-OBSERVAR
-   ↓
-DIAGNOSTICAR
-   ↓
-RECUPERAR
-   ↓
-GERIR CONFIGURAÇÃO
-   ↓
-GERIR RELEASES
-   ↓
-ROLLBACK
-   ↓
-ESTENDER A API
-   ↓
-RECONCILIAR
-   ↓
-VALIDAR
-```
-
-A componente de troubleshooting fornece o problema operacional; Helm, Kustomize, CRDs e Operators fornecem mecanismos estruturados para operar, recuperar e evoluir o cluster.
+Este ficheiro **não deve ser usado como guião inicial dos formandos**. Como o repositório é público, a separação é apenas pedagógica; não existe controlo de acesso por diretoria.
