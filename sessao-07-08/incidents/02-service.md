@@ -31,9 +31,9 @@ kubectl apply -k app/overlays/incident-service/
 ## Observar
 
 ```bash
-kubectl get pods -n s7-lab --show-labels
-kubectl get svc symfony-demo -n s7-lab -o yaml
-kubectl get endpointslices -n s7-lab \
+kubectl get pods -n s78-lab --show-labels
+kubectl get svc symfony-demo -n s78-lab -o yaml
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -50,7 +50,7 @@ kubectl get endpointslices -n s7-lab \
 Depois de identificar o selector configurado no Service:
 
 ```bash
-kubectl get pods -n s7-lab -l <CHAVE>=<VALOR>
+kubectl get pods -n s78-lab -l <CHAVE>=<VALOR>
 ```
 
 Perguntas orientadoras:
@@ -64,9 +64,9 @@ Perguntas orientadoras:
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl get svc symfony-demo -n s7-lab \
+kubectl get svc symfony-demo -n s78-lab \
   -o jsonpath='selector={.spec.selector.app}{"\n"}'
-kubectl get endpointslices -n s7-lab \
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
