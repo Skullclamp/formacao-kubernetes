@@ -1,13 +1,13 @@
 replicaCount: 2
 
 image:
-  repository: registry.invalid/s78/symfony-demo
+  repository: ghcr.io/skullclamp/symfony-demo
   tag: "1.0.0"
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 app:
   environment: prod
-  version: "1.0.0-broken"
+  version: "1.0.0"
   existingSecret: postgres-credentials
 
 probes:

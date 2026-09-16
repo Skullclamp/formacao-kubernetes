@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: symfony-demo
+  labels:
+    app.kubernetes.io/name: symfony-demo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Com dois Workers e anti-affinity obrigatória, a atualização decorre
+      # sem criar uma terceira réplica temporária.
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: symfony-demo
+  template:
+    metadata:
+      labels:
+        # O Service seleciona os Pods através desta label.
+        app: symfony-demo
+        role: app
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          # Mantém as duas réplicas Web em Workers diferentes.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: symfony-demo
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: symfony
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: APP_ENV
+              value: {{ .Values.app.environment | quote }}
+            - name: APP_VERSION
+              value: {{ .Values.app.version | quote }}
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.existingSecret }}
+                  key: APP_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.existingSecret }}
+                  key: DATABASE_URL
+          # Readiness controla a entrada do Pod nos endpoints do Service.
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readinessPath }}
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          # Liveness verifica se a aplicação deve continuar a executar.
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.livenessPath }}
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 5
+          resources:
+{{ toYaml .Values.resources | indent 12 }}

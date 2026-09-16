@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-# Todos os recursos namespaced da base são aplicados em s78-lab.
-namespace: s78-lab
+# Todos os recursos namespaced da base são aplicados em s7-lab.
+namespace: s7-lab
 resources:
   - namespace.yaml
   - postgres-secret.yaml

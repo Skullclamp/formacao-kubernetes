@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: symfony-demo
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Com dois Workers e anti-affinity obrigatória, não existe capacidade
+      # para uma terceira réplica temporária. Atualizamos uma réplica de cada vez.
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: symfony-demo
+  template:
+    metadata:
+      labels:
+        # O Service seleciona os Pods através desta label.
+        app: symfony-demo
+        role: app
+    spec:
+      affinity:
+        podAntiAffinity:
+          # Objetivo pedagógico: manter as duas réplicas Web em Workers diferentes.
+          # A regra é obrigatória, permitindo discutir disponibilidade vs. placement.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: symfony-demo
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: symfony
+          image: ghcr.io/skullclamp/symfony-demo:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: APP_ENV
+              value: prod
+            - name: APP_VERSION
+              value: "1.0.0"
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: APP_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: DATABASE_URL
+          # /ready representa prontidão para receber tráfego, incluindo dependências.
+          # Um processo pode estar Running sem o Pod estar Ready.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          # /health verifica se a aplicação continua funcional enquanto processo.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 5
+          # Requests influenciam scheduling; limits delimitam o consumo máximo.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
