@@ -7,6 +7,8 @@ spec:
     spec:
       containers:
         - name: symfony
+          # Falha controlada: o processo continua Running, mas este endpoint
+          # não existe e a nova réplica não entra nos endpoints do Service.
           readinessProbe:
             httpGet:
               path: /ready-inexistente
