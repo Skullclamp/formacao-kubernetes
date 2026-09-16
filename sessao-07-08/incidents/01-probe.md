@@ -33,17 +33,17 @@ kubectl apply -k app/overlays/incident-probe/
 ## Observar
 
 ```bash
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl get events -n s7-lab --sort-by=.metadata.creationTimestamp
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get events -n s78-lab --sort-by=.metadata.creationTimestamp
 ```
 
 Identificar o Pod novo:
 
 ```bash
-kubectl describe pod <POD> -n s7-lab
-kubectl logs <POD> -n s7-lab
-kubectl get endpointslices -n s7-lab \
+kubectl describe pod <POD> -n s78-lab
+kubectl logs <POD> -n s78-lab
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -76,15 +76,15 @@ Um `FailedScheduling` transitório devido à anti-affinity pode aparecer durante
 ```bash
 kubectl apply -k app/overlays/normal/
 kubectl rollout status deployment/symfony-demo \
-  -n s7-lab --timeout=180s
+  -n s78-lab --timeout=180s
 ```
 
 Validar:
 
 ```bash
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -l app=symfony-demo -o wide
-kubectl get endpointslices -n s7-lab \
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -l app=symfony-demo -o wide
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```

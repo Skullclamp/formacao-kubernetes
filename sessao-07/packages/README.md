@@ -2,7 +2,7 @@
 
 Esta diretoria guarda dependências externas utilizadas no laboratório.
 
-Para as Sessões 7 e 8, a versão de `kube-prometheus-stack` validada no cluster real da formação é:
+Para a Sessão 7, a versão de `kube-prometheus-stack` validada no cluster real da formação é:
 
 ```text
 91.4.1
@@ -13,7 +13,7 @@ Para as Sessões 7 e 8, a versão de `kube-prometheus-stack` validada no cluster
 Depois de descarregar o repositório, cada formando prepara o pacote com:
 
 ```bash
-cd ~/formacao-kubernetes/sessao-07-08
+cd ~/formacao-kubernetes/sessao-07
 chmod +x monitoring/prepare-chart.sh
 ./monitoring/prepare-chart.sh 91.4.1
 ```

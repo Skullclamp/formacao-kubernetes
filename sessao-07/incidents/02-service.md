@@ -76,9 +76,9 @@ Um Service pode existir sem endpoints se nenhum Pod corresponder ao selector.
 # 2. Observar o estado — executar em conjunto
 
 ```bash
-kubectl get pods -n s78-lab --show-labels
-kubectl get svc symfony-demo -n s78-lab -o yaml
-kubectl get endpointslices -n s78-lab \
+kubectl get pods -n s7-lab --show-labels
+kubectl get svc symfony-demo -n s7-lab -o yaml
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -133,7 +133,7 @@ Se a hipótese apontar para incompatibilidade entre selector e labels, confirmar
 Exemplo do método:
 
 ```bash
-kubectl get pods -n s78-lab -l <CHAVE>=<VALOR>
+kubectl get pods -n s7-lab -l <CHAVE>=<VALOR>
 ```
 
 ## Interpretação
@@ -158,9 +158,9 @@ kubectl apply -k app/overlays/normal/
 Depois validar:
 
 ```bash
-kubectl get svc symfony-demo -n s78-lab -o yaml
-kubectl get pods -n s78-lab --show-labels
-kubectl get endpointslices -n s78-lab \
+kubectl get svc symfony-demo -n s7-lab -o yaml
+kubectl get pods -n s7-lab --show-labels
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```

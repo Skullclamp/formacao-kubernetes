@@ -1,4 +1,4 @@
-# Laboratório Integrado — Sessão 7
+# Laboratório Integrado — Sessões 7 e 8
 ## Continuidade, Troubleshooting e Operação Avançada de Kubernetes
 
 **Módulos:** M10 + M11  
@@ -9,7 +9,7 @@
 **CNI:** Calico  
 **StorageClass:** `local-path`  
 **Aplicação:** Symfony Demo + PostgreSQL 16  
-**Namespace da aplicação:** `s7-lab`  
+**Namespace da aplicação:** `s78-lab`  
 **Namespace da monitorização:** `monitoring`
 
 ---
@@ -50,6 +50,8 @@ Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção →
 
 > **Limite do cenário:** existe apenas um Control Plane. O laboratório demonstra resiliência de workloads e enquadra HA do Control Plane, mas não provoca a falha destrutiva do único Control Plane.
 
+> **Nota de reorganização:** a lógica técnica deste laboratório foi ensaiada no cenário real antes da mudança de diretoria/namespace. Depois da adaptação para `sessao-07-08/` e `s78-lab`, executar novamente o ensaio operacional antes da formação.
+
 ---
 
 # 2. Distribuição das 4 horas
@@ -71,12 +73,12 @@ Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção →
 
 ---
 
-# 3. Preparação do formador — antes da sessão
+# 3. Preparação do formador — antes das sessões
 
 A monitorização é preparada **antes da aula**, para não consumir tempo do laboratório.
 
 ```bash
-cd ~/formacao-kubernetes/sessao-07
+cd ~/formacao-kubernetes/sessao-07-08
 chmod +x monitoring/prepare-chart.sh
 ./monitoring/prepare-chart.sh 91.4.1
 
@@ -97,7 +99,7 @@ kubectl get pods -n monitoring
 kubectl get crd prometheusrules.monitoring.coreos.com
 ```
 
-Não avançar para a sessão sem esta preparação concluída.
+Não avançar para o laboratório sem esta preparação concluída.
 
 > Se o sistema operativo indicar que é necessário reiniciar algum Node, tratar essa manutenção **antes da formação**, numa janela controlada. Num cluster com apenas um Control Plane, não reiniciar o Control Plane durante o laboratório.
 
@@ -124,7 +126,7 @@ git pull --ff-only origin main
 Depois:
 
 ```bash
-cd ~/formacao-kubernetes/sessao-07
+cd ~/formacao-kubernetes/sessao-07-08
 bash 00-precheck/precheck.sh
 ```
 
@@ -154,20 +156,20 @@ Depois aplicar:
 kubectl apply -k app/overlays/normal/
 
 kubectl rollout status statefulset/postgres \
-  -n s7-lab --timeout=180s
+  -n s78-lab --timeout=180s
 
 kubectl rollout status deployment/symfony-demo \
-  -n s7-lab --timeout=180s
+  -n s78-lab --timeout=180s
 ```
 
 Recolher evidência:
 
 ```bash
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl get pvc -n s7-lab
-kubectl get svc -n s7-lab
-kubectl get endpointslices -n s7-lab
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get pvc -n s78-lab
+kubectl get svc -n s78-lab
+kubectl get endpointslices -n s78-lab
 ```
 
 ### CHECKPOINT
@@ -240,18 +242,18 @@ kubectl apply -k app/overlays/incident-probe/
 Observar:
 
 ```bash
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl get events -n s7-lab --sort-by=.metadata.creationTimestamp
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get events -n s78-lab --sort-by=.metadata.creationTimestamp
 ```
 
 Identificar o Pod novo e aprofundar:
 
 ```bash
-kubectl describe pod <POD> -n s7-lab
-kubectl logs <POD> -n s7-lab
+kubectl describe pod <POD> -n s78-lab
+kubectl logs <POD> -n s78-lab
 
-kubectl get endpointslices -n s7-lab \
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -281,10 +283,10 @@ Perguntas orientadoras:
 ```bash
 kubectl apply -k app/overlays/normal/
 kubectl rollout status deployment/symfony-demo \
-  -n s7-lab --timeout=180s
+  -n s78-lab --timeout=180s
 
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get endpointslices -n s7-lab \
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -310,9 +312,9 @@ kubectl apply -k app/overlays/incident-service/
 Observar:
 
 ```bash
-kubectl get pods -n s7-lab --show-labels
-kubectl get svc symfony-demo -n s7-lab -o yaml
-kubectl get endpointslices -n s7-lab \
+kubectl get pods -n s78-lab --show-labels
+kubectl get svc symfony-demo -n s78-lab -o yaml
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -332,18 +334,18 @@ backends
 Testar o selector observado:
 
 ```bash
-kubectl get pods -n s7-lab -l <CHAVE>=<VALOR>
+kubectl get pods -n s78-lab -l <CHAVE>=<VALOR>
 ```
 
-No cenário validado, o selector incorreto não encontra Pods e o EndpointSlice fica sem endpoints (`endpoints: null`).
+No cenário de referência, o selector incorreto não encontra Pods e o EndpointSlice fica sem endpoints (`endpoints: null`).
 
 ### Recuperar
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl get svc symfony-demo -n s7-lab \
+kubectl get svc symfony-demo -n s78-lab \
   -o jsonpath='selector={.spec.selector.app}{"\n"}'
-kubectl get endpointslices -n s7-lab \
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -364,8 +366,8 @@ O guião detalhado está em [`incidents/02-service.md`](incidents/02-service.md)
 
 ```bash
 kubectl get nodes -o wide
-kubectl get pod postgres-0 -n s7-lab -o wide
-kubectl get pods -n s7-lab -l app=symfony-demo -o wide
+kubectl get pod postgres-0 -n s78-lab -o wide
+kubectl get pods -n s78-lab -l app=symfony-demo -o wide
 ```
 
 Escolher o Worker que contém uma réplica Symfony mas **não** o PostgreSQL.
@@ -389,10 +391,10 @@ kubectl get nodes -w
 Noutro terminal:
 
 ```bash
-kubectl get pods -n s7-lab -o wide
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get events -n s7-lab --sort-by=.metadata.creationTimestamp
-kubectl get endpointslices -n s7-lab \
+kubectl get pods -n s78-lab -o wide
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get events -n s78-lab --sort-by=.metadata.creationTimestamp
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -400,7 +402,7 @@ kubectl get endpointslices -n s7-lab \
 Se surgir um Pod `Pending`:
 
 ```bash
-kubectl describe pod <POD_PENDING> -n s7-lab
+kubectl describe pod <POD_PENDING> -n s78-lab
 ```
 
 Relacionar:
@@ -417,7 +419,7 @@ Scheduler procura Node elegível
 anti-affinity pode impedir placement
 ```
 
-No cenário validado, o PostgreSQL manteve-se saudável no outro Worker; a aplicação conservou uma réplica Symfony elegível, mas perdeu redundância; a réplica de substituição ficou temporariamente `Pending` devido a anti-affinity/taints.
+No cenário de referência, o PostgreSQL manteve-se saudável no outro Worker; a aplicação conservou uma réplica Symfony elegível, mas perdeu redundância; a réplica de substituição ficou temporariamente `Pending` devido a anti-affinity/taints.
 
 Mensagem intermédia:
 
@@ -439,9 +441,9 @@ Validar:
 ```bash
 kubectl get nodes
 kubectl rollout status deployment/symfony-demo \
-  -n s7-lab --timeout=300s
-kubectl get pods -n s7-lab -o wide
-kubectl get endpointslices -n s7-lab \
+  -n s78-lab --timeout=300s
+kubectl get pods -n s78-lab -o wide
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -548,11 +550,11 @@ A aplicação foi criada inicialmente por Kustomize. Agora o Deployment e o Serv
 ```bash
 helm template symfony-lab \
   ./helm/app-lab \
-  -n s7-lab \
+  -n s78-lab \
   -f helm/values/values-good.yaml \
   > /tmp/symfony-good.yaml
 
-kubectl diff -n s7-lab -f /tmp/symfony-good.yaml || true
+kubectl diff -n s78-lab -f /tmp/symfony-good.yaml || true
 ```
 
 Interpretar o diff antes de continuar. A adoção pode introduzir labels de gestão Helm e provocar um rollout sem alterar a lógica funcional da aplicação.
@@ -562,7 +564,7 @@ Interpretar o diff antes de continuar. A adoção pode introduzir labels de gest
 ```bash
 helm upgrade --install symfony-lab \
   ./helm/app-lab \
-  -n s7-lab \
+  -n s78-lab \
   -f helm/values/values-good.yaml \
   --take-ownership \
   --wait \
@@ -573,14 +575,14 @@ Validar:
 
 ```bash
 kubectl rollout status deployment/symfony-demo \
-  -n s7-lab --timeout=180s
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl get deployment symfony-demo -n s7-lab \
+  -n s78-lab --timeout=180s
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get deployment symfony-demo -n s78-lab \
   -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}{" | "}{.metadata.annotations.meta\.helm\.sh/release-name}{"\n"}'
-kubectl get svc symfony-demo -n s7-lab \
+kubectl get svc symfony-demo -n s78-lab \
   -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}{" | "}{.metadata.annotations.meta\.helm\.sh/release-name}{"\n"}'
 ```
 
@@ -597,7 +599,7 @@ ownership  → Helm | symfony-lab
 ```bash
 helm upgrade symfony-lab \
   ./helm/app-lab \
-  -n s7-lab \
+  -n s78-lab \
   -f helm/values/values-broken.yaml \
   --wait \
   --timeout 90s
@@ -608,36 +610,36 @@ helm upgrade symfony-lab \
 Diagnosticar:
 
 ```bash
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl describe pod <NOVO_POD> -n s7-lab
-kubectl get deployment symfony-demo -n s7-lab \
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl describe pod <NOVO_POD> -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab \
   -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
 ```
 
-No cenário validado, a causa raiz é uma imagem num registry inválido:
+Na variante adaptada para as Sessões 7 e 8, a causa raiz continua a ser uma imagem num registry inválido:
 
 ```text
-registry.invalid/s7/symfony-demo:1.0.0
+registry.invalid/s78/symfony-demo:1.0.0
 ```
 
-O Pod novo evidencia `ErrImagePull`/`ImagePullBackOff`. Um `FailedScheduling` transitório por anti-affinity não deve ser confundido com a causa raiz se o Pod acabar por ser agendado.
+O Pod novo deverá evidenciar `ErrImagePull`/`ImagePullBackOff`. Um `FailedScheduling` transitório por anti-affinity não deve ser confundido com a causa raiz se o Pod acabar por ser agendado.
 
 ## 4. Rollback
 
 Identificar a revisão boa no histórico:
 
 ```bash
-helm history symfony-lab -n s7-lab
+helm history symfony-lab -n s78-lab
 ```
 
 Depois:
 
 ```bash
 helm rollback symfony-lab <REVISAO_BOA> \
-  -n s7-lab \
+  -n s78-lab \
   --wait \
   --timeout 180s
 ```
@@ -647,15 +649,15 @@ helm rollback symfony-lab <REVISAO_BOA> \
 Validar:
 
 ```bash
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
 kubectl rollout status deployment/symfony-demo \
-  -n s7-lab --timeout=180s
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl get deployment symfony-demo -n s7-lab \
+  -n s78-lab --timeout=180s
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get deployment symfony-demo -n s78-lab \
   -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
-kubectl get endpointslices -n s7-lab \
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -723,7 +725,7 @@ variante declarativa
 Para confirmar ownership, usar metadata Helm:
 
 ```bash
-kubectl get deployment symfony-demo -n s7-lab \
+kubectl get deployment symfony-demo -n s78-lab \
   -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}{" | "}{.metadata.annotations.meta\.helm\.sh/release-name}{"\n"}'
 ```
 
@@ -751,15 +753,15 @@ kubectl get deployments -n monitoring | grep -i operator
 
 ```bash
 kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s7-lab-rules -n monitoring
+kubectl get prometheusrule s78-lab-rules -n monitoring
 ```
 
-> O `PrometheusRule` existe no namespace `monitoring`. A expressão PromQL que contém pode observar o Deployment no namespace `s7-lab`. Não confundir o namespace do CR com o namespace referido pela regra.
+> O `PrometheusRule` existe no namespace `monitoring`. A expressão PromQL que contém observa o Deployment no namespace `s78-lab`. Não confundir o namespace do CR com o namespace referido pela regra.
 
 Registar a geração e a `summary` atuais:
 
 ```bash
-kubectl get prometheusrule s7-lab-rules -n monitoring \
+kubectl get prometheusrule s78-lab-rules -n monitoring \
   -o jsonpath='generation={.metadata.generation}{"\n"}summary={.spec.groups[0].rules[0].annotations.summary}{"\n"}'
 ```
 
@@ -768,7 +770,7 @@ kubectl get prometheusrule s7-lab-rules -n monitoring \
 Alterar apenas a `summary`:
 
 ```bash
-kubectl patch prometheusrule s7-lab-rules \
+kubectl patch prometheusrule s78-lab-rules \
   -n monitoring \
   --type='json' \
   -p='[
@@ -783,7 +785,7 @@ kubectl patch prometheusrule s7-lab-rules \
 Confirmar que `generation` aumentou:
 
 ```bash
-kubectl get prometheusrule s7-lab-rules -n monitoring \
+kubectl get prometheusrule s78-lab-rules -n monitoring \
   -o jsonpath='generation={.metadata.generation}{"\n"}summary={.spec.groups[0].rules[0].annotations.summary}{"\n"}'
 ```
 
@@ -816,7 +818,7 @@ with urllib.request.urlopen(url) as r:
 
 found = False
 for group in data["data"]["groups"]:
-    if group.get("name") != "s7-lab.rules":
+    if group.get("name") != "s78-lab.rules":
         continue
     for rule in group.get("rules", []):
         if rule.get("name") == "SymfonyDeploymentUnavailable":
@@ -836,7 +838,7 @@ A evidência de reconciliação é a nova `summary` aparecer na API do Prometheu
 
 ```bash
 kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s7-lab-rules -n monitoring \
+kubectl get prometheusrule s78-lab-rules -n monitoring \
   -o jsonpath='generation={.metadata.generation}{"\n"}summary={.spec.groups[0].rules[0].annotations.summary}{"\n"}'
 ```
 
@@ -889,24 +891,24 @@ validação
 Se o problema estiver associado à release:
 
 ```bash
-helm history symfony-lab -n s7-lab
-helm rollback symfony-lab <REVISAO_BOA> -n s7-lab --wait
+helm history symfony-lab -n s78-lab
+helm rollback symfony-lab <REVISAO_BOA> -n s78-lab --wait
 ```
 
 ## Validação global obrigatória
 
-Antes de terminar a sessão:
+Antes de terminar o laboratório:
 
 ```bash
 kubectl get nodes
-kubectl get pod postgres-0 -n s7-lab -o wide
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -l app=symfony-demo -o wide
-kubectl get deployment symfony-demo -n s7-lab \
+kubectl get pod postgres-0 -n s78-lab -o wide
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -l app=symfony-demo -o wide
+kubectl get deployment symfony-demo -n s78-lab \
   -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
-kubectl get endpointslices -n s7-lab \
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]}{" ready="}{.conditions.ready}{" serving="}{.conditions.serving}{" terminating="}{.conditions.terminating}{"\n"}{end}'
 ```
@@ -955,20 +957,20 @@ Sem validação pós-correção não há recuperação demonstrada.
 
 # Limpeza
 
-A monitorização foi preparada pelo formador e **não deve ser removida pelos formandos** no final da sessão.
+A monitorização foi preparada pelo formador e **não deve ser removida pelos formandos** no final do laboratório.
 
 Remover o Custom Resource pedagógico criado no namespace `monitoring`:
 
 ```bash
-kubectl delete prometheusrule s7-lab-rules \
+kubectl delete prometheusrule s78-lab-rules \
   -n monitoring --ignore-not-found
 ```
 
 Remover os recursos da aplicação quando indicado:
 
 ```bash
-helm uninstall symfony-lab -n s7-lab || true
-kubectl delete namespace s7-lab --ignore-not-found
+helm uninstall symfony-lab -n s78-lab || true
+kubectl delete namespace s78-lab --ignore-not-found
 ```
 
 Não remover CRDs do Prometheus Operator durante a aula.

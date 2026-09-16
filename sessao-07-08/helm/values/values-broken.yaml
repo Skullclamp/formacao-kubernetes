@@ -1,7 +1,7 @@
 replicaCount: 2
 
 image:
-  repository: registry.invalid/s7/symfony-demo
+  repository: registry.invalid/s78/symfony-demo
   tag: "1.0.0"
   pullPolicy: Always
 
