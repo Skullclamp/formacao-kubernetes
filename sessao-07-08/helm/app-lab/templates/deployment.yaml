@@ -10,20 +10,24 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      # Com dois Workers e anti-affinity obrigatória, a atualização decorre
+      # sem criar uma terceira réplica temporária.
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: symfony-demo
   template:
     metadata:
       labels:
+        # O Service seleciona os Pods através desta label.
         app: symfony-demo
         role: app
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       affinity:
         podAntiAffinity:
+          # Mantém as duas réplicas Web em Workers diferentes.
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchLabels:
@@ -51,6 +55,7 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.app.existingSecret }}
                   key: DATABASE_URL
+          # Readiness controla a entrada do Pod nos endpoints do Service.
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readinessPath }}
@@ -59,6 +64,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 12
+          # Liveness verifica se a aplicação deve continuar a executar.
           livenessProbe:
             httpGet:
               path: {{ .Values.probes.livenessPath }}
