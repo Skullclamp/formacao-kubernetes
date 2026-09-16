@@ -13,7 +13,7 @@ Observar:
 ```text
 Worker indisponível
       ↓
-Node NotReady / Unknown
+Node NotReady
       ↓
 controladores detetam divergência
       ↓
@@ -40,11 +40,13 @@ Escolher o Worker que contém uma réplica Symfony mas não `postgres-0`.
 
 ## Provocar a falha
 
-No Worker escolhido:
+No Worker escolhido, parar **apenas o kubelet**:
 
 ```bash
 sudo systemctl stop kubelet
 ```
+
+> Não parar `containerd`, não desligar a VM e não tocar no Control Plane. Este cenário demonstra perda de heartbeat/gestão do Node, não uma falha física completa.
 
 ## Observar
 
@@ -56,13 +58,35 @@ Noutro terminal:
 
 ```bash
 kubectl get pods -n s7-lab -o wide
-kubectl get events -A --sort-by=.lastTimestamp
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get events -n s7-lab --sort-by=.metadata.creationTimestamp
+kubectl get endpointslices -n s7-lab \
+  -l kubernetes.io/service-name=symfony-demo \
+  -o yaml
 ```
 
 Se existir um Pod `Pending`:
 
 ```bash
 kubectl describe pod <POD_PENDING> -n s7-lab
+```
+
+## Evidência esperada
+
+No cenário validado observou-se:
+
+- o Worker passa a `NotReady`;
+- PostgreSQL mantém-se saudável no outro Worker;
+- a aplicação perde redundância, mas conserva uma réplica Symfony elegível;
+- o Pod do Worker indisponível pode permanecer algum tempo antes de ser marcado para remoção;
+- o controlador cria uma réplica de substituição;
+- a nova réplica pode ficar `Pending` porque a anti-affinity obrigatória impede colocá-la no Worker que já contém a outra réplica e os restantes Nodes não são elegíveis;
+- no EndpointSlice, o endpoint do Worker indisponível pode aparecer com `ready: false`, enquanto o backend saudável permanece `ready: true`.
+
+Isto demonstra:
+
+```text
+estado desejado ≠ convergência imediata
 ```
 
 Perguntas orientadoras:
@@ -72,6 +96,7 @@ Perguntas orientadoras:
 - Existe um Node elegível?
 - A anti-affinity permite colocar as duas réplicas no mesmo Worker?
 - Que Event comprova a conclusão?
+- O Service conserva pelo menos um backend `ready=true`?
 
 ## Recuperar
 
@@ -89,6 +114,14 @@ kubectl get nodes
 kubectl rollout status deployment/symfony-demo \
   -n s7-lab --timeout=300s
 kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab \
+  -l kubernetes.io/service-name=symfony-demo \
+  -o yaml
 ```
 
-Não avançar enquanto o Worker e a aplicação não tiverem regressado ao estado esperado.
+Não avançar enquanto:
+
+- o Worker não estiver `Ready`;
+- o Deployment não estiver `2/2`;
+- as duas réplicas Symfony não estiverem `1/1 Running`;
+- os dois endpoints não estiverem `ready: true`.
