@@ -1,4 +1,4 @@
-# Folha de Evidências — Sessão 7
+# Folha de Evidências — Sessões 7 e 8
 ## Continuidade, Troubleshooting e Operação Avançada
 
 Esta folha acompanha o laboratório orientado pelo formador. O objetivo é registar apenas a evidência necessária para justificar cada conclusão.
