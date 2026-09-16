@@ -102,9 +102,9 @@ As duas réplicas Symfony usam anti-affinity obrigatória por hostname.
 
 ```bash
 kubectl get nodes -o wide
-kubectl get pod postgres-0 -n s78-lab -o wide
-kubectl get pods -n s78-lab -l app=symfony-demo -o wide
-kubectl get endpointslices -n s78-lab \
+kubectl get pod postgres-0 -n s7-lab -o wide
+kubectl get pods -n s7-lab -l app=symfony-demo -o wide
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
@@ -167,8 +167,8 @@ kubectl get nodes -w
 Noutro terminal:
 
 ```bash
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab \
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 kubectl get events -A --sort-by=.lastTimestamp
@@ -211,8 +211,8 @@ Não assumir tempos fixos: registar os valores efetivamente observados.
 Se Kubernetes criar uma nova réplica e esta não for agendada, executar em conjunto:
 
 ```bash
-kubectl get pods -n s78-lab -o wide
-kubectl describe pod <POD_PENDING> -n s78-lab
+kubectl get pods -n s7-lab -o wide
+kubectl describe pod <POD_PENDING> -n s7-lab
 ```
 
 O formador orienta a leitura dos Events de scheduling.
@@ -254,10 +254,10 @@ Depois, no terminal administrativo:
 ```bash
 kubectl get nodes
 kubectl rollout status deployment/symfony-demo \
-  -n s78-lab \
+  -n s7-lab \
   --timeout=300s
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab \
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
