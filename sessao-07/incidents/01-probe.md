@@ -102,12 +102,12 @@ Com dois Workers e anti-affinity obrigatória, esta estratégia substitui uma r�
 # 2. Observar o sintoma — executar em conjunto
 
 ```bash
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab \
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
+kubectl get events -n s7-lab --sort-by=.lastTimestamp
 ```
 
 ## O que significam os comandos e flags
@@ -116,7 +116,7 @@ kubectl get events -n s78-lab --sort-by=.lastTimestamp
 kubectl get deployment
 → mostra o estado desejado e disponível do Deployment
 
--n s78-lab
+-n s7-lab
 → executa a consulta no Namespace do laboratório
 
 kubectl get pods -o wide
@@ -161,8 +161,8 @@ POD=<NOVO_POD>
 Depois executar:
 
 ```bash
-kubectl describe pod "$POD" -n s78-lab
-kubectl logs "$POD" -n s78-lab
+kubectl describe pod "$POD" -n s7-lab
+kubectl logs "$POD" -n s7-lab
 ```
 
 ## Como interpretar
@@ -204,15 +204,15 @@ A correção do laboratório não é feita com `kubectl edit`. Reaplica-se o est
 ```bash
 kubectl apply -k app/overlays/normal/
 kubectl rollout status deployment/symfony-demo \
-  -n s78-lab \
+  -n s7-lab \
   --timeout=180s
 ```
 
 Depois validar:
 
 ```bash
-kubectl get pods -n s78-lab -o wide
-kubectl get endpointslices -n s78-lab \
+kubectl get pods -n s7-lab -o wide
+kubectl get endpointslices -n s7-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
