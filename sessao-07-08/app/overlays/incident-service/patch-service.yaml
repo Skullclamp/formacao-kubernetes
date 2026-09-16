@@ -4,4 +4,6 @@ metadata:
   name: symfony-demo
 spec:
   selector:
+    # Falha controlada: esta label não existe nos Pods Symfony.
+    # O Service continua a existir, mas deixa de ter backends/endpoints.
     app: symfony-demo-inexistente
