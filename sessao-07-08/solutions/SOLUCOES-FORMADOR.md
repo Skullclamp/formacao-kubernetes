@@ -4,6 +4,18 @@
 >
 > **Nota de acesso:** este ficheiro está num repositório GitHub público. A designação «soluções do formador» é pedagógica e não constitui controlo de acesso técnico.
 
+## Como conduzir este laboratório
+
+Este é um **laboratório acompanhado pelo formador**, não uma prova prática autónoma. Em cada checkpoint, o formador deve introduzir o conceito e o objetivo antes da execução, explicar os comandos e flags relevantes e orientar a leitura do output observado no cluster.
+
+Nos incidentes, o formador não revela imediatamente a causa raiz. Em vez disso, conduz a turma através de perguntas e evidência, ajudando os formandos a percorrerem:
+
+```text
+Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção → Validação
+```
+
+A turma executa os passos em conjunto, discute a interpretação dos resultados e só avança quando o checkpoint estiver validado. O objetivo é desenvolver raciocínio operacional e hábitos de troubleshooting, não avaliar quem consegue resolver sozinho um problema escondido.
+
 ## 1. Preparação, obtenção dos materiais e baseline
 
 As máquinas Ubuntu dos formandos são criadas de raiz. Não é necessário pedir `machine-id`, UUID de firmware/disco, `systemUUID` ou identificadores equivalentes como parte do procedimento normal. Só investigar identidade de máquina se existir um sintoma real de clonagem ou duplicação.
