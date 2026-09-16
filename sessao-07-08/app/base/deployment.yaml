@@ -7,19 +7,24 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      # Com dois Workers e anti-affinity obrigatória, não existe capacidade
+      # para uma terceira réplica temporária. Atualizamos uma réplica de cada vez.
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: symfony-demo
   template:
     metadata:
       labels:
+        # O Service seleciona os Pods através desta label.
         app: symfony-demo
         role: app
     spec:
       affinity:
         podAntiAffinity:
+          # Objetivo pedagógico: manter as duas réplicas Web em Workers diferentes.
+          # A regra é obrigatória, permitindo discutir disponibilidade vs. placement.
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchLabels:
@@ -47,6 +52,8 @@ spec:
                 secretKeyRef:
                   name: postgres-credentials
                   key: DATABASE_URL
+          # /ready representa prontidão para receber tráfego, incluindo dependências.
+          # Um processo pode estar Running sem o Pod estar Ready.
           readinessProbe:
             httpGet:
               path: /ready
@@ -55,6 +62,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 12
+          # /health verifica se a aplicação continua funcional enquanto processo.
           livenessProbe:
             httpGet:
               path: /health
@@ -63,6 +71,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 5
+          # Requests influenciam scheduling; limits delimitam o consumo máximo.
           resources:
             requests:
               cpu: 100m
