@@ -1,77 +1,176 @@
-# Folha de Evidências — Sessão 7
-## Continuidade, Troubleshooting e Operação Avançada
+# Folha de Evidências — Laboratório Integrado Sessões 7 e 8
 
-Esta folha acompanha o laboratório orientado pelo formador. O objetivo é registar apenas a evidência necessária para justificar cada conclusão.
+## Como utilizar esta folha
+
+Esta folha acompanha um **laboratório orientado pelo formador**. Não é uma ficha de avaliação autónoma nem um guião para o formando resolver sozinho.
+
+Em cada checkpoint:
+
+```text
+formador explica o conceito
+        ↓
+turma executa os comandos
+        ↓
+formador orienta a leitura do output
+        ↓
+turma regista a evidência essencial
+        ↓
+formador valida antes de avançar
+```
+
+O objetivo é criar hábitos de observação e validação sem transformar o laboratório numa coleção de respostas escritas.
+
+> **Regra de evidência:** um comando terminar sem erro não prova que o sistema está saudável. O estado observado tem de confirmar o objetivo do passo.
+
+---
+
+# CP0 — Pré-validação mínima do ambiente
+
+## O que o formador pretende confirmar
+
+Que as ferramentas e o cluster estão prontos para iniciar o laboratório.
+
+| Verificação acompanhada | Evidência observada | OK? |
+|---|---|:---:|
+| `git`, `kubectl` e Helm disponíveis | | |
+| API Kubernetes acessível | | |
+| 2 Workers `Ready` e schedulable | | |
+| `local-path` disponível | | |
+| Calico identificado | | |
+| Kustomize integrado disponível | | |
+| Helm suporta `--take-ownership` | | |
+
+> As máquinas Ubuntu dos formandos são criadas de raiz. Não é necessário registar ou comparar `machine-id`, UUIDs ou identificadores equivalentes.
+
+**Gate acompanhado:** o formador confirma os pré-requisitos antes de avançar.
+
+---
+
+# CP1 — Obter os materiais e criar a baseline
+
+## Conceitos acompanhados
+
+```text
+Git → obter os materiais
+Kustomize → compor manifests
+apply → declarar estado desejado
+rollout status → observar convergência
+```
+
+| Verificação acompanhada | Evidência observada | OK? |
+|---|---|:---:|
+| Repositório descarregado | | |
+| Diretoria `sessao-07-08/` disponível | | |
+| Chart `kube-prometheus-stack-91.4.1.tgz` disponível | | |
+| `precheck.sh` concluído | | |
+| PostgreSQL `Running` e `Ready` | | |
+| PVC `Bound` | | |
+| 2 Pods Symfony `Running` e `Ready` | | |
+| Réplicas em Workers diferentes | | |
+| Service com 2 endpoints prontos | | |
+
+### Síntese oral guiada
+
+O formando deve conseguir explicar:
+
+```text
+manifesto aplicado ≠ aplicação validada
+```
+
+---
+
+# CP2 — Helm, Operator, CRDs e PrometheusRule
+
+## Conceitos acompanhados
+
+```text
+Helm Chart → pacote
+Values     → configuração
+Release    → instalação concreta
+CRD        → novo tipo de recurso
+CR         → instância desse tipo
+Operator   → observa e reconcilia
+```
+
+| Verificação acompanhada | Evidência observada | OK? |
+|---|---|:---:|
+| Release `monitoring` instalada | | |
+| Pods de monitorização operacionais | | |
+| CRDs `monitoring.coreos.com` presentes | | |
+| Prometheus Custom Resource existe | | |
+| StatefulSet/Pods gerados identificados | | |
+| `PrometheusRule` aceite pela API | | |
+
+### Relação a completar em conjunto
+
+```text
+CRD
+ ↓
+____________________
+ ↓
+Operator / Controller
+ ↓
+____________________
+```
+
+---
+
+# CP3 — Incidente 1: `Running` mas não `Ready`
+
+## Método acompanhado
 
 ```text
 Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção → Validação
 ```
 
-> Um comando terminar sem erro não prova que o sistema está saudável.
-
----
-
-## CP0 — Baseline
-
-| Verificação | Evidência observada | OK? |
-|---|---|:---:|
-| 2 Workers `Ready` | | |
-| `local-path` disponível | | |
-| Calico operacional | | |
-| Kustomize disponível | | |
-| Helm suporta `--take-ownership` | | |
-| Prometheus Operator disponível | | |
-| PostgreSQL `Running/Ready` | | |
-| PVC `Bound` | | |
-| Symfony 2/2 `Ready` | | |
-| Réplicas Symfony em Workers diferentes | | |
-| Service com backends | | |
-
----
-
-## CP2A — `Running ≠ Ready`
-
-| Etapa | Evidência essencial |
+| Etapa | Evidência essencial observada |
 |---|---|
-| Sintoma | |
-| Estado do Pod novo | |
-| Readiness probe observada | |
-| HTTP/erro observado | |
+| Sintoma inicial | |
+| Estado da réplica antiga | |
+| Estado da nova réplica | |
+| Condição do endpoint da nova réplica | |
 | Event/`describe` relevante | |
-| EndpointSlice — endpoint saudável | |
-| EndpointSlice — endpoint não pronto (`ready=false`) | |
-| Hipótese | |
-| Teste | |
-| Causa raiz | |
-| Correção | |
-| Validação final — Deployment 2/2 | |
-| Validação final — 2 endpoints `ready=true` | |
+| Hipótese formulada em conjunto | |
+| Teste efetuado | |
+| Causa raiz identificada | |
+| Correção declarativa aplicada | |
+| Estado após recuperação | |
 
-**Conclusão:**
+### Conceito a consolidar
 
 ```text
 Running ≠ Ready
-Presença no EndpointSlice ≠ endpoint Ready
 ```
+
+O formando deve conseguir explicar oralmente como a readiness protege o tráfego e influencia o rollout.
 
 ---
 
-## CP2B — Service sem backends
+# CP4 — Incidente 2: Service sem endpoints
 
-| Etapa | Evidência essencial |
+## Relação acompanhada
+
+```text
+Service selector
+      ↓
+labels dos Pods
+      ↓
+EndpointSlice
+```
+
+| Etapa | Evidência essencial observada |
 |---|---|
 | Pods `Running/Ready` | |
-| Selector do Service | |
-| Labels dos Pods | |
-| Resultado do teste com selector | |
+| Selector observado no Service | |
+| Labels observadas nos Pods | |
 | EndpointSlice durante a falha | |
-| Hipótese | |
-| Causa raiz | |
-| Correção | |
-| Selector após correção | |
+| Hipótese formulada em conjunto | |
+| Teste com selector | |
+| Causa raiz identificada | |
+| Correção aplicada | |
 | EndpointSlice após correção | |
 
-**Conclusão:**
+### Conceito a consolidar
 
 ```text
 Service existente ≠ Service com backends
@@ -79,188 +178,188 @@ Service existente ≠ Service com backends
 
 ---
 
-## CP3 — Worker `NotReady`
+# CP5 — Incidente 3: Worker `NotReady`
 
-| Momento | Evidência / tempo observado |
+Este checkpoint é acompanhado em tempo real. A ação disruptiva é executada pelo formador.
+
+| Momento observado | Evidência / tempo aproximado |
 |---|---|
 | Worker escolhido | |
-| PostgreSQL permanece no outro Worker | |
-| Distribuição inicial dos Pods Symfony | |
-| Paragem apenas do `kubelet` | |
+| Distribuição inicial dos Pods | |
+| Paragem do `kubelet` | |
 | Node deixa de estar `Ready` | |
-| Event `NodeNotReady` / eviction | |
-| Aplicação perde redundância | |
-| Backend que permanece `ready=true` | |
+| Endpoint do Node afetado deixa de estar pronto | |
+| Taint/Event relevante | |
+| Eviction observada | |
 | Nova réplica criada | |
+| Estado da nova réplica | |
 | Razão de eventual `Pending` | |
-| `kubelet` reiniciado | |
-| Node regressa a `Ready` | |
-| Deployment regressa a 2/2 | |
-| Dois endpoints regressam a `ready=true` | |
+| Arranque do `kubelet` | |
+| Node recupera `Ready` | |
+| Aplicação regressa a 2/2 | |
 
-**Conclusões:**
+### Conceitos a consolidar em conjunto
 
 ```text
-estado desejado ≠ convergência imediata
-resiliência do workload ≠ HA do Control Plane
+kubelet
+Node Ready
+Taints / tolerations
+Eviction
+Anti-affinity
+Scheduling
+```
+
+E distinguir:
+
+```text
+resiliência do workload ≠ HA do Control Plane ≠ backup
 ```
 
 ---
 
-## CP4 — Control Plane / `etcd`
+# CP6 — Control Plane, etcd, HA e recuperação
 
-| Componente | Evidência observada | Função |
+## Identificação acompanhada
+
+| Componente | Onde foi observado? | Função discutida |
 |---|---|---|
 | `kube-apiserver` | | |
 | `kube-controller-manager` | | |
 | `kube-scheduler` | | |
 | `etcd` | | |
-| `/readyz?verbose` | | |
 
-Completar:
+### Completar em conjunto
 
 ```text
-1 único Control Plane saudável
-→ __________________________________________
+1 Control Plane
+→ _______________________________________________
 
-vários Control Planes + etcd redundante
-→ __________________________________________
+redundância de etcd
+→ _______________________________________________
 
 snapshot de etcd
-→ __________________________________________
+→ _______________________________________________
 ```
 
-**Conclusão:**
-
-```text
-Control Plane saudável ≠ Control Plane altamente disponível
-HA ≠ Backup ≠ Recovery
-```
+O objetivo é distinguir disponibilidade, persistência e recuperação sem provocar uma falha destrutiva no único Control Plane.
 
 ---
 
-## CP6 — Helm: adoção, upgrade e rollback
+# CP7 — Transição Kustomize → Helm
 
-| Verificação | Evidência |
-|---|---|
-| Release inicial | |
-| Ownership Deployment | |
-| Ownership Service | |
-| Revisão conhecida como boa | |
-| Estado após upgrade defeituoso | |
-| Estado da release após falha | |
-| Estado do Pod novo | |
-| Imagem declarada no Deployment | |
-| Event/erro principal | |
-| Causa raiz | |
-| Revisão escolhida para rollback | |
-| Histórico após rollback | |
-| Nova revision criada pelo rollback | |
-| Estado final da aplicação | |
-| Imagem final | |
-| Endpoints finais | |
-
-Completar:
+## Conceitos acompanhados
 
 ```text
-Chart ≠ __________ ≠ Revision
+Kustomize → composição declarativa de YAML
+Helm      → templates + values + release + histórico
+ownership → quem passa a gerir os objetos
 ```
 
----
-
-## CP7 — Kustomize
-
-| Elemento | O que representa? |
-|---|---|
-| `app/base/` | |
-| `overlays/normal/` | |
-| `overlays/incident-probe/` | |
-| `overlays/incident-service/` | |
-| Ownership atual de Deployment/Service Symfony | |
-
-Completar:
-
-```text
-base comum + __________________ = variante declarativa
-```
-
-Responder:
-
-```text
-Depois da adoção por Helm, devemos voltar a aplicar Kustomize
-sobre Deployment/Service Symfony? __________________________
-```
-
----
-
-## CP8 — CRD / Custom Resource / reconciliação
-
-| Evidência | Registo |
-|---|---|
-| CRD observada | |
-| Namespace do Custom Resource | |
-| Namespace observado pela expressão PromQL | |
-| Custom Resource criada | |
-| `generation` inicial | |
-| `summary` inicial | |
-| `generation` após alteração | |
-| `summary` alterada no CR | |
-| Controller/Operator identificado | |
-| `summary` alterada observada na API do Prometheus | |
-| Estado da regra no Prometheus | |
-| `generation` após reposição | |
-| `summary` original reposta no Prometheus | |
-
-Completar:
-
-```text
-CRD             → __________________________
-Custom Resource → __________________________
-Controller      → __________________________
-Reconciliação   → __________________________
-```
-
----
-
-## CP9 — Desafio final
-
-Registar apenas a sequência proposta pela turma:
-
-```text
-1. __________________________________________
-2. __________________________________________
-3. __________________________________________
-4. __________________________________________
-5. __________________________________________
-6. __________________________________________
-```
-
-### Validação global final
-
-| Verificação | Evidência | OK? |
+| Verificação acompanhada | Evidência observada | OK? |
 |---|---|:---:|
-| Todos os Nodes `Ready` | | |
-| PostgreSQL `1/1 Running` | | |
-| Symfony Deployment `2/2` | | |
-| 2 Pods Symfony `1/1 Running` | | |
-| Symfony distribuído pelos 2 Workers | | |
-| Imagem `ghcr.io/skullclamp/symfony-demo:1.0.0` | | |
-| Helm `STATUS: deployed` | | |
-| Histórico mantém revisão falhada e rollback | | |
-| 2 endpoints `ready=true` / `serving=true` | | |
-| Deployment e Service geridos por Helm | | |
-| `PrometheusRule` reposto para a `summary` original | | |
+| `helm template` renderizado | | |
+| `kubectl diff -n s78-lab` analisado | | |
+| Alterações funcionais inesperadas ausentes | | |
+| `--take-ownership` executado | | |
+| Deployment gerido por Helm | | |
+| Release `symfony-lab` criada | | |
+| Baseline Helm `2/2` | | |
+| 2 endpoints prontos | | |
 
-### Checklist pedagógico
+### Health gate
 
-- [ ] recolhemos evidência antes de alterar;
-- [ ] distinguimos sintoma de causa raiz;
-- [ ] validámos depois da correção;
-- [ ] distinguimos `Running` de `Ready`;
-- [ ] sabemos interpretar `ready` num EndpointSlice;
-- [ ] compreendemos que estado desejado não implica convergência imediata;
-- [ ] sabemos quando um rollback é apropriado;
-- [ ] compreendemos que rollback cria uma nova revision;
-- [ ] distinguimos resiliência, HA, backup e recovery;
-- [ ] distinguimos CRD de Custom Resource;
-- [ ] compreendemos a relação CR + Controller/Operator → reconciliação.
+O formador só avança para o upgrade defeituoso depois de a turma confirmar uma baseline Helm comprovadamente saudável.
+
+---
+
+# CP8 — Incidente 4: release defeituosa e rollback
+
+## Método acompanhado
+
+| Etapa | Evidência essencial observada |
+|---|---|
+| Revisão boa inicial | |
+| Revisão candidata | |
+| Estado da release após upgrade | |
+| Estado da réplica anterior | |
+| Estado do novo Pod | |
+| Endpoint ainda utilizável | |
+| Event/`describe` principal | |
+| Hipótese formulada em conjunto | |
+| Teste sobre imagem/configuração | |
+| Causa raiz identificada | |
+| Revisão escolhida para rollback | |
+| Nova revisão criada pelo rollback | |
+| Estado após rollback | |
+| 2 endpoints novamente prontos | |
+
+### Conceitos a consolidar
+
+```text
+Chart
+Values
+Release
+Revision
+Upgrade
+Rollback
+Configuration drift
+```
+
+O formando deve conseguir explicar oralmente por que não se corrige este incidente com `kubectl edit`.
+
+---
+
+# CP9 — Alterar um Custom Resource e provar reconciliação
+
+## Cadeia acompanhada
+
+```text
+Custom Resource alterado
+        ↓
+generation muda
+        ↓
+Operator observa
+        ↓
+Prometheus recebe nova configuração
+```
+
+| Verificação acompanhada | Evidência observada | OK? |
+|---|---|:---:|
+| Campo do `PrometheusRule` alterado | | |
+| `generation` antes/depois | | |
+| `resourceVersion` antes/depois | | |
+| Nova `summary` visível no CR | | |
+| Nova `summary` visível em `/api/v1/rules` | | |
+| Estado da regra observado | | |
+| Regra original reposta | | |
+
+### Prova forte de reconciliação
+
+A alteração não fica apenas armazenada na API Kubernetes: deve tornar-se visível no sistema gerido pelo Operator.
+
+---
+
+# Síntese final acompanhada
+
+No final, o formador revê oralmente com a turma:
+
+```text
+Running ≠ Ready
+Service existente ≠ Service com backends
+resiliência do workload ≠ HA do Control Plane
+HA ≠ Backup / Recuperação
+Kustomize ≠ Helm
+CRD ≠ Custom Resource
+Custom Resource + Controller → reconciliação
+release defeituosa → diagnóstico → rollback → validação
+```
+
+## Regra final
+
+```text
+Executar
+  não chega.
+
+É necessário:
+executar → observar → interpretar → validar
+```

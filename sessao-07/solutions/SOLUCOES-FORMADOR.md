@@ -1,29 +1,95 @@
-# SOLUÇÕES DO FORMADOR — Sessão 7
-## M10 + M11 em 4 horas
+# SOLUÇÕES DO FORMADOR — Laboratório Integrado Sessões 7 e 8
 
-> Material de apoio ao formador. O repositório é público; esta designação é apenas pedagógica.
+> Material de apoio ao formador. Não entregar como guião inicial aos formandos.
+>
+> **Nota de acesso:** este ficheiro está num repositório GitHub público. A designação «soluções do formador» é pedagógica e não constitui controlo de acesso técnico.
 
-## Princípio de condução
+## Como conduzir este laboratório
 
-Este é um laboratório acompanhado. Em cada incidente, conduzir a turma por:
+Este é um **laboratório acompanhado pelo formador**, não uma prova prática autónoma. Em cada checkpoint, o formador deve introduzir o conceito e o objetivo antes da execução, explicar os comandos e flags relevantes e orientar a leitura do output observado no cluster.
+
+Nos incidentes, o formador não revela imediatamente a causa raiz. Em vez disso, conduz a turma através de perguntas e evidência, ajudando os formandos a percorrerem:
 
 ```text
 Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção → Validação
 ```
 
-Não revelar a causa raiz antes de existir evidência suficiente.
+A turma executa os passos em conjunto, discute a interpretação dos resultados e só avança quando o checkpoint estiver validado. O objetivo é desenvolver raciocínio operacional e hábitos de troubleshooting, não avaliar quem consegue resolver sozinho um problema escondido.
 
----
+## 1. Preparação, obtenção dos materiais e baseline
 
-# 1. Preparação anterior à sessão
+As máquinas Ubuntu dos formandos são criadas de raiz. Não é necessário pedir `machine-id`, UUID de firmware/disco, `systemUUID` ou identificadores equivalentes como parte do procedimento normal. Só investigar identidade de máquina se existir um sintoma real de clonagem ou duplicação.
 
-Preparar o Prometheus Operator fora das 4 horas:
+### CP0 — validação mínima
+
+Antes de descarregar os materiais, confirmar:
 
 ```bash
-cd ~/formacao-kubernetes/sessao-07
-chmod +x monitoring/prepare-chart.sh
-./monitoring/prepare-chart.sh 91.4.1
+command -v git
+command -v kubectl
+command -v helm
+helm version --short
+kubectl cluster-info
+kubectl get nodes -o wide
+kubectl get storageclass local-path
+kubectl get pods -A | grep -i calico
+kubectl kustomize --help >/dev/null
+helm upgrade --help | grep -- '--take-ownership'
+```
 
+### CP1 — download dos manifests e materiais
+
+Cada formando descarrega o repositório no início do laboratório:
+
+```bash
+cd ~
+git clone --depth 1 https://github.com/Skullclamp/formacao-kubernetes.git
+cd ~/formacao-kubernetes/sessao-07-08
+```
+
+A versão do `kube-prometheus-stack` validada neste cluster é **91.4.1**. Preparar o pacote local:
+
+```bash
+chmod +x 00-precheck/precheck.sh monitoring/prepare-chart.sh
+./monitoring/prepare-chart.sh 91.4.1
+ls -lh packages/kube-prometheus-stack-91.4.1.tgz
+```
+
+Se a sessão tiver de decorrer sem Internet, o formador deve distribuir previamente o `.tgz` validado.
+
+Executar depois o precheck completo:
+
+```bash
+./00-precheck/precheck.sh
+```
+
+Aplicar a baseline:
+
+```bash
+kubectl kustomize app/overlays/normal/
+kubectl apply -k app/overlays/normal/
+kubectl rollout status statefulset/postgres -n s78-lab --timeout=180s
+kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
+kubectl get pods -n s78-lab -o wide
+kubectl get svc,endpointslices -n s78-lab
+kubectl get pvc -n s78-lab
+```
+
+Resultado esperado:
+
+- `postgres-0` em `Running` e `Ready`;
+- duas réplicas de `symfony-demo` em `Running` e `Ready`;
+- réplicas Symfony em Workers diferentes devido à Pod Anti-Affinity obrigatória;
+- Service `symfony-demo` com dois endpoints prontos;
+- PVC `Bound`.
+
+A estratégia do Deployment usa `maxSurge: 0` e `maxUnavailable: 1`. Com apenas dois Workers e anti-affinity obrigatória, isto evita um deadlock de rollout: uma réplica antiga é libertada antes de criar a nova.
+
+## 2. Monitorização, CRDs e Operator
+
+Instalar a versão efetivamente validada:
+
+```bash
 helm upgrade --install monitoring \
   packages/kube-prometheus-stack-91.4.1.tgz \
   --namespace monitoring \
@@ -33,424 +99,368 @@ helm upgrade --install monitoring \
   --timeout 10m
 ```
 
-Validar:
+Validar a release e as extensões da API:
 
 ```bash
-helm status monitoring -n monitoring
+helm list -n monitoring
 kubectl get pods -n monitoring
-kubectl get crd prometheusrules.monitoring.coreos.com
+kubectl get crd | grep monitoring.coreos.com
+kubectl get prometheus -A
 ```
 
-Se algum Node indicar reinício pendente do sistema operativo, tratar a manutenção antes da formação. Não reiniciar o único Control Plane durante o laboratório.
-
----
-
-# 2. Baseline
-
-Obter/atualizar o repositório e executar o precheck com:
+Identificar concretamente a cadeia de reconciliação:
 
 ```bash
-cd ~/formacao-kubernetes/sessao-07
-bash 00-precheck/precheck.sh
+kubectl get prometheus -n monitoring
+kubectl get statefulset -n monitoring
+kubectl get pods -n monitoring
 ```
 
-Não ativar `set -euo pipefail` manualmente no shell interativo.
+Relação a reforçar:
 
-Criar a baseline:
+```text
+CRD
+ ↓
+define um novo tipo
+ ↓
+Prometheus Custom Resource
+ ↓
+Prometheus Operator / Controller
+ ↓
+StatefulSet + Pods reconciliados
+```
+
+Criar a regra pedagógica antes dos incidentes:
 
 ```bash
-kubectl apply -k app/overlays/normal/
-kubectl rollout status statefulset/postgres -n s7-lab --timeout=180s
-kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl get pvc -n s7-lab
-kubectl get endpointslices -n s7-lab
+kubectl apply -f monitoring/prometheus-rule.yaml
+kubectl get prometheusrule s78-lab-rules -n monitoring
+kubectl describe prometheusrule s78-lab-rules -n monitoring
 ```
 
-Esperado:
+O `PrometheusRule` usa a label `release: monitoring`, selecionada explicitamente em `monitoring/values-lab.yaml`.
 
-- `postgres-0` `Running/Ready`;
-- PVC `Bound`;
-- Symfony Deployment `2/2`;
-- réplicas Symfony em Workers diferentes;
-- Service com dois backends prontos.
+## 3. Incidente 1 — rollout bloqueado por readiness probe
 
----
-
-# 3. Incidente A — readiness
-
-Introduzir:
+### Preparar a falha
 
 ```bash
 kubectl apply -k app/overlays/incident-probe/
 ```
 
-Causa raiz esperada: `readinessProbe` aponta para `/ready-inexistente`.
+### Sintoma esperado
 
-Evidência principal:
-
-```bash
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl describe pod <POD> -n s7-lab
-kubectl logs <POD> -n s7-lab
-kubectl get events -n s7-lab --sort-by=.metadata.creationTimestamp
-kubectl get endpointslices -n s7-lab \
-  -l kubernetes.io/service-name=symfony-demo \
-  -o yaml
-```
-
-No cenário validado:
-
-- novo Pod `Running`, mas `Ready=False`;
-- readiness devolve HTTP `404`;
-- Deployment fica `1/2`;
-- o Pod não pronto **continua presente no EndpointSlice** com `ready: false` e `serving: false`;
-- a réplica saudável permanece `ready: true`.
-
-Se surgir `FailedScheduling` por anti-affinity e o Pod acabar posteriormente agendado, tratar esse Event como transitório; não é a causa raiz deste incidente.
-
-Mensagem:
+Com `maxSurge: 0` e `maxUnavailable: 1`, o Deployment substitui uma réplica de cada vez. A nova réplica pode aparecer:
 
 ```text
-Running ≠ Ready
-Presença no EndpointSlice ≠ endpoint Ready
+Running
+READY 0/1
 ```
 
-Recuperação:
+A réplica antiga permanece `Ready`, pelo que o Service deverá continuar a dispor de pelo menos um endpoint utilizável.
+
+### Evidência principal
+
+```bash
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get endpointslices -n s78-lab
+kubectl describe pod <NOVO_POD> -n s78-lab
+kubectl get events -n s78-lab --sort-by=.lastTimestamp
+```
+
+A readiness probe aponta deliberadamente para um endpoint inexistente. A evidência esperada é uma falha HTTP da readiness probe. O processo continua em execução, mas Kubernetes não considera o novo Pod pronto para receber tráfego.
+
+### Recuperação
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
-kubectl get endpointslices -n s7-lab \
-  -l kubernetes.io/service-name=symfony-demo \
-  -o yaml
+kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
+kubectl get pods -n s78-lab
+kubectl get endpointslices -n s78-lab
 ```
 
-Só encerrar quando o Deployment estiver `2/2` e os dois endpoints estiverem `ready: true`.
+Mensagens-chave:
 
----
+```text
+Running ≠ Ready
+Readiness protege o tráfego e o rollout
+```
 
-# 4. Incidente B — Service sem backends
+## 4. Incidente 2 — Service sem endpoints
 
-Introduzir:
+### Preparar a falha
 
 ```bash
 kubectl apply -k app/overlays/incident-service/
 ```
 
-Causa raiz: selector `app: symfony-demo-inexistente` não corresponde às labels dos Pods.
-
-Evidência:
+### Evidência
 
 ```bash
-kubectl get pods -n s7-lab --show-labels
-kubectl get svc symfony-demo -n s7-lab -o yaml
-kubectl get pods -n s7-lab -l app=symfony-demo-inexistente
-kubectl get endpointslices -n s7-lab \
-  -l kubernetes.io/service-name=symfony-demo \
-  -o yaml
+kubectl get pods -n s78-lab --show-labels
+kubectl get svc symfony-demo -n s78-lab -o yaml
+kubectl get endpointslices -n s78-lab
 ```
 
-No cenário validado:
+O Service fica com um selector que não corresponde às labels dos Pods.
 
-- os Pods permanecem `Running/Ready`;
-- o Service continua a existir;
-- o selector incorreto não encontra Pods;
-- o EndpointSlice fica com `endpoints: null`.
+### Causa raiz
 
-Mensagem:
+Incompatibilidade entre o selector do Service e as labels dos Pods.
+
+### Recuperação
+
+```bash
+kubectl apply -k app/overlays/normal/
+kubectl get endpointslices -n s78-lab
+```
+
+Mensagem-chave:
 
 ```text
 Service existente ≠ Service com backends
 ```
 
-Recuperação:
+## 5. Incidente 3 — Worker NotReady
+
+### Escolher o Worker da falha
+
+Evitar falhar o Worker onde corre PostgreSQL para manter o incidente focado na resiliência do workload Web.
 
 ```bash
-kubectl apply -k app/overlays/normal/
-kubectl get svc symfony-demo -n s7-lab \
-  -o jsonpath='selector={.spec.selector.app}{"\n"}'
-kubectl get endpointslices -n s7-lab \
-  -l kubernetes.io/service-name=symfony-demo \
-  -o yaml
+kubectl get pod postgres-0 -n s78-lab -o wide
+kubectl get pods -n s78-lab -l app=symfony-demo -o wide
 ```
 
----
+Selecionar o outro Worker, onde corre uma réplica Symfony mas não `postgres-0`.
 
-# 5. Worker `NotReady`
+### Provocar a falha
 
-Escolher o Worker que não contém `postgres-0`:
-
-```bash
-kubectl get pod postgres-0 -n s7-lab -o wide
-kubectl get pods -n s7-lab -l app=symfony-demo -o wide
-```
-
-No Worker, parar **apenas** o kubelet:
+No Worker escolhido:
 
 ```bash
 sudo systemctl stop kubelet
 ```
 
-Não parar `containerd`, não desligar a VM e não tocar no Control Plane.
-
-Observar:
+### Observar
 
 ```bash
 kubectl get nodes -w
-kubectl get pods -n s7-lab -o wide
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get events -n s7-lab --sort-by=.metadata.creationTimestamp
-kubectl get endpointslices -n s7-lab \
-  -l kubernetes.io/service-name=symfony-demo \
-  -o yaml
+kubectl get pods -n s78-lab -o wide
+kubectl get endpointslices -n s78-lab
+kubectl get events -A --sort-by=.lastTimestamp
 ```
 
-No cenário validado:
+A transição para `NotReady` e eventual evicção não são instantâneas. Registar os tempos concretos observados.
 
-- o Worker passou a `NotReady`;
-- PostgreSQL permaneceu saudável no outro Worker;
-- a aplicação manteve um backend elegível, mas perdeu redundância;
-- o Pod antigo foi posteriormente marcado para remoção;
-- a réplica de substituição ficou `Pending` porque a anti-affinity obrigatória impediu colocação no Worker restante e os outros Nodes não eram elegíveis;
-- no EndpointSlice, o endpoint do Worker indisponível ficou `ready: false`, enquanto o outro permaneceu `ready: true`.
-
-Reforçar:
+Como existe anti-affinity obrigatória, Kubernetes não pode manter as duas réplicas Symfony no único Worker restante. É possível observar:
 
 ```text
-estado desejado ≠ convergência imediata
-resiliência do workload ≠ HA do Control Plane
+1 réplica funcional no Worker saudável
++
+1 réplica indisponível/Pending enquanto o outro Worker não regressar
 ```
 
-Recuperar:
+### Recuperar
+
+No Worker:
 
 ```bash
 sudo systemctl start kubelet
-sudo systemctl is-active kubelet
 ```
 
-Depois:
+No terminal administrativo:
 
 ```bash
 kubectl get nodes
-kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=300s
-kubectl get pods -n s7-lab -o wide
-kubectl get endpointslices -n s7-lab \
-  -l kubernetes.io/service-name=symfony-demo \
-  -o yaml
+kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=300s
+kubectl get pods -n s78-lab -o wide
+kubectl get endpointslices -n s78-lab
 ```
 
-Só encerrar quando Worker `Ready`, Deployment `2/2` e dois endpoints `ready: true`.
+## 6. Control Plane, etcd, HA e recuperação
 
----
+O cluster da formação tem um único Control Plane. Portanto, este laboratório não demonstra HA real do Control Plane.
 
-# 6. Control Plane e `etcd`
+Recolher evidência dos componentes:
 
 ```bash
-kubectl get pods -n kube-system -o wide \
-  | grep -E 'kube-apiserver|kube-controller-manager|kube-scheduler|etcd'
-
-kubectl get --raw='/readyz?verbose'
+kubectl get pods -n kube-system -o wide
+kubectl get pods -n kube-system -o wide | grep -E 'kube-apiserver|kube-controller-manager|kube-scheduler|etcd'
 ```
-
-No cenário validado, `etcd`, API server, controller-manager e scheduler estavam todos no mesmo `k8s-cp-01`, e `/readyz?verbose` terminou com `readyz check passed`.
-
-Não parar o único Control Plane e não executar restore destrutivo de `etcd`.
 
 Consolidar:
 
 ```text
-Control Plane saudável                 ≠ HA do Control Plane
-vários Control Planes + etcd redundante → HA do Control Plane
-snapshot de etcd                        → ponto de recuperação
-HA                                      ≠ Backup ≠ Recovery
+1 Control Plane
+      ↓
+não demonstra HA do Control Plane
+
+redundância de etcd
+      ↓
+disponibilidade
+
+snapshot de etcd
+      ↓
+ponto de recuperação
 ```
 
----
+Não parar o único Control Plane nem executar restore de `etcd` no cluster principal da formação.
 
-# 7. Transição Kustomize → Helm
+## 7. Transição de Kustomize para Helm
 
-Renderizar e comparar:
+O procedimento validado **não apaga** o Deployment nem o Service. A release Helm adota os objetos existentes, preservando continuidade.
+
+### Renderizar e comparar
 
 ```bash
 helm template symfony-lab \
   ./helm/app-lab \
-  -n s7-lab \
+  -n s78-lab \
   -f helm/values/values-good.yaml \
   > /tmp/symfony-good.yaml
 
-kubectl diff -n s7-lab -f /tmp/symfony-good.yaml || true
+kubectl diff -n s78-lab -f /tmp/symfony-good.yaml || true
 ```
 
-Adotar objetos existentes:
+Confirmar que o diff não altera de forma inesperada `selector`, `replicas`, imagem, probes, resources, estratégia ou configuração funcional do Service.
+
+É normal o Pod template receber `app.kubernetes.io/instance: symfony-lab`, o que pode provocar um rollout controlado.
+
+### Transferir ownership
 
 ```bash
 helm upgrade --install symfony-lab \
   ./helm/app-lab \
-  -n s7-lab \
+  -n s78-lab \
   -f helm/values/values-good.yaml \
   --take-ownership \
   --wait \
-  --timeout 180s
+  --timeout 5m
 ```
 
 Validar:
 
 ```bash
-kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl get deployment symfony-demo -n s7-lab \
-  -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}{" | "}{.metadata.annotations.meta\.helm\.sh/release-name}{"\n"}'
-kubectl get svc symfony-demo -n s7-lab \
-  -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}{" | "}{.metadata.annotations.meta\.helm\.sh/release-name}{"\n"}'
+kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
+helm list -n s78-lab
+helm history symfony-lab -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get endpointslices -n s78-lab
 ```
 
-Esperado: `Helm | symfony-lab` nos dois objetos e Deployment `2/2` antes do incidente seguinte.
+Confirmar ownership:
 
----
+```bash
+kubectl get deployment symfony-demo -n s78-lab \
+  -o jsonpath='managed-by={.metadata.labels.app\.kubernetes\.io/managed-by}{"  release="}{.metadata.annotations.meta\.helm\.sh/release-name}{"  namespace="}{.metadata.annotations.meta\.helm\.sh/release-namespace}{"\n"}'
+```
 
-# 8. Upgrade defeituoso e rollback
+Resultado esperado:
 
-Aplicar:
+```text
+managed-by=Helm  release=symfony-lab  namespace=s78-lab
+```
+
+Não avançar para o upgrade defeituoso enquanto as duas réplicas não estiverem `Running` e `Ready` e o Service não tiver dois endpoints prontos.
+
+## 8. Incidente 4 — release candidata defeituosa
+
+### Aplicar a candidata
 
 ```bash
 helm upgrade symfony-lab \
   ./helm/app-lab \
-  -n s7-lab \
+  -n s78-lab \
   -f helm/values/values-broken.yaml \
   --wait \
   --timeout 90s
 ```
 
-Causa raiz esperada:
+O comando deverá falhar por timeout. Não mostrar `values-broken.yaml` aos formandos antes do diagnóstico.
 
-```text
-registry.invalid/s7/symfony-demo:1.0.0
-```
-
-No cenário validado, o comando terminou com timeout, a nova revision ficou `failed`, o Deployment ficou `1/2` e o Pod novo entrou em `ImagePullBackOff`.
-
-Diagnóstico:
+### Evidência
 
 ```bash
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl describe pod <NOVO_POD> -n s7-lab
-kubectl get deployment symfony-demo -n s7-lab \
-  -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get endpointslices -n s78-lab
+kubectl get events -n s78-lab --sort-by=.lastTimestamp
+kubectl describe pod <NOVO_POD> -n s78-lab
 ```
 
-O `describe` deve revelar a falha de pull/resolução de `registry.invalid`. Se existir um `FailedScheduling` transitório antes do agendamento, não o confundir com a causa raiz persistente.
+### Causa raiz esperada
 
-Rollback:
-
-```bash
-helm history symfony-lab -n s7-lab
-helm rollback symfony-lab <REVISAO_BOA> \
-  -n s7-lab --wait --timeout 180s
-```
-
-Não assumir que a revisão boa é sempre `1`; consultar o histórico.
-
-Explicar:
+`values-broken.yaml` altera o repositório da imagem para:
 
 ```text
-rollback para uma revisão anterior
-≠ voltar ao mesmo número de revision
+registry.invalid/s78/symfony-demo
 ```
 
-O rollback cria uma nova revision.
+O novo Pod deverá evidenciar `ErrImagePull` e/ou `ImagePullBackOff`. Uma réplica anterior permanece disponível devido à estratégia `maxSurge: 0` / `maxUnavailable: 1`.
+
+### Rollback
+
+Identificar primeiro a revisão boa:
+
+```bash
+helm history symfony-lab -n s78-lab
+```
+
+Depois:
+
+```bash
+helm rollback symfony-lab <REVISAO_BOA> -n s78-lab --wait --timeout 3m
+```
+
+Não assumir que a revisão boa é sempre `1`.
 
 Validar:
 
 ```bash
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
-kubectl rollout status deployment/symfony-demo -n s7-lab --timeout=180s
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl get deployment symfony-demo -n s7-lab \
-  -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
-kubectl get endpointslices -n s7-lab \
-  -l kubernetes.io/service-name=symfony-demo \
-  -o yaml
+helm history symfony-lab -n s78-lab
+kubectl rollout status deployment/symfony-demo -n s78-lab --timeout=180s
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get endpointslices -n s78-lab
 ```
 
----
-
-# 9. Kustomize
-
-A componente Kustomize reutiliza os próprios overlays do laboratório:
-
-```bash
-kubectl kustomize app/overlays/normal/ > /tmp/normal.yaml
-kubectl kustomize app/overlays/incident-probe/ > /tmp/probe.yaml
-kubectl kustomize app/overlays/incident-service/ > /tmp/service.yaml
-
-diff -u /tmp/normal.yaml /tmp/probe.yaml || true
-diff -u /tmp/normal.yaml /tmp/service.yaml || true
-```
-
-Reforçar:
+Mensagem-chave:
 
 ```text
-base + overlay → variante declarativa
+rollback recupera conteúdo de uma revisão anterior
+mas cria uma nova revisão no histórico
 ```
 
-Depois da adoção Helm, **não executar `kubectl apply -k` sobre o Deployment e o Service Symfony**. Helm é agora o mecanismo responsável por esses objetos.
+## 9. Alteração de Custom Resource e prova de reconciliação
 
-Um `kubectl diff` vazio não prova ownership, porque a lógica de apply considera o estado `last-applied`. Para ownership, verificar labels/anotações Helm.
-
----
-
-# 10. CRD / Custom Resource / reconciliação
-
-Criar a regra:
+Trabalhar sobre uma cópia temporária para poder repor facilmente o ficheiro original:
 
 ```bash
-kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s7-lab-rules -n monitoring
-kubectl get prometheusrule s7-lab-rules -n monitoring \
-  -o jsonpath='generation={.metadata.generation}{"\n"}summary={.spec.groups[0].rules[0].annotations.summary}{"\n"}'
+cp monitoring/prometheus-rule.yaml /tmp/prometheus-rule-reconcile.yaml
+
+sed -i \
+  's/Existem réplicas indisponíveis no Deployment symfony-demo/Reconciliação observada: existem réplicas indisponíveis no Deployment symfony-demo/' \
+  /tmp/prometheus-rule-reconcile.yaml
 ```
 
-Explicar explicitamente:
-
-```text
-namespace do PrometheusRule → monitoring
-namespace observado no PromQL → s7-lab
-```
-
-Alterar temporariamente apenas a `summary`:
+Registar antes e depois:
 
 ```bash
-kubectl patch prometheusrule s7-lab-rules \
-  -n monitoring \
-  --type='json' \
-  -p='[
-    {
-      "op":"replace",
-      "path":"/spec/groups/0/rules/0/annotations/summary",
-      "value":"Reconciliação observada: existem réplicas indisponíveis no Deployment symfony-demo"
-    }
-  ]'
+kubectl get prometheusrule s78-lab-rules -n monitoring \
+  -o jsonpath='generation={.metadata.generation} resourceVersion={.metadata.resourceVersion}{"\n"}'
+
+kubectl apply -f /tmp/prometheus-rule-reconcile.yaml
+
+kubectl get prometheusrule s78-lab-rules -n monitoring \
+  -o jsonpath='generation={.metadata.generation} resourceVersion={.metadata.resourceVersion}{"\n"}'
 ```
 
-Verificar que `generation` aumentou:
-
-```bash
-kubectl get prometheusrule s7-lab-rules -n monitoring \
-  -o jsonpath='generation={.metadata.generation}{"\n"}summary={.spec.groups[0].rules[0].annotations.summary}{"\n"}'
-```
-
-Provar a alteração no Prometheus.
+A alteração do CR prova apenas que a API aceitou um novo estado desejado. Para provar reconciliação, verificar o sistema gerido.
 
 Num terminal:
 
@@ -461,46 +471,30 @@ kubectl port-forward \
   9090:9090
 ```
 
-Não abrir um segundo `port-forward` para a mesma porta local na mesma máquina. Se `9090` já estiver ocupada por um forward ativo, reutilizá-lo.
-
-Noutro terminal no mesmo Control Plane:
+Noutro terminal da mesma máquina:
 
 ```bash
-sleep 10
-python3 - <<'PY'
-import json
-import urllib.request
-
-with urllib.request.urlopen("http://127.0.0.1:9090/api/v1/rules") as r:
-    data = json.load(r)
-
-found = False
-for group in data["data"]["groups"]:
-    if group.get("name") != "s7-lab.rules":
-        continue
+curl -sS http://127.0.0.1:9090/api/v1/rules \
+  | python3 -c '
+import sys, json
+data=json.load(sys.stdin)
+for group in data.get("data", {}).get("groups", []):
     for rule in group.get("rules", []):
         if rule.get("name") == "SymfonyDeploymentUnavailable":
-            print("name=" + rule.get("name", ""))
-            print("state=" + rule.get("state", ""))
-            print("summary=" + rule.get("annotations", {}).get("summary", ""))
-            found = True
-
-if not found:
-    print("REGRA_NAO_ENCONTRADA")
-PY
+            print("name       =", rule.get("name"))
+            print("state      =", rule.get("state"))
+            print("query      =", rule.get("query"))
+            print("summary    =", rule.get("annotations", {}).get("summary"))
+'
 ```
 
-A prova de reconciliação é a nova `summary` aparecer na API do Prometheus. `state=inactive` é normal se o Deployment estiver saudável.
+A nova `summary` deve aparecer na API do Prometheus. Com a aplicação saudável, `state=inactive` é esperado.
 
-Repor:
+Repor a regra original:
 
 ```bash
 kubectl apply -f monitoring/prometheus-rule.yaml
-kubectl get prometheusrule s7-lab-rules -n monitoring \
-  -o jsonpath='generation={.metadata.generation}{"\n"}summary={.spec.groups[0].rules[0].annotations.summary}{"\n"}'
 ```
-
-Repetir a consulta à API e confirmar a `summary` original. Terminar depois o `port-forward` com `Ctrl+C`.
 
 Relação final:
 
@@ -508,53 +502,39 @@ Relação final:
 CRD → tipo
 CR → estado desejado
 Controller/Operator → observa
-Reconciliação → propaga o estado
+reconciliação → propaga o estado
+Prometheus → carrega a regra resultante
 ```
 
----
-
-# 11. Critérios de sucesso e validação global
-
-Antes de terminar, validar:
+## 10. Limpeza
 
 ```bash
-kubectl get nodes
-kubectl get pod postgres-0 -n s7-lab -o wide
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -l app=symfony-demo -o wide
-kubectl get deployment symfony-demo -n s7-lab \
-  -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
-kubectl get endpointslices -n s7-lab \
-  -l kubernetes.io/service-name=symfony-demo \
-  -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]}{" ready="}{.conditions.ready}{" serving="}{.conditions.serving}{" terminating="}{.conditions.terminating}{"\n"}{end}'
+helm uninstall symfony-lab -n s78-lab || true
+helm uninstall monitoring -n monitoring || true
+kubectl delete namespace monitoring --ignore-not-found
+kubectl delete namespace s78-lab --ignore-not-found
 ```
 
-A sessão está pedagogicamente concluída quando os formandos conseguem explicar:
+As CRDs do `kube-prometheus-stack` podem permanecer após a remoção da release. Não as remover automaticamente sem confirmar que não são utilizadas por outros componentes do cluster.
 
-- por que `Running` não significa `Ready`;
-- por que um Pod NotReady pode aparecer no EndpointSlice com `ready=false`;
-- como Service selector, labels e EndpointSlice se relacionam;
-- por que estado desejado não significa convergência imediata;
-- como controllers e Scheduler participam na recuperação;
-- por que resiliência de workload não é HA do Control Plane;
-- por que Control Plane saudável não implica HA;
-- por que HA não substitui backup;
-- a diferença entre Chart, Release e Revision;
-- que rollback cria uma nova revision;
-- quando usar rollback;
-- o modelo base + overlay de Kustomize;
-- por que não se deve misturar gestão Kustomize/Helm dos mesmos objetos sem estratégia;
-- a relação CRD → Custom Resource → Controller/Operator → reconciliação.
+## 11. Checklist final do formador
 
-## Limpeza
-
-```bash
-kubectl delete prometheusrule s7-lab-rules \
-  -n monitoring --ignore-not-found
-helm uninstall symfony-lab -n s7-lab || true
-kubectl delete namespace s7-lab --ignore-not-found
-```
-
-Manter a monitorização instalada se ainda for necessária para demonstrações ou para a sessão seguinte. Não remover CRDs automaticamente.
+- [ ] Máquinas dos formandos criadas de raiz; não exigir verificação de UUIDs sem sintoma que a justifique.
+- [ ] Formandos descarregam os manifests e materiais no CP1.
+- [ ] Chart `kube-prometheus-stack` 91.4.1 descarregado e disponível localmente.
+- [ ] `precheck.sh` concluído sem erros críticos.
+- [ ] Imagem `ghcr.io/skullclamp/symfony-demo:1.0.0` validada no ambiente real.
+- [ ] Imagem `postgres:16` disponível.
+- [ ] StorageClass `local-path` funcional.
+- [ ] Duas réplicas Symfony distribuídas pelos dois Workers.
+- [ ] Rollout com `maxSurge: 0` e `maxUnavailable: 1` validado.
+- [ ] `PrometheusRule` selecionado pela instância Prometheus.
+- [ ] Cadeia `Prometheus CR → Operator → StatefulSet/Pods` identificada.
+- [ ] Incidente de probe validado com uma réplica antiga ainda disponível.
+- [ ] Incidente de selector validado.
+- [ ] Worker seguro para simular falha identificado.
+- [ ] Componentes do Control Plane e `etcd` identificados sem provocar indisponibilidade do Control Plane.
+- [ ] Transição Kustomize → Helm validada com `--take-ownership` sem apagar Deployment/Service.
+- [ ] Helm install/upgrade/rollback testado.
+- [ ] Reconciliação do `PrometheusRule` confirmada também na API do Prometheus.
+- [ ] Procedimento de limpeza testado.
