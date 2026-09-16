@@ -31,10 +31,10 @@ Nova revision
 ## Health gate
 
 ```bash
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
 ```
 
 Confirmar que a release está `deployed`, o Deployment está `2/2` e identificar a revisão atualmente conhecida como boa.
@@ -44,7 +44,7 @@ Confirmar que a release está `deployed`, o Deployment está `2/2` e identificar
 ```bash
 helm upgrade symfony-lab \
   ./helm/app-lab \
-  -n s7-lab \
+  -n s78-lab \
   -f helm/values/values-broken.yaml \
   --wait \
   --timeout 90s
@@ -55,17 +55,17 @@ helm upgrade symfony-lab \
 ## Recolher evidência
 
 ```bash
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
 ```
 
 Identificar o Pod não Ready e aprofundar:
 
 ```bash
-kubectl describe pod <NOVO_POD> -n s7-lab
-kubectl get deployment symfony-demo -n s7-lab \
+kubectl describe pod <NOVO_POD> -n s78-lab
+kubectl get deployment symfony-demo -n s78-lab \
   -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
 ```
 
@@ -74,7 +74,7 @@ kubectl get deployment symfony-demo -n s7-lab \
 No cenário validado, a candidata altera a imagem para:
 
 ```text
-registry.invalid/s7/symfony-demo:1.0.0
+registry.invalid/s78/symfony-demo:1.0.0
 ```
 
 É esperado observar:
@@ -102,14 +102,14 @@ Perguntas orientadoras:
 Consultar novamente o histórico:
 
 ```bash
-helm history symfony-lab -n s7-lab
+helm history symfony-lab -n s78-lab
 ```
 
 Executar o rollback para a revisão conhecida como boa:
 
 ```bash
 helm rollback symfony-lab <REVISAO_BOA> \
-  -n s7-lab \
+  -n s78-lab \
   --wait \
   --timeout 180s
 ```
@@ -119,15 +119,15 @@ helm rollback symfony-lab <REVISAO_BOA> \
 ## Validar
 
 ```bash
-helm status symfony-lab -n s7-lab
-helm history symfony-lab -n s7-lab
+helm status symfony-lab -n s78-lab
+helm history symfony-lab -n s78-lab
 kubectl rollout status deployment/symfony-demo \
-  -n s7-lab --timeout=180s
-kubectl get deployment symfony-demo -n s7-lab
-kubectl get pods -n s7-lab -o wide
-kubectl get deployment symfony-demo -n s7-lab \
+  -n s78-lab --timeout=180s
+kubectl get deployment symfony-demo -n s78-lab
+kubectl get pods -n s78-lab -o wide
+kubectl get deployment symfony-demo -n s78-lab \
   -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
-kubectl get endpointslices -n s7-lab \
+kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
