@@ -40,6 +40,8 @@ Validar
 - Kustomize;
 - Prometheus Operator preparado previamente pelo formador.
 
+A aplicação usa o namespace `s7-lab`. O `PrometheusRule` pedagógico é criado no namespace `monitoring`, embora a expressão PromQL observe o Deployment no namespace `s7-lab`.
+
 ## Laboratório
 
 O guião principal é:
@@ -63,6 +65,8 @@ Correção
   ↓
 Validação
 ```
+
+> A validação técnica foi efetuada no cenário real de 1 Control Plane + 2 Workers. O guião incorpora os comportamentos observados durante essa execução.
 
 ## Estrutura dos materiais
 
@@ -94,7 +98,11 @@ Running ≠ Ready
 
 Service existente ≠ Service com backends
 
+Estado desejado ≠ convergência imediata
+
 Resiliência do workload ≠ HA do Control Plane
+
+Control Plane saudável ≠ Control Plane altamente disponível
 
 HA ≠ Backup ≠ Recovery
 
@@ -102,8 +110,21 @@ Chart ≠ Release ≠ Revision
 
 CRD ≠ Custom Resource
 
+CR + Controller/Operator → reconciliação
+
 Sem evidência não há diagnóstico.
-Sem validação não há recuperação demonstrada.
+Sem causa raiz não há troubleshooting completo.
+Sem validação pós-correção não há recuperação demonstrada.
 ```
+
+## Notas operacionais validadas
+
+- um Pod `Running` mas `NotReady` pode continuar representado no EndpointSlice com `ready: false`;
+- um `FailedScheduling` transitório pode aparecer durante rollouts com anti-affinity e não deve ser confundido automaticamente com a causa raiz;
+- parar apenas o `kubelet` num Worker demonstra perda de heartbeat/gestão, não equivale a desligar o Node;
+- um rollback Helm cria uma nova revision;
+- depois da adoção por Helm, não voltar a aplicar Kustomize sobre o Deployment e o Service Symfony;
+- manter apenas um `port-forward` para a porta local `9090` na mesma máquina;
+- remover no fim o `PrometheusRule` `s7-lab-rules`, porque ele existe no namespace `monitoring` e não é eliminado com o namespace `s7-lab`.
 
 > O cluster possui apenas um Control Plane. O laboratório demonstra resiliência de workloads e enquadra HA do Control Plane, mas não simula a falha destrutiva do único Control Plane.
