@@ -15,7 +15,7 @@ Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção →
 
 | Verificação | Evidência observada | OK? |
 |---|---|:---:|
-| 2 Workers `Ready` e schedulable | | |
+| 2 Workers `Ready` | | |
 | `local-path` disponível | | |
 | Calico operacional | | |
 | Kustomize disponível | | |
@@ -24,6 +24,7 @@ Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção →
 | PostgreSQL `Running/Ready` | | |
 | PVC `Bound` | | |
 | Symfony 2/2 `Ready` | | |
+| Réplicas Symfony em Workers diferentes | | |
 | Service com backends | | |
 
 ---
@@ -34,19 +35,23 @@ Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção →
 |---|---|
 | Sintoma | |
 | Estado do Pod novo | |
-| Probe observada | |
+| Readiness probe observada | |
+| HTTP/erro observado | |
 | Event/`describe` relevante | |
-| Estado do EndpointSlice | |
+| EndpointSlice — endpoint saudável | |
+| EndpointSlice — endpoint não pronto (`ready=false`) | |
 | Hipótese | |
 | Teste | |
 | Causa raiz | |
 | Correção | |
-| Validação final | |
+| Validação final — Deployment 2/2 | |
+| Validação final — 2 endpoints `ready=true` | |
 
 **Conclusão:**
 
 ```text
 Running ≠ Ready
+Presença no EndpointSlice ≠ endpoint Ready
 ```
 
 ---
@@ -58,11 +63,12 @@ Running ≠ Ready
 | Pods `Running/Ready` | |
 | Selector do Service | |
 | Labels dos Pods | |
+| Resultado do teste com selector | |
 | EndpointSlice durante a falha | |
 | Hipótese | |
-| Teste com selector | |
 | Causa raiz | |
 | Correção | |
+| Selector após correção | |
 | EndpointSlice após correção | |
 
 **Conclusão:**
@@ -78,19 +84,24 @@ Service existente ≠ Service com backends
 | Momento | Evidência / tempo observado |
 |---|---|
 | Worker escolhido | |
-| Distribuição inicial dos Pods | |
-| Paragem do `kubelet` | |
+| PostgreSQL permanece no outro Worker | |
+| Distribuição inicial dos Pods Symfony | |
+| Paragem apenas do `kubelet` | |
 | Node deixa de estar `Ready` | |
-| Event/taint relevante | |
+| Event `NodeNotReady` / eviction | |
+| Aplicação perde redundância | |
+| Backend que permanece `ready=true` | |
 | Nova réplica criada | |
-| Eventual razão de `Pending` | |
+| Razão de eventual `Pending` | |
 | `kubelet` reiniciado | |
 | Node regressa a `Ready` | |
-| Aplicação regressa ao estado esperado | |
+| Deployment regressa a 2/2 | |
+| Dois endpoints regressam a `ready=true` | |
 
-**Conclusão:**
+**Conclusões:**
 
 ```text
+estado desejado ≠ convergência imediata
 resiliência do workload ≠ HA do Control Plane
 ```
 
@@ -104,10 +115,14 @@ resiliência do workload ≠ HA do Control Plane
 | `kube-controller-manager` | | |
 | `kube-scheduler` | | |
 | `etcd` | | |
+| `/readyz?verbose` | | |
 
 Completar:
 
 ```text
+1 único Control Plane saudável
+→ __________________________________________
+
 vários Control Planes + etcd redundante
 → __________________________________________
 
@@ -115,21 +130,35 @@ snapshot de etcd
 → __________________________________________
 ```
 
+**Conclusão:**
+
+```text
+Control Plane saudável ≠ Control Plane altamente disponível
+HA ≠ Backup ≠ Recovery
+```
+
 ---
 
-## CP6 — Helm: upgrade e rollback
+## CP6 — Helm: adoção, upgrade e rollback
 
 | Verificação | Evidência |
 |---|---|
 | Release inicial | |
+| Ownership Deployment | |
+| Ownership Service | |
 | Revisão conhecida como boa | |
 | Estado após upgrade defeituoso | |
+| Estado da release após falha | |
 | Estado do Pod novo | |
-| Event principal | |
+| Imagem declarada no Deployment | |
+| Event/erro principal | |
 | Causa raiz | |
 | Revisão escolhida para rollback | |
 | Histórico após rollback | |
+| Nova revision criada pelo rollback | |
 | Estado final da aplicação | |
+| Imagem final | |
+| Endpoints finais | |
 
 Completar:
 
@@ -147,11 +176,19 @@ Chart ≠ __________ ≠ Revision
 | `overlays/normal/` | |
 | `overlays/incident-probe/` | |
 | `overlays/incident-service/` | |
+| Ownership atual de Deployment/Service Symfony | |
 
 Completar:
 
 ```text
 base comum + __________________ = variante declarativa
+```
+
+Responder:
+
+```text
+Depois da adoção por Helm, devemos voltar a aplicar Kustomize
+sobre Deployment/Service Symfony? __________________________
 ```
 
 ---
@@ -161,11 +198,18 @@ base comum + __________________ = variante declarativa
 | Evidência | Registo |
 |---|---|
 | CRD observada | |
+| Namespace do Custom Resource | |
+| Namespace observado pela expressão PromQL | |
 | Custom Resource criada | |
 | `generation` inicial | |
+| `summary` inicial | |
 | `generation` após alteração | |
+| `summary` alterada no CR | |
 | Controller/Operator identificado | |
-| Alteração observada no Prometheus | |
+| `summary` alterada observada na API do Prometheus | |
+| Estado da regra no Prometheus | |
+| `generation` após reposição | |
+| `summary` original reposta no Prometheus | |
 
 Completar:
 
@@ -191,11 +235,32 @@ Registar apenas a sequência proposta pela turma:
 6. __________________________________________
 ```
 
-### Validação final
+### Validação global final
+
+| Verificação | Evidência | OK? |
+|---|---|:---:|
+| Todos os Nodes `Ready` | | |
+| PostgreSQL `1/1 Running` | | |
+| Symfony Deployment `2/2` | | |
+| 2 Pods Symfony `1/1 Running` | | |
+| Symfony distribuído pelos 2 Workers | | |
+| Imagem `ghcr.io/skullclamp/symfony-demo:1.0.0` | | |
+| Helm `STATUS: deployed` | | |
+| Histórico mantém revisão falhada e rollback | | |
+| 2 endpoints `ready=true` / `serving=true` | | |
+| Deployment e Service geridos por Helm | | |
+| `PrometheusRule` reposto para a `summary` original | | |
+
+### Checklist pedagógico
 
 - [ ] recolhemos evidência antes de alterar;
 - [ ] distinguimos sintoma de causa raiz;
 - [ ] validámos depois da correção;
+- [ ] distinguimos `Running` de `Ready`;
+- [ ] sabemos interpretar `ready` num EndpointSlice;
+- [ ] compreendemos que estado desejado não implica convergência imediata;
 - [ ] sabemos quando um rollback é apropriado;
+- [ ] compreendemos que rollback cria uma nova revision;
 - [ ] distinguimos resiliência, HA, backup e recovery;
-- [ ] compreendemos a relação CRD → CR → Controller → reconciliação.
+- [ ] distinguimos CRD de Custom Resource;
+- [ ] compreendemos a relação CR + Controller/Operator → reconciliação.
