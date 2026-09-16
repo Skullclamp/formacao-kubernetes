@@ -31,13 +31,13 @@ Nova revision
 ## Health gate
 
 ```bash
-helm list -n s7-lab
+helm status symfony-lab -n s7-lab
 helm history symfony-lab -n s7-lab
+kubectl get deployment symfony-demo -n s7-lab
 kubectl get pods -n s7-lab -o wide
-kubectl get endpointslices -n s7-lab
 ```
 
-Identificar a revisão atualmente conhecida como boa.
+Confirmar que a release está `deployed`, o Deployment está `2/2` e identificar a revisão atualmente conhecida como boa.
 
 ## Aplicar a candidata
 
@@ -50,31 +50,51 @@ helm upgrade symfony-lab \
   --timeout 90s
 ```
 
-É esperado que o upgrade não conclua com sucesso.
+É esperado que o upgrade termine por timeout e que a nova revisão fique `failed`.
 
 ## Recolher evidência
 
 ```bash
 helm status symfony-lab -n s7-lab
 helm history symfony-lab -n s7-lab
+kubectl get deployment symfony-demo -n s7-lab
 kubectl get pods -n s7-lab -o wide
-kubectl get events -n s7-lab --sort-by=.lastTimestamp
 ```
 
-Identificar o Pod novo:
+Identificar o Pod não Ready e aprofundar:
 
 ```bash
 kubectl describe pod <NOVO_POD> -n s7-lab
-kubectl get pod <NOVO_POD> -n s7-lab \
-  -o jsonpath='{.spec.containers[0].image}{"\n"}'
+kubectl get deployment symfony-demo -n s7-lab \
+  -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
 ```
+
+## Evidência esperada
+
+No cenário validado, a candidata altera a imagem para:
+
+```text
+registry.invalid/s7/symfony-demo:1.0.0
+```
+
+É esperado observar:
+
+- release Helm com nova revisão em `failed`;
+- Deployment temporariamente em `1/2`;
+- uma réplica anterior saudável ainda utilizável;
+- novo Pod em `ErrImagePull`/`ImagePullBackOff`;
+- `describe` com erro de resolução/pull do registry inválido;
+- Deployment a declarar a imagem inválida.
+
+Um `FailedScheduling` transitório devido à anti-affinity pode surgir antes de o Pod ser colocado no segundo Worker. Se o Pod acabar agendado e a falha persistente for `ImagePullBackOff`, a causa raiz é a imagem/registry inválido, não o scheduling transitório.
 
 Perguntas orientadoras:
 
 - Foi criada uma nova revision?
+- Qual é o estado da release?
 - Qual é o estado do novo Pod?
 - Que Event é persistente?
-- Qual a imagem realmente aplicada?
+- Qual a imagem realmente declarada no Deployment?
 - Existe ainda alguma réplica anterior utilizável?
 
 ## Rollback
@@ -91,17 +111,34 @@ Executar o rollback para a revisão conhecida como boa:
 helm rollback symfony-lab <REVISAO_BOA> \
   -n s7-lab \
   --wait \
-  --timeout 3m
+  --timeout 180s
 ```
+
+> O rollback recupera o conteúdo de uma revisão anterior, mas cria uma **nova revisão**. Não faz o número da revisão atual voltar atrás.
 
 ## Validar
 
 ```bash
+helm status symfony-lab -n s7-lab
 helm history symfony-lab -n s7-lab
 kubectl rollout status deployment/symfony-demo \
   -n s7-lab --timeout=180s
-kubectl get pods -n s7-lab
+kubectl get deployment symfony-demo -n s7-lab
+kubectl get pods -n s7-lab -o wide
+kubectl get deployment symfony-demo -n s7-lab \
+  -o jsonpath='image={.spec.template.spec.containers[0].image}{"\n"}'
+kubectl get endpointslices -n s7-lab \
+  -l kubernetes.io/service-name=symfony-demo \
+  -o yaml
 ```
+
+A recuperação só fica demonstrada quando:
+
+- a release regressa a `deployed`;
+- o Deployment está `2/2`;
+- a imagem regressa a `ghcr.io/skullclamp/symfony-demo:1.0.0`;
+- os dois Pods estão `1/1 Running`;
+- os dois endpoints estão `ready: true`.
 
 Mensagem-chave:
 
