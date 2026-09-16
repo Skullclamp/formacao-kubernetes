@@ -38,6 +38,13 @@ kubectl get endpointslices -n s7-lab \
   -o yaml
 ```
 
+## Evidência esperada
+
+- os Pods Symfony permanecem `Running/Ready` com `app=symfony-demo`;
+- o Service mantém-se criado, mas o selector passa a `app=symfony-demo-inexistente`;
+- o selector não encontra Pods;
+- o EndpointSlice fica sem endpoints utilizáveis (`endpoints: null` no cenário validado).
+
 ## Testar a hipótese
 
 Depois de identificar o selector configurado no Service:
@@ -57,7 +64,11 @@ Perguntas orientadoras:
 
 ```bash
 kubectl apply -k app/overlays/normal/
-kubectl get endpointslices -n s7-lab
+kubectl get svc symfony-demo -n s7-lab \
+  -o jsonpath='selector={.spec.selector.app}{"\n"}'
+kubectl get endpointslices -n s7-lab \
+  -l kubernetes.io/service-name=symfony-demo \
+  -o yaml
 ```
 
 Validar a cadeia:
