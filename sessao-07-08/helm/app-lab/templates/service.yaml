@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: symfony-demo
+  labels:
+    app.kubernetes.io/name: symfony-demo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: symfony-demo
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
