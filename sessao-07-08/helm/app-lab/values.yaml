@@ -1,0 +1,27 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/skullclamp/symfony-demo
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+app:
+  environment: prod
+  version: "1.0.0"
+  existingSecret: postgres-credentials
+
+service:
+  type: ClusterIP
+  port: 80
+
+probes:
+  readinessPath: /ready
+  livenessPath: /health
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
