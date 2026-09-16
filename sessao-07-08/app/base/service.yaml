@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: symfony-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: symfony-demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
