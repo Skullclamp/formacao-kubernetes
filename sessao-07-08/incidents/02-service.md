@@ -1,67 +1,26 @@
 # Incidente 2 — Pods saudáveis, Service sem resposta
 
-## Situação entregue ao formando
+## Como utilizar este incidente
 
-Os Pods da aplicação estão `Running` e `Ready`. O objeto `Service` existe, mas os pedidos enviados através do Service não chegam à aplicação.
+Este bloco é realizado em **modo acompanhado**. O formador apresenta o sintoma, pede observações concretas e conduz a turma na interpretação da cadeia `Service → selector → labels → EndpointSlice`.
 
-A causa **não é fornecida**. O objetivo é diagnosticar a cadeia entre Service, selectors, labels e EndpointSlices.
+O objetivo não é adivinhar rapidamente a causa, mas perceber como provar cada hipótese com os objetos reais do cluster.
 
 ---
 
-## Objetivo
+## Situação
 
-Aplicar o método:
+Os Pods da aplicação estão `Running` e `Ready`. O objeto `Service` existe, mas os pedidos enviados através do Service não chegam à aplicação.
 
-```text
-Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção → Validação
-```
+## Objetivo pedagógico
 
-E compreender que:
+Compreender que:
 
 ```text
 Service existente ≠ Service com backends utilizáveis
 ```
 
----
-
-## Conceitos a compreender antes de diagnosticar
-
-### Service
-
-Um `Service` fornece um ponto de acesso estável a um conjunto dinâmico de Pods.
-
-Os Pods podem ser destruídos e recriados com novos IPs; o Service evita que clientes tenham de conhecer esses IPs diretamente.
-
-### Selector
-
-Na configuração mais comum, o Service encontra os seus backends através de um `selector` baseado em labels.
-
-Exemplo conceptual:
-
-```yaml
-selector:
-  app: minha-app
-```
-
-O Service procura Pods cujas labels correspondam a esse selector.
-
-### Labels
-
-Labels são pares chave/valor associados aos objetos Kubernetes. São usadas para organizar, selecionar e relacionar recursos.
-
-Exemplo:
-
-```yaml
-labels:
-  app: minha-app
-  role: web
-```
-
-### EndpointSlice
-
-O controlador de EndpointSlices observa Services e Pods e mantém a lista de endpoints elegíveis.
-
-A relação a demonstrar neste incidente é:
+E observar a relação:
 
 ```text
 Service selector
@@ -70,220 +29,133 @@ labels dos Pods
       ↓
 EndpointSlice
       ↓
-backends disponíveis ao Service
+backends do Service
 ```
-
-Se o selector não corresponder a nenhum Pod, o objeto Service pode continuar perfeitamente existente, mas sem backends para encaminhar tráfego.
 
 ---
 
-## Regras do incidente
+# 1. Conceitos antes de executar comandos
 
-- Confirmar primeiro o estado dos Pods.
-- Não assumir imediatamente que existe um problema de CNI ou DNS.
-- Comparar explicitamente labels dos Pods com selectors do Service.
-- Validar o EndpointSlice associado especificamente ao Service `symfony-demo`.
-- Não corrigir através de `kubectl edit`.
-- Repor a baseline declarativa conhecida como boa depois de confirmada a causa raiz.
+## Service
+
+Um `Service` fornece um ponto de acesso estável a um conjunto dinâmico de Pods. Os Pods podem ser recriados com novos IPs; o Service mantém um ponto lógico estável.
+
+## Labels
+
+Labels são pares chave/valor associados aos objetos Kubernetes. Permitem organizar e selecionar recursos.
+
+Exemplo conceptual:
+
+```yaml
+labels:
+  app: minha-app
+  role: web
+```
+
+## Selector
+
+Um Service normalmente escolhe os Pods através de um selector.
+
+Exemplo conceptual:
+
+```yaml
+selector:
+  app: minha-app
+```
+
+A correspondência entre selector e labels é exata para as chaves usadas.
+
+## EndpointSlice
+
+Os controladores Kubernetes mantêm EndpointSlices com os endpoints que o Service pode usar.
+
+Um Service pode existir sem endpoints se nenhum Pod corresponder ao selector.
 
 ---
 
-# 1. Confirmar que o workload está saudável
-
-```bash
-kubectl get deployment symfony-demo -n s78-lab
-kubectl get pods -n s78-lab -o wide --show-labels
-```
-
-### Como interpretar os comandos e flags
-
-```text
-kubectl get deployment symfony-demo
-→ mostra o estado agregado do workload
-
-kubectl get pods
-→ mostra cada réplica individual
-
--o wide
-→ acrescenta IP e Node, úteis para relacionar Pods com endpoints
-
---show-labels
-→ acrescenta ao output as labels atribuídas a cada Pod
-```
-
-### O que observar
-
-Confirmar antes de investigar a rede:
-
-```text
-Deployment → 2/2 Ready
-Pods       → Running / Ready
-```
-
-Se os Pods não estiverem saudáveis, o incidente já não é exclusivamente de Service e deve ser diagnosticado primeiro ao nível do workload.
-
----
-
-# 2. Inspecionar o Service
-
-```bash
-kubectl get svc symfony-demo -n s78-lab
-kubectl get svc symfony-demo -n s78-lab -o yaml
-```
-
-### Conceitos importantes
-
-No YAML do Service, distinguir:
-
-```text
-spec.ports
-→ portas expostas pelo Service
-
-spec.selector
-→ labels usadas para encontrar os Pods backend
-
-spec.clusterIP
-→ endereço virtual estável atribuído ao Service
-```
-
-O `clusterIP` existir não prova que existam endpoints.
-
-### O que observar
-
-Registar exatamente o selector do Service. Não o corrigir ainda.
-
----
-
-# 3. Comparar selector e labels
-
-Depois de identificar o selector, comparar com as labels reais dos Pods:
+# 2. Observar o estado — executar em conjunto
 
 ```bash
 kubectl get pods -n s78-lab --show-labels
-```
-
-Também é possível testar diretamente um selector:
-
-```bash
-kubectl get pods -n s78-lab -l '<CHAVE>=<VALOR>'
-```
-
-### Como interpretar
-
-```text
--l '<CHAVE>=<VALOR>'
-→ aplica ao comando o mesmo princípio de seleção por labels usado por vários objetos Kubernetes
-```
-
-O objetivo é responder com evidência:
-
-```text
-Que Pods correspondem exatamente ao selector atual do Service?
-```
-
----
-
-# 4. Inspecionar o EndpointSlice
-
-```bash
+kubectl get svc symfony-demo -n s78-lab -o yaml
 kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
 ```
 
-### Como interpretar
+## Comandos e flags
 
 ```text
+--show-labels
+→ mostra as labels dos Pods no output
+
+kubectl get svc ... -o yaml
+→ mostra a definição completa do Service, incluindo spec.selector
+
 -l kubernetes.io/service-name=symfony-demo
-→ seleciona apenas o EndpointSlice gerido para este Service
+→ seleciona apenas o EndpointSlice associado ao Service em estudo
 
 -o yaml
-→ permite observar addresses, targetRef e conditions
+→ permite observar endpoints e respetivas condições
 ```
 
-Campos importantes:
+## Observação guiada
 
-```yaml
-endpoints:
-  - addresses:
-    conditions:
-      ready:
-      serving:
-    targetRef:
+O formador pede à turma para comparar lado a lado:
+
+```text
+selector do Service
+        ↕
+labels dos Pods
+        ↓
+conteúdo do EndpointSlice
 ```
 
-### O que observar
+Perguntas orientadoras:
 
-Responder:
+```text
+Os Pods estão realmente Ready?
+Que selector está definido no Service?
+Existe pelo menos um Pod cujas labels correspondem ao selector?
+O EndpointSlice contém addresses?
+```
 
-- existem endpoints?
-- quantos?
-- que Pods são referenciados em `targetRef`?
-- as condições `ready` e `serving` estão verdadeiras?
+### Checkpoint acompanhado
 
-Um EndpointSlice sem endpoints é evidência de que o Service não encontrou backends elegíveis; não identifica, por si só, a razão.
+Não avançar enquanto a turma não conseguir explicar por que um objeto Service pode existir sem encaminhar tráfego para qualquer Pod.
 
 ---
 
-# 5. Consultar Events sem assumir que haverá erro explícito
+# 3. Testar a hipótese
+
+Se a hipótese apontar para incompatibilidade entre selector e labels, confirmar diretamente com um selector equivalente ao observado no Service.
+
+Exemplo do método:
 
 ```bash
-kubectl get events -n s78-lab --sort-by=.lastTimestamp
+kubectl get pods -n s78-lab -l <CHAVE>=<VALOR>
 ```
 
-Um selector logicamente incorreto pode não gerar um Event evidente. Kubernetes pode estar simplesmente a cumprir uma configuração válida que não corresponde a nenhum Pod.
-
-Esta distinção é importante:
+## Interpretação
 
 ```text
-configuração sintaticamente válida
-        ≠
-configuração funcionalmente correta
+-l <selector>
+→ pede à API apenas os objetos cujas labels correspondem ao selector indicado
 ```
+
+Este teste transforma uma hipótese numa prova observável: se o selector não devolver Pods, o Service também não os poderá usar como backends através desse selector.
 
 ---
 
-# 6. Formular e testar a hipótese
+# 4. Recuperar a baseline declarativa
 
-Registar:
-
-```text
-Sintoma:
-
-Evidência:
-
-Hipótese:
-
-Teste:
-
-Causa raiz:
-```
-
-Antes da correção, o formando deve conseguir demonstrar a relação entre:
-
-```text
-selector observado
-labels observadas
-EndpointSlice observado
-```
-
----
-
-# 7. Recuperar a configuração declarativa
-
-Depois de confirmada a causa raiz:
+A correção é feita reaplicando a configuração conhecida como boa:
 
 ```bash
 kubectl apply -k app/overlays/normal/
 ```
 
-### O que significa
-
-O overlay `normal` representa o estado conhecido como bom do laboratório. Em vez de editar diretamente o Service, reaplicamos a configuração declarativa validada.
-
----
-
-# 8. Validar a recuperação
+Depois validar:
 
 ```bash
 kubectl get svc symfony-demo -n s78-lab -o yaml
@@ -293,53 +165,54 @@ kubectl get endpointslices -n s78-lab \
   -o yaml
 ```
 
-A validação deve provar:
+O formador volta a pedir a comparação:
 
 ```text
-selector do Service
-      ↓ corresponde
-labels dos Pods
+selector correto
       ↓
-2 endpoints presentes
+labels correspondentes
       ↓
-ready=true / serving=true
+EndpointSlice preenchido
 ```
 
 ---
 
-## Registo do incidente
+# 5. Validação final acompanhada
+
+O incidente só termina quando existir evidência de:
+
+```text
+Pods Symfony      → Running / Ready
+Service           → selector coerente
+EndpointSlice     → 2 endpoints
+conditions.ready  → true nos endpoints utilizáveis
+```
+
+## Registo na folha de evidências
 
 | Campo | Registo |
 |---|---|
-| Sintoma | |
-| Deployment saudável? | |
-| Pods saudáveis? | |
-| Selector do Service | |
-| Labels dos Pods | |
-| Pods encontrados pelo selector | |
-| Endpoints antes da correção | |
-| Condições `ready` / `serving` | |
-| Hipótese | |
-| Teste | |
-| Causa raiz | |
-| Correção declarativa | |
-| Evidência de recuperação | |
+| Sintoma observado | |
+| Selector observado | |
+| Labels observadas | |
+| Evidência no EndpointSlice | |
+| Hipótese formulada | |
+| Teste efetuado | |
+| Causa raiz identificada | |
+| Correção aplicada | |
+| Evidência final | |
 
----
-
-## CHECKPOINT — Incidente 2 concluído
-
-Não avançar até ser possível demonstrar com evidência:
+## Síntese a consolidar
 
 ```text
-Pods saudáveis
-Service existente
-selector coerente com labels
-2 endpoints utilizáveis
-```
+Service
+  não descobre Pods pelo nome
 
-E explicar sem ambiguidade:
-
-```text
-Service selector → labels dos Pods → EndpointSlices
+Service selector
+      ↓
+labels dos Pods
+      ↓
+EndpointSlices
+      ↓
+tráfego utilizável
 ```
