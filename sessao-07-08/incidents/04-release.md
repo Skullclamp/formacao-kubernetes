@@ -1,25 +1,25 @@
 # Incidente 4 — Release candidata não fica operacional
 
-## Situação entregue ao formando
+## Como utilizar este incidente
 
-A aplicação já é gerida por Helm. Uma nova release candidata é aplicada, mas o rollout não termina com sucesso. A estratégia de atualização permite que uma réplica anterior continue disponível enquanto a nova réplica evidencia a falha.
+Este incidente é realizado em **modo acompanhado**. O formador explica primeiro os conceitos de Helm, conduz o health gate, lança a release candidata com a turma e orienta a leitura do histórico, estado do Deployment, Pods, EndpointSlices e Events.
 
-A causa **não é fornecida**. Deve ser descoberta a partir do estado da release, Pods, Events e configuração efetivamente aplicada.
+A causa não é revelada antes da recolha de evidência, mas este não é um exercício autónomo. O formador vai colocando perguntas e decide quando a turma tem evidência suficiente para avançar para a causa raiz e para o rollback.
 
 ---
 
-## Objetivo
+## Situação
 
-Aplicar novamente:
+A aplicação já é gerida por Helm. Uma nova release candidata é aplicada, mas o rollout não termina com sucesso. Uma réplica anterior continua disponível enquanto a nova réplica evidencia a falha.
 
-```text
-Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção → Validação
-```
+## Objetivo pedagógico
 
-E compreender os conceitos operacionais de Helm:
+Compreender e observar a sequência:
 
 ```text
 Chart
+  ↓
+Values
   ↓
 Release
   ↓
@@ -27,22 +27,28 @@ Revision
   ↓
 Upgrade
   ↓
+Falha
+  ↓
+Diagnóstico
+  ↓
 Rollback
+  ↓
+Nova revision
 ```
 
-No final, o formando deve conseguir explicar por que razão um rollback é preferível a uma edição manual do Deployment neste cenário.
+E perceber por que razão um rollback é preferível a editar manualmente o Deployment neste cenário.
 
 ---
 
-## Conceitos a compreender antes de iniciar
+# 1. Conceitos antes de executar comandos
 
-### Helm
+## Helm
 
-Helm é um gestor de pacotes para Kubernetes. Permite agrupar templates, valores configuráveis e metadados num `Chart`, instalar esses recursos como uma `Release` e manter histórico das alterações.
+Helm é um gestor de pacotes para Kubernetes. Permite definir aplicações através de templates e valores configuráveis, instalá-las como releases e manter histórico das alterações.
 
-### Chart
+## Chart
 
-Um `Chart` é o pacote que contém os templates Kubernetes e os valores por defeito necessários para produzir manifests.
+Um `Chart` é o pacote Helm. Contém templates Kubernetes, metadados e valores por defeito.
 
 Neste laboratório:
 
@@ -50,11 +56,11 @@ Neste laboratório:
 helm/app-lab/
 ```
 
-é o chart da aplicação Symfony.
+é o Chart da aplicação Symfony.
 
-### Values
+## Values
 
-Os ficheiros de values permitem alterar parâmetros do chart sem editar diretamente os templates.
+Os ficheiros `values.yaml` permitem alterar parâmetros sem editar diretamente os templates.
 
 Exemplo conceptual:
 
@@ -64,9 +70,9 @@ image:
   tag: ...
 ```
 
-### Release
+## Release
 
-Uma Release é uma instalação concreta de um Chart num cluster/Namespace.
+Uma `Release` é uma instalação concreta de um Chart num cluster/Namespace.
 
 Neste laboratório:
 
@@ -74,31 +80,27 @@ Neste laboratório:
 symfony-lab
 ```
 
-é o nome da release.
+é a release da aplicação.
 
-### Revision
+## Revision
 
-Cada alteração à release gera uma revisão no histórico Helm.
-
-Exemplo conceptual:
+Cada instalação, upgrade ou rollback cria uma entrada histórica numerada.
 
 ```text
-revision 1 → instalação inicial
+revision 1 → estado inicial
 revision 2 → upgrade
 revision 3 → rollback ou novo upgrade
 ```
 
-### Rollback
+## Rollback
 
-`helm rollback` recupera o estado de uma revisão anterior, mas o faz criando **uma nova revisão**. O histórico não é apagado.
-
-Isto é importante para auditabilidade operacional.
+`helm rollback` recupera a configuração de uma revisão anterior, mas cria **uma nova revisão**. O histórico permanece disponível.
 
 ---
 
-# 1. Health gate — confirmar uma release conhecida como boa
+# 2. Health gate — confirmar uma baseline boa
 
-Antes de introduzir a candidata:
+Executar em conjunto:
 
 ```bash
 helm list -n s78-lab
@@ -110,38 +112,43 @@ kubectl get endpointslices -n s78-lab \
   -o yaml
 ```
 
-### Como interpretar os comandos
+## Como interpretar os comandos
 
 ```text
 helm list
-→ lista releases no Namespace
+→ mostra as releases existentes no Namespace
 
-helm history symfony-lab
-→ mostra todas as revisões conhecidas da release
+helm history
+→ mostra todas as revisions da release e o respetivo estado
 
 kubectl get deployment
-→ confirma estado agregado da aplicação
+→ confirma READY, AVAILABLE e estado do rollout
 
-kubectl get endpointslices
-→ confirma se o Service tem backends prontos
+kubectl get pods -o wide
+→ mostra estado, IP e Node das réplicas
+
+EndpointSlice -o yaml
+→ permite confirmar conditions.ready dos endpoints
 ```
 
-### O que observar
+### Checkpoint acompanhado
 
-Não avançar sem:
+Não avançar enquanto a turma não confirmar:
 
 ```text
-release STATUS=deployed
-Deployment 2/2 Ready
+release ativa
+Deployment 2/2
 2 Pods Ready
 2 endpoints ready=true
 ```
 
-Registar a revisão atual. Essa informação poderá ser necessária mais tarde.
+O formador pede também que seja identificada a revisão atualmente conhecida como boa.
 
 ---
 
-# 2. Aplicar a release candidata
+# 3. Aplicar a release candidata
+
+Executar:
 
 ```bash
 helm upgrade symfony-lab \
@@ -152,223 +159,145 @@ helm upgrade symfony-lab \
   --timeout 90s
 ```
 
-É esperado que o comando não conclua com sucesso dentro do tempo definido.
-
-### Como interpretar o comando e as flags
+## Comando e flags
 
 ```text
 helm upgrade symfony-lab
-→ altera a release existente chamada symfony-lab
+→ atualiza a release existente
 
 ./helm/app-lab
-→ chart usado para renderizar a nova configuração
+→ Chart usado para renderizar os manifests
+
+-f helm/values/values-broken.yaml
+→ fornece os valores da release candidata
 
 -n s78-lab
 → Namespace da release
 
--f helm/values/values-broken.yaml
-→ fornece valores específicos para esta candidata
-
 --wait
-→ mantém o comando à espera de condições de prontidão suportadas pelo Helm
+→ espera pelas condições de prontidão suportadas pelo Helm
 
 --timeout 90s
-→ limita a espera a 90 segundos
+→ termina a espera ao fim de 90 segundos se o estado pretendido não for alcançado
 ```
 
-### O que significa um timeout
-
-Um timeout do Helm é um **sintoma**, não uma causa raiz.
-
-```text
-UPGRADE FAILED: context deadline exceeded
-```
-
-apenas prova que a release não atingiu as condições esperadas dentro do prazo.
-
-É necessário investigar o cluster para descobrir porquê.
-
-> Não abrir imediatamente `values-broken.yaml` à procura da resposta. Primeiro diagnosticar através do estado observado.
+Neste exercício é esperado que a candidata não fique operacional dentro do tempo definido.
 
 ---
 
-# 3. Consultar o estado da release
+# 4. Observar o efeito do upgrade
+
+Depois da falha do comando, executar em conjunto:
 
 ```bash
 helm status symfony-lab -n s78-lab
 helm history symfony-lab -n s78-lab
-```
-
-### Conceitos
-
-`helm status` mostra o estado atual da release.
-
-`helm history` permite comparar a revisão anteriormente conhecida como boa com a nova candidata.
-
-Registar:
-
-```text
-revisão anterior
-revisão candidata
-STATUS da candidata
-DESCRIPTION
-```
-
-Uma revisão marcada como `failed` não implica que todos os recursos criados por essa revisão tenham desaparecido. O estado real do cluster deve ser observado com `kubectl`.
-
----
-
-# 4. Observar Deployment, Pods e endpoints
-
-```bash
 kubectl get deployment symfony-demo -n s78-lab
 kubectl get pods -n s78-lab -o wide
 kubectl get endpointslices -n s78-lab \
   -l kubernetes.io/service-name=symfony-demo \
   -o yaml
-```
-
-### O que observar
-
-No Deployment:
-
-```text
-READY
-UP-TO-DATE
-AVAILABLE
-```
-
-Nos Pods:
-
-```text
-Pod antigo vs Pod novo
-READY
-STATUS
-NODE
-```
-
-No EndpointSlice:
-
-```yaml
-conditions:
-  ready:
-  serving:
-```
-
-### Questão de análise
-
-A aplicação ficou totalmente indisponível ou a estratégia do Deployment preservou pelo menos uma réplica anterior utilizável?
-
-A resposta deve ser sustentada pelos endpoints, não apenas pelo número de Pods.
-
----
-
-# 5. Recolher Events
-
-```bash
 kubectl get events -n s78-lab --sort-by=.lastTimestamp
 ```
 
-### O que procurar
+## O que observar
 
-Events relacionados com:
+O formador conduz a leitura por esta ordem:
 
 ```text
-novo ReplicaSet
-criação do novo Pod
-scheduling
-arranque do container
-imagem
-probes
-back-off
+1. Qual é agora o estado da release?
+2. Foi criada uma nova revision?
+3. Quantas réplicas estão Ready?
+4. Existe uma réplica anterior ainda utilizável?
+5. Qual é o estado do novo Pod?
+6. O EndpointSlice exclui a réplica não pronta?
+7. Que Events explicam a falha?
 ```
-
-Os Events ajudam a reduzir o espaço de hipóteses.
 
 ---
 
-# 6. Inspecionar o novo Pod afetado
+# 5. Aprofundar o diagnóstico do novo Pod
 
-Identificar primeiro o Pod criado pela nova revisão:
+Identificar o novo Pod afetado e definir:
 
 ```bash
-kubectl get pods -n s78-lab -o wide
+POD=<NOVO_POD>
 ```
 
-Depois:
+Executar:
 
 ```bash
-kubectl describe pod <NOVO_POD> -n s78-lab
-```
-
-Se a hipótese justificar, inspecionar também campos concretos:
-
-```bash
-kubectl get pod <NOVO_POD> -n s78-lab \
+kubectl describe pod "$POD" -n s78-lab
+kubectl get pod "$POD" -n s78-lab \
   -o jsonpath='{.spec.containers[0].image}{"\n"}'
-
 kubectl get deployment symfony-demo -n s78-lab \
   -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 ```
 
-### Como interpretar
+## Como interpretar
 
 ```text
+kubectl describe pod
+→ mostra estado do container, razão da espera e Events associados
+
 jsonpath
-→ extrai diretamente um campo da representação devolvida pela API
+→ extrai apenas o campo pretendido do objeto devolvido pela API
+
+.spec.containers[0].image
+→ imagem configurada no primeiro container do Pod
+
+.spec.template.spec.containers[0].image
+→ imagem definida no Pod template do Deployment
 ```
 
-Comparar Pod e Deployment ajuda a provar se o problema está realmente no estado desejado atual da release.
+O formador orienta a turma a relacionar:
+
+```text
+estado do container
+        ↓
+Event persistente
+        ↓
+configuração realmente aplicada
+```
+
+Só depois se fecha a causa raiz.
 
 ---
 
-# 7. Formular a hipótese e provar a causa raiz
+# 6. Porque não corrigir com `kubectl edit`
 
-Registar:
+Neste exercício, o Deployment pertence à release Helm.
 
-```text
-Sintoma:
-
-Evidência:
-
-Hipótese:
-
-Teste:
-
-Causa raiz:
-```
-
-A causa raiz deve explicar simultaneamente:
+Uma alteração manual no objeto vivo criaria divergência entre:
 
 ```text
-porque a nova réplica falha
-porque o Helm atinge timeout
-porque a réplica anterior pode continuar disponível
+estado no cluster
+        ≠
+estado descrito pela release Helm
 ```
+
+Esta divergência é uma forma de **configuration drift**.
+
+Por isso, a recuperação deve ser feita através do mecanismo que gere a release.
 
 ---
 
-# 8. Escolher a revisão conhecida como boa
+# 7. Identificar a revisão boa e executar rollback
 
-Antes do rollback:
+Primeiro confirmar novamente o histórico:
 
 ```bash
 helm history symfony-lab -n s78-lab
 ```
 
-Não assumir que a revisão boa é sempre `1`.
-
-O critério é identificar a revisão que estava operacional **antes da candidata defeituosa**.
-
-Registar explicitamente:
+O formador pergunta:
 
 ```text
-REVISAO_BOA=<número>
+Qual era a última revision comprovadamente saudável?
+Que evidência temos de que estava saudável?
 ```
 
----
-
-# 9. Efetuar rollback
+Depois executar:
 
 ```bash
 helm rollback symfony-lab <REVISAO_BOA> \
@@ -377,39 +306,31 @@ helm rollback symfony-lab <REVISAO_BOA> \
   --timeout 3m
 ```
 
-### Como interpretar
+## Como interpretar
 
 ```text
-helm rollback symfony-lab <REVISAO_BOA>
-→ pede ao Helm que restaure o conteúdo de uma revisão anterior
+helm rollback
+→ cria uma nova revision cujo conteúdo deriva da revisão escolhida
+
+<REVISAO_BOA>
+→ número obtido do histórico, não um valor assumido previamente
 
 --wait
-→ aguarda condições de prontidão
+→ espera pela convergência dos recursos
 
 --timeout 3m
-→ limita o tempo de espera
-```
-
-### Conceito essencial
-
-O rollback não “volta atrás no número da revisão”. Em vez disso:
-
-```text
-revision antiga boa
-        ↓
-conteúdo reutilizado
-        ↓
-nova revision criada
-        ↓
-histórico preservado
+→ limita a espera a três minutos
 ```
 
 ---
 
-# 10. Validar a recuperação
+# 8. Validar a recuperação
+
+Executar:
 
 ```bash
 helm history symfony-lab -n s78-lab
+helm status symfony-lab -n s78-lab
 kubectl rollout status deployment/symfony-demo \
   -n s78-lab \
   --timeout=180s
@@ -420,84 +341,42 @@ kubectl get endpointslices -n s78-lab \
   -o yaml
 ```
 
-### O que observar
-
-A recuperação deve demonstrar:
+## O que a turma deve provar
 
 ```text
-nova revisão Helm → deployed
-Deployment        → 2/2 Ready
-Pods              → 2 × Ready
-Endpoints         → 2 × ready=true
+release atual       → deployed
+nova revision       → criada pelo rollback
+Deployment          → 2/2
+Pods                → 2 × Ready
+EndpointSlice       → 2 endpoints ready=true
 ```
 
 ---
 
-## Porque não usar `kubectl edit` neste exercício?
-
-Editar manualmente o Deployment poderia alterar o estado do cluster, mas criaria divergência entre:
-
-```text
-estado gerido pelo Helm
-        ≠
-estado alterado manualmente
-```
-
-Isto é **configuration drift**.
-
-Num fluxo gerido por Helm, a correção deve ser realizada através do mecanismo que é fonte de verdade da release:
-
-```text
-nova release corrigida
-        ou
-helm rollback
-```
-
-Neste exercício pratica-se deliberadamente o rollback.
-
----
-
-## Registo do incidente
+# 9. Registo na folha de evidências
 
 | Campo | Registo |
 |---|---|
 | Revisão boa inicial | |
 | Revisão candidata | |
-| Estado Helm da candidata | |
-| Estado da réplica anterior | |
-| Estado da nova réplica | |
-| Endpoints ainda disponíveis | |
-| Sintoma | |
+| Sintoma observado | |
 | Evidência principal | |
-| Hipótese | |
-| Teste | |
+| Estado da réplica anterior | |
+| Estado do novo Pod | |
+| Hipótese formulada | |
+| Teste utilizado | |
 | Causa raiz | |
 | Revisão escolhida para rollback | |
-| Nova revisão criada pelo rollback | |
-| Estado após rollback | |
-| Endpoints após rollback | |
+| Nova revisão criada | |
+| Evidência final | |
 
----
-
-## CHECKPOINT — Incidente 4 concluído
-
-Não avançar enquanto não for possível demonstrar:
+## Síntese a consolidar
 
 ```text
-release candidata falhou
-causa raiz identificada por evidência
-revisão boa identificada
-rollback executado
-nova revisão Helm deployed
-Deployment 2/2
-2 endpoints ready=true
-```
-
-E explicar:
-
-```text
-Helm mantém histórico de revisions
-rollback restaura conteúdo anterior
+Helm mantém histórico da release
+upgrade pode falhar sem apagar a revisão anterior
+rollback não apaga o incidente
 rollback cria uma nova revision
-edição manual criaria drift
+editar manualmente recursos geridos por Helm cria drift
+recuperação só termina depois de validada
 ```
