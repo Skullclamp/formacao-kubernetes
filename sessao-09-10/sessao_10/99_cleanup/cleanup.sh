@@ -21,7 +21,7 @@ kubectl -n "$NS" delete networkpolicy symfony-demo-ingress --ignore-not-found
 echo
 echo "== Remover Pods e workloads auxiliares =="
 kubectl -n "$NS" delete pod hpa-load client-allowed client-blocked obs-client \
-  --ignore-not-found --wait=false
+  --ignore-not-found --wait=true --timeout=60s
 kubectl -n "$NS" delete deployment symfony-troubleshoot --ignore-not-found
 kubectl -n "$NS" delete service symfony-troubleshoot --ignore-not-found
 
