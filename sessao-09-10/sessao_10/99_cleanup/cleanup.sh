@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-NS="${NS:-s10-validacao}"
+
+NS="${NS:-$(kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null)}"
+if [ -z "$NS" ]; then
+  echo "ERRO: namespace não definido em \$NS nem no contexto kubectl atual."
+  exit 1
+fi
 
 echo "Namespace alvo: $NS"
 echo "Este script remove apenas recursos temporários do laboratório, não o PostgreSQL/Symfony principal."
