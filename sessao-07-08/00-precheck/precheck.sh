@@ -10,7 +10,12 @@ err()  { printf 'ERRO %s\n' "$1"; fail=1; }
 
 command -v git >/dev/null 2>&1 && ok 'git disponível' || err 'git não encontrado'
 command -v kubectl >/dev/null 2>&1 && ok 'kubectl disponível' || err 'kubectl não encontrado'
-command -v helm >/dev/null 2>&1 && ok 'Helm disponível' || err 'Helm não encontrado'
+if command -v helm >/dev/null 2>&1; then
+  ok 'Helm disponível'
+else
+  err 'Helm não encontrado'
+  printf '     Instalar/validar com: bash 00-precheck/install-helm.sh\n'
+fi
 
 if command -v kubectl >/dev/null 2>&1; then
   if kubectl cluster-info >/dev/null 2>&1; then
