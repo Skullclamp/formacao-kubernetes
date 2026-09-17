@@ -13,18 +13,72 @@ No ensaio de 16/09/2026 foram observados:
 - PostgreSQL 16;
 - Metrics Server funcional após correção de preparação do laboratório.
 
+Na revalidação posterior, o Calico foi confirmado com o DaemonSet `calico-node` no namespace `calico-system`, instalado através do ecossistema Tigera. O DaemonSet estava totalmente convergido nos três nós.
+
 Estes dados descrevem o **cluster de ensaio** e não devem ser assumidos noutro ambiente sem confirmação.
 
 ## Checklist antes da aula
+
+Executar primeiro o precheck principal:
+
+```bash
+cd ~/formacao-kubernetes/sessao-09-10/sessao_10
+
+bash 00_precheck/precheck.sh
+```
+
+O precheck deve terminar com:
+
+```text
+PRECHECK PRINCIPAL: OK
+```
+
+Como verificação complementar:
 
 ```bash
 kubectl get nodes -o wide
 kubectl get storageclass
 kubectl get ingressclass
-kubectl -n kube-system get pods
 kubectl get apiservice v1beta1.metrics.k8s.io
 kubectl top nodes
 kubectl top pods -A
+```
+
+### Confirmar o CNI / Calico
+
+Não assumir que o Calico está em `kube-system`. No cluster validado, os componentes estão em `calico-system`.
+
+Para localizar o DaemonSet:
+
+```bash
+kubectl get daemonsets -A \
+  | grep -i calico || true
+```
+
+Depois confirmar o estado do `calico-node` no namespace observado:
+
+```bash
+kubectl -n calico-system get daemonset calico-node -o wide
+```
+
+No cluster validado foi observado:
+
+```text
+DESIRED     3
+CURRENT     3
+READY       3
+UP-TO-DATE  3
+AVAILABLE   3
+```
+
+A conclusão só é sustentada quando o número de instâncias `Ready` e `Available` coincide com o número `Desired`.
+
+Mensagem-chave:
+
+```text
+comando executado com sucesso
+≠
+componente efetivamente encontrado e saudável
 ```
 
 Confirmar ainda:
