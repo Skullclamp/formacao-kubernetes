@@ -120,6 +120,19 @@ PRECHECK PRINCIPAL: OK
 EXIT_CODE=0
 ```
 
+### IngressClass — exemplo opcional validado
+
+O Ingress da Sessão 9 é opcional e usa `ingressClassName: traefik`. O precheck foi reforçado para confirmar a classe e o respetivo controller sem bloquear o percurso principal via Service.
+
+A reexecução confirmou:
+
+```text
+IngressClass traefik: controller=traefik.io/ingress-controller
+IngressClass traefik: configuração coerente com o exemplo opcional.
+PRECHECK PRINCIPAL: OK
+EXIT_CODE=0
+```
+
 ### Metrics Server
 
 O Metrics Server não estava inicialmente funcional porque os certificados de serving dos kubelets não continham os IPs nos SANs. No laboratório foi utilizado `--kubelet-insecure-tls` como **workaround exclusivo de ambiente de formação**. Em produção deve corrigir-se a cadeia/certificados dos kubelets, não normalizar este bypass.
