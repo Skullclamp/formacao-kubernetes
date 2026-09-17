@@ -16,6 +16,7 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 | Metrics Server | ✅ | `kubectl top` funcional após preparação do cluster |
 | Precheck de nodes | ✅ | 3 nodes encontrados; `Ready=True` nos três; precheck reforçado terminou com `PRECHECK PRINCIPAL: OK` e `EXIT_CODE=0` |
 | Precheck da StorageClass | ✅ | `local-path` com provisioner `rancher.io/local-path`, `Delete` e `WaitForFirstConsumer`; expansão não ativada; precheck terminou com `EXIT_CODE=0` |
+| Precheck da IngressClass | ✅ | `traefik` presente com controller `traefik.io/ingress-controller`; coerente com o exemplo opcional; precheck terminou com `EXIT_CODE=0` |
 | HPA scale-out | ✅ | 2 → 4 → 5 réplicas com CPU acima do target; gerador revalidado com preflight HTTP ao `/health` antes de declarar carga ativa |
 | HPA scale-in | ✅ | 5 → 2 após estabilização; `minReplicas=2` respeitado |
 | Troubleshooting | ✅ | Pod `Running` mas `NotReady`; readiness 404; recuperação após correção |
@@ -102,6 +103,19 @@ A reexecução confirmou:
 ```text
 StorageClass: provisioner=rancher.io/local-path reclaimPolicy=Delete volumeBindingMode=WaitForFirstConsumer allowVolumeExpansion=false
 StorageClass local-path: configuração validada.
+PRECHECK PRINCIPAL: OK
+EXIT_CODE=0
+```
+
+### IngressClass — validar o exemplo opcional sem bloquear o percurso principal
+
+O Ingress da Sessão 9 é opcional e usa `ingressClassName: traefik`. O precheck foi reforçado para confirmar o nome da classe e o controller associado, sem transformar a ausência/mudança da IngressClass numa falha do percurso principal via Service.
+
+A reexecução confirmou:
+
+```text
+IngressClass traefik: controller=traefik.io/ingress-controller
+IngressClass traefik: configuração coerente com o exemplo opcional.
 PRECHECK PRINCIPAL: OK
 EXIT_CODE=0
 ```
