@@ -2,12 +2,14 @@
 
 O laboratório principal é [`laboratorio_integrado_sessao_3.md`](laboratorio_integrado_sessao_3.md).
 
-A Sessão 3 foi mantida como uma história técnica contínua porque acompanha o mesmo artefacto desde o código até ao deployment/rollback. A sua leitura deve, contudo, seguir o **mesmo padrão pedagógico da Sessão 4**:
+A Sessão 3 é mantida como uma história técnica contínua porque acompanha o mesmo artefacto desde o código até ao deployment e rollback. A sua leitura deve seguir o **mesmo padrão pedagógico da Sessão 4**:
 
 ```text
 OBJETIVO / O QUE ESTAMOS A FAZER
         ↓
 PORQUE É NECESSÁRIO
+        ↓
+CONCEITOS ABORDADOS NESTE CP
         ↓
 COMANDO / FICHEIRO
         ↓
@@ -24,25 +26,27 @@ CHECKPOINT — NÃO AVANÇAR SEM VALIDAR
 EVIDÊNCIA
 ```
 
-## Mapa de checkpoints
+## Mapa de checkpoints e conceitos
 
-| Checkpoint | Secção do laboratório | Evidência principal |
-|---|---|---|
-| CP1 | Preparar VM / Docker | Engine, Compose e Buildx operacionais |
-| CP2 | Instalar Trivy | versão do scanner disponível |
-| CP3 | Obter/preparar Symfony | source e endpoints pedagógicos presentes |
-| CP4 | Primeira imagem | build concluído, assets presentes, HTTP funcional |
-| CP5 | Cache e multi-stage | cache observável e runtime com assets compilados |
-| CP6 | Hardening e secrets | segredo não persistido na imagem final |
-| CP7 | HEALTHCHECK e controlos | healthcheck + recursos + restart/logging interpretados |
-| CP8 | Scan | findings interpretados sem depender de contagem fixa |
-| CP9 | Tag, digest e registry | artefacto identificado e promoção compreendida |
-| CP10 | Deployment 1.0.0 | app + PostgreSQL operacionais |
-| CP11 | Validação | `/health`, `/ready`, `/info`, health Docker e assets |
-| CP12 | Persistência/backup | marcador persistente + `backup.sql` não vazio |
-| CP13 | Update 1.1.0 | versão e imagem corretas + dados preservados |
-| CP14 | Falha 1.2.0-rc1 | `/health=200`, `/healthz=404`, container unhealthy |
-| CP15 | Rollback 1.1.0 | versão saudável recuperada + dados preservados |
+| CP | Secção do laboratório | Conceitos que estão a ser trabalhados | Evidência principal |
+|---:|---|---|---|
+| **CP1** | Preparar VM / Docker | Docker CLI, Engine, `containerd`, `runc`, Buildx, Compose, permissões do grupo `docker` | Engine, Compose e Buildx operacionais |
+| **CP2** | Instalar Trivy | scanner de vulnerabilidades, base de vulnerabilidades, ferramenta vs. artefacto analisado | versão do Trivy disponível |
+| **CP3** | Obter/preparar Symfony | Git, source reproduzível, versão da aplicação, endpoints pedagógicos | source e endpoints presentes |
+| **CP4** | Primeira imagem | Dockerfile, build context, `.dockerignore`, layers, tag, assets de runtime, port publishing | build concluído, assets presentes e HTTP funcional |
+| **CP5** | Cache e multi-stage | cache de build, invalidation, build stage, runtime stage, `COPY --from`, separação build/runtime | cache observável e runtime com assets compilados |
+| **CP6** | Hardening e secrets | superfície de ataque, menor privilégio, build secret, runtime secret, risco de `ARG`/`ENV` | segredo não persistido indevidamente na imagem final |
+| **CP7** | HEALTHCHECK e controlos | saúde vs. prontidão, Docker `HEALTHCHECK`, limites CPU/memória, restart policy, logging | healthcheck e controlos interpretados |
+| **CP8** | Scan | vulnerabilidade conhecida, severidade, findings, quality gate por exit code | findings interpretados sem depender de contagem fixa |
+| **CP9** | Tag, digest e registry | SemVer, tag mutável, digest imutável, registry, promoção do mesmo artefacto | artefacto identificado e promoção compreendida |
+| **CP10** | Deployment 1.0.0 | Compose multi-container, rede, volume, dependência de DB, configuração de produção single-host | aplicação e PostgreSQL operacionais |
+| **CP11** | Validação | `/health`, `/ready`, `/info`, health do Docker, validação funcional do browser | estado operacional comprovado em várias camadas |
+| **CP12** | Persistência/backup | named volume, persistência ≠ backup, `pg_dump`, evidência de dados | marcador persistente e `backup.sql` não vazio |
+| **CP13** | Update 1.1.0 | atualização de versão, substituição do container, preservação de dados, promoção | versão e imagem corretas com dados preservados |
+| **CP14** | Falha 1.2.0-rc1 | falha controlada, healthcheck incorreto, processo ativo ≠ aplicação saudável | `/health=200`, `/healthz=404`, container `unhealthy` |
+| **CP15** | Rollback 1.1.0 | diagnóstico antes de rollback, recuperação de versão conhecida, continuidade dos dados | versão saudável recuperada e dados preservados |
+
+Este mapa não substitui a explicação detalhada existente no laboratório; torna explícito **que conceito do percurso Docker II está a ser comprovado em cada CP**.
 
 ## Regra para comandos
 
@@ -50,7 +54,7 @@ Não copiar apenas o comando. Sempre que surgir sintaxe nova, responder:
 
 ```text
 Que programa estou a usar?
-Que objeto estou a alterar/consultar?
+Que objeto estou a alterar ou consultar?
 Que flags mudam o comportamento?
 Que output prova o resultado?
 ```
