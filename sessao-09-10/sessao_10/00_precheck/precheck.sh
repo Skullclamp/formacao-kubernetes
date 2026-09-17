@@ -58,7 +58,20 @@ fi
 echo
 
 echo "== IngressClass =="
-kubectl get ingressclass || echo "AVISO: sem IngressClass; o laboratório principal pode continuar via Service."
+if kubectl get ingressclass traefik >/dev/null 2>&1; then
+  INGRESS_CONTROLLER="$(kubectl get ingressclass traefik -o jsonpath='{.spec.controller}')"
+  printf 'IngressClass traefik: controller=%s\n' "$INGRESS_CONTROLLER"
+
+  if [ "$INGRESS_CONTROLLER" = "traefik.io/ingress-controller" ]; then
+    echo "IngressClass traefik: configuração coerente com o exemplo opcional."
+  else
+    echo "AVISO: IngressClass 'traefik' existe, mas usa controller '$INGRESS_CONTROLLER'."
+    echo "Adaptar baseline/06-ingress.example.yaml se o Ingress opcional for utilizado."
+  fi
+else
+  echo "AVISO: IngressClass 'traefik' não encontrada; o laboratório principal pode continuar via Service."
+  echo "Adaptar baseline/06-ingress.example.yaml se o Ingress opcional for utilizado."
+fi
 echo
 
 echo "== CNI / Calico =="
