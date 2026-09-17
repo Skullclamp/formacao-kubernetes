@@ -103,12 +103,19 @@ Ambiente de referência:
 
 A aplicação usa o Namespace `s78-lab`. O `PrometheusRule` pedagógico é criado no Namespace `monitoring`, embora a expressão PromQL observe o Deployment em `s78-lab`.
 
-## Pré-requisito — instalar Helm
+## Preparação principal do laboratório — instalar Helm e monitorização
 
-No Control Plane, antes de preparar o chart de monitorização:
+No **Control Plane**, antes de executar o laboratório, atualizar primeiro os materiais:
 
 ```bash
-cd ~/formacao-kubernetes/sessao-07-08
+cd ~/formacao-kubernetes
+git pull --ff-only origin main
+cd sessao-07-08
+```
+
+### 1. Instalar Helm
+
+```bash
 chmod +x 00-precheck/install-helm.sh
 ./00-precheck/install-helm.sh
 ```
@@ -120,15 +127,44 @@ helm version --short
 helm upgrade --help | grep -- '--take-ownership'
 ```
 
-O instalador foi preparado para Ubuntu/Debian e configura o repositório APT usado nas instruções atuais do projeto Helm. O `precheck.sh` e o `prepare-chart.sh` indicam este passo quando o binário `helm` não está disponível.
+O instalador foi preparado para Ubuntu/Debian. O `precheck.sh` e o `prepare-chart.sh` também indicam este passo quando o binário `helm` não está disponível.
 
-Depois da instalação do Helm, a preparação da monitorização pode continuar com:
+### 2. Preparar o chart de monitorização
 
 ```bash
+chmod +x monitoring/prepare-chart.sh
 ./monitoring/prepare-chart.sh 91.4.1
 ```
 
-Para diagnóstico detalhado da monitorização, consultar [`monitoring/TROUBLESHOOTING.md`](monitoring/TROUBLESHOOTING.md).
+Confirmar que o pacote existe:
+
+```bash
+ls -lh packages/kube-prometheus-stack-91.4.1.tgz
+```
+
+### 3. Instalar a stack de monitorização
+
+```bash
+helm upgrade --install monitoring \
+  packages/kube-prometheus-stack-91.4.1.tgz \
+  --namespace monitoring \
+  --create-namespace \
+  -f monitoring/values-lab.yaml \
+  --wait \
+  --timeout 10m
+```
+
+### 4. Validar a instalação
+
+```bash
+helm status monitoring -n monitoring
+kubectl get pods -n monitoring
+kubectl get crd prometheusrules.monitoring.coreos.com
+```
+
+A preparação só está concluída quando a release `monitoring` estiver em estado `deployed`, os Pods necessários estiverem operacionais e a CRD `prometheusrules.monitoring.coreos.com` estiver disponível.
+
+Para diagnóstico detalhado, consultar [`monitoring/TROUBLESHOOTING.md`](monitoring/TROUBLESHOOTING.md).
 
 ## Estrutura dos materiais
 
