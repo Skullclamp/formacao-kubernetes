@@ -232,6 +232,27 @@ Este ponto continua dependente da configuração real do Ingress Controller e da
 
 ## Validação estática da versão final
 
+### Revalidação estática final — scripts shell
+
+Após as correções finais, foi repetido `bash -n` sobre todos os scripts `.sh` de `sessao-09-10`, com árvore Git limpa antes da verificação.
+
+Resultado observado:
+
+```text
+git status --short → sem alterações locais
+
+OK  sessao-09-10/sessao_10/00_precheck/precheck.sh
+OK  sessao-09-10/sessao_10/00_precheck/validar-baseline.sh
+OK  sessao-09-10/sessao_10/99_cleanup/cleanup.sh
+OK  sessao-09-10/sessao_10/05_networkpolicy/testar-depois.sh
+OK  sessao-09-10/sessao_10/05_networkpolicy/testar-antes.sh
+OK  sessao-09-10/sessao_10/02_hpa/parar-carga.sh
+OK  sessao-09-10/sessao_10/02_hpa/gerar-carga.sh
+```
+
+Não foram observados erros de sintaxe shell.
+
+
 Após a consolidação inicial foi executada uma bateria estática sobre o pacote:
 
 - parsing de todos os YAML que não contêm templates Helm;
