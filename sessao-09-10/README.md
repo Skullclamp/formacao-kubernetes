@@ -6,7 +6,9 @@ Pacote de recursos de apoio para as duas sessões finais da Parte II — Kuberne
 
 Esta versão incorpora as correções resultantes do **ensaio real no cluster de formação** realizado em 16/09/2026. Foram validados em runtime o baseline PostgreSQL/Symfony, resources/probes, HPA, troubleshooting, ServiceAccount/SecurityContext, NetworkPolicy e o cenário de release defeituosa com rollback.
 
-As micropráticas de **Kustomize e Helm** permanecem como exercícios curtos de M6; os respetivos ficheiros foram verificados estaticamente, mas não fizeram parte do ensaio runtime final descrito em `VALIDACAO.md`.
+As micropráticas de **Kustomize e Helm** foram posteriormente **revalidadas também em runtime** no cluster de formação. A validação confirmou a renderização e aplicação Kustomize DEV, as diferenças DEV/PROD, labels/selectors e EndpointSlice, bem como `helm lint`, `helm template`, instalação da release, estado/histórico, objetos criados, EndpointSlice e remoção da release sem afetar a baseline original.
+
+Consultar `VALIDACAO.md` para a evidência consolidada e particularidades observadas.
 
 ## Organização
 
@@ -135,13 +137,53 @@ A componente final fica dividida em dois momentos:
 1. **30 min — Micropráticas M6:** Kustomize e Helm (`MICROPRATICAS_M6.md`).
 2. **80 min — Laboratório integrado acompanhado:** baseline → resources/probes → HPA → segurança → NetworkPolicy → release defeituosa → diagnóstico → rollback.
 
-No laboratório integrado, cada bloco identifica explicitamente:
+No laboratório integrado e nas micropráticas, cada bloco identifica explicitamente:
 
 - onde olhar no output;
 - os campos relevantes;
 - o valor esperado;
 - a comparação antes/depois;
 - a conclusão que a evidência permite retirar.
+
+### Ponto pedagógico importante no Kustomize
+
+No cenário atual:
+
+```text
+metadata.name → recebe -dev / -prod
+label app     → mantém app=symfony-demo-kustomize
+```
+
+Por isso, depois de aplicar DEV, o Pod deve ser procurado com:
+
+```bash
+kubectl -n "$NS" get pods \
+  -l app=symfony-demo-kustomize
+```
+
+O `nameSuffix` não deve ser confundido com uma transformação automática de todas as labels.
+
+### Ponto pedagógico importante no Helm
+
+A validação de uma release não termina em:
+
+```text
+STATUS: deployed
+```
+
+O percurso pede também:
+
+```text
+Deployment Ready
++
+Pod Running/Ready
++
+Service selector coerente
++
+EndpointSlice ready=true
+```
+
+Isto mantém a mesma regra usada nos restantes laboratórios: **o objeto existir não é, por si só, prova de serviço funcional**.
 
 O cenário `03_observabilidade_opcional/` foi validado em runtime e pode ser utilizado como exercício adicional/alternativo. Não é contabilizado nos 80 minutos do percurso principal, porque o troubleshooting é trabalhado explicitamente no cenário de release/rollback.
 
@@ -150,8 +192,16 @@ O cenário `03_observabilidade_opcional/` foi validado em runtime e pode ser uti
 Executar primeiro:
 
 ```bash
-cd sessao-09-10/sessao_10
+cd ~/formacao-kubernetes/sessao-09-10/sessao_10
+
+export NS="$(kubectl config view --minify \
+  -o jsonpath='{..namespace}')"
+
+printf 'PWD=%s\nNS=%s\n' "$PWD" "$NS"
+
 bash 00_precheck/precheck.sh
 ```
+
+> Se o repositório estiver clonado noutro caminho, adaptar o `cd`. O importante é executar os caminhos relativos a partir de `sessao_10/`.
 
 Consultar também `formador/PREPARACAO_CLUSTER.md`. O HPA só deve ser executado quando `kubectl top` estiver funcional, e a NetworkPolicy só deve ser considerada validada após teste positivo **e** negativo.
