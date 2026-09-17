@@ -2,7 +2,7 @@
 
 Este documento complementa a preparação do laboratório integrado das Sessões 7 e 8.
 
-O objetivo é diagnosticar de forma estruturada erros durante a preparação do chart `kube-prometheus-stack` e durante a instalação da release Helm `monitoring`.
+O objetivo é diagnosticar de forma estruturada erros durante a instalação do Helm, a preparação do chart `kube-prometheus-stack` e a instalação da release Helm `monitoring`.
 
 > Regra operacional: **primeiro observar; só depois alterar**.
 
@@ -20,13 +20,42 @@ cd sessao-07-08
 
 ---
 
-## 2. Confirmar a versão do Helm
+## 2. Instalar e validar o Helm
+
+Antes de executar `prepare-chart.sh`, confirmar:
 
 ```bash
+command -v helm
 helm version --short
 ```
 
-Se o comando falhar, corrigir primeiro a instalação ou o `PATH` do Helm.
+Se o Helm ainda não estiver instalado, utilizar o instalador incluído no laboratório:
+
+```bash
+cd ~/formacao-kubernetes/sessao-07-08
+chmod +x 00-precheck/install-helm.sh
+./00-precheck/install-helm.sh
+```
+
+O script destina-se ao ambiente Ubuntu/Debian da formação e:
+
+1. instala os pré-requisitos APT necessários;
+2. configura o repositório APT atualmente documentado pelo projeto Helm;
+3. valida a fingerprint da chave do repositório antes de a instalar;
+4. instala o pacote `helm`;
+5. mostra a versão instalada;
+6. confirma que a versão suporta `--take-ownership`, utilizado posteriormente no laboratório.
+
+Validação manual:
+
+```bash
+helm version --short
+helm upgrade --help | grep -- '--take-ownership'
+```
+
+Só avançar quando ambos os comandos produzirem resultado válido.
+
+> Não é suficiente existir um binário chamado `helm`; o laboratório requer uma versão que suporte as operações utilizadas no guião, incluindo `--take-ownership`.
 
 ---
 
