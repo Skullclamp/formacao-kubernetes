@@ -551,16 +551,33 @@ na porta TCP 80.
 
 ## 1. Criar clientes e validar o ANTES
 
+Para tornar a experiência repetível, remover primeiro uma policy ou clientes deixados por uma execução anterior:
+
 ```bash
+kubectl -n "$NS" delete networkpolicy symfony-demo-ingress --ignore-not-found
+kubectl -n "$NS" delete -f 05_networkpolicy/clientes.yaml --ignore-not-found
+
 kubectl -n "$NS" apply -f 05_networkpolicy/clientes.yaml
 kubectl -n "$NS" wait --for=condition=Ready pod/client-allowed --timeout=60s
 kubectl -n "$NS" wait --for=condition=Ready pod/client-blocked --timeout=60s
+
+kubectl -n "$NS" get pods client-allowed client-blocked --show-labels
 ./05_networkpolicy/testar-antes.sh
 ```
 
+Os clientes usam um `sleep` de 24 horas para evitar que terminem durante uma sessão longa. Mesmo assim, o script valida explicitamente que ambos estão `Running` e `Ready` antes de testar a rede.
+
 ### Onde olhar
 
-Antes da policy, o script deve mostrar que **ambos** conseguem chegar a `/health`:
+Antes da policy, confirmar primeiro:
+
+```text
+client-allowed → Running / Ready / access=symfony-demo
+client-blocked → Running / Ready / access=blocked
+NetworkPolicy symfony-demo-ingress → ausente
+```
+
+Depois, o script deve mostrar que **ambos** conseguem chegar ao mesmo endpoint `/health`:
 
 ```text
 client-allowed -> resposta válida
@@ -584,32 +601,56 @@ kubectl -n "$NS" apply -f 05_networkpolicy/networkpolicy.yaml
 
 ### Onde olhar depois
 
+O script confirma primeiro as precondições e a própria policy:
+
+```text
+client-allowed → Running / Ready / access=symfony-demo
+client-blocked → Running / Ready / access=blocked
+policy → app=symfony-demo / allowedAccess=symfony-demo / port=80
+```
+
+Depois usa **o mesmo Service, a mesma porta e o mesmo endpoint `/health`** nos dois clientes.
+
 Esperado:
 
 ```text
-client-allowed -> responde
-OK: client-blocked foi bloqueado pela NetworkPolicy.
+client-allowed → responde
+client-blocked → wget: download timed out
 ```
 
-O cliente bloqueado deverá falhar por timeout.
+Uma falha genérica do comando não é suficiente. Se o Pod estiver terminado, o `kubectl exec` falhar, o DNS falhar ou surgir outro erro, o script **não** declara a NetworkPolicy validada.
 
 ### Comparação que prova a policy
 
 ```text
 ANTES
-allowed → funciona
-blocked → funciona
+allowed → /health funciona
+blocked → /health funciona
 
 DEPOIS
-allowed → funciona
-blocked → timeout
+allowed → /health funciona
+blocked → /health termina por timeout
 ```
 
 ### O que concluir
 
-A evidência de uma NetworkPolicy não é apenas o objeto existir. É necessário provar **tráfego permitido + tráfego bloqueado**.
+A evidência de uma NetworkPolicy não é apenas o objeto existir nem apenas existir um comando com exit code diferente de zero. Neste cenário, a conclusão é sustentada pela combinação:
 
-**Checkpoint:** `client-allowed` funciona; `client-blocked` falha; Symfony continua disponível.
+```text
+ambos os clientes Running/Ready
+        +
+labels confirmadas
+        +
+mesmo destino /health
+        +
+cliente permitido responde
+        +
+cliente bloqueado termina por timeout
+        ↓
+resultado coerente com a NetworkPolicy aplicada
+```
+
+**Checkpoint:** `client-allowed` funciona; `client-blocked` falha por timeout; Symfony continua disponível.
 
 ---
 
