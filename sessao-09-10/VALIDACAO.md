@@ -14,7 +14,7 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 | Symfony estável | ✅ | Deployment 2/2, imagem `1.1.0`, `/health`, `/ready` e `/info` funcionais |
 | Resources/probes | ✅ | requests/limits aplicados; liveness `/health`; readiness `/ready` |
 | Metrics Server | ✅ | `kubectl top` funcional após preparação do cluster |
-| HPA scale-out | ✅ | 2 → 4 → 5 réplicas com CPU acima do target |
+| HPA scale-out | ✅ | 2 → 4 → 5 réplicas com CPU acima do target; gerador revalidado com preflight HTTP ao `/health` antes de declarar carga ativa |
 | HPA scale-in | ✅ | 5 → 2 após estabilização; `minReplicas=2` respeitado |
 | Troubleshooting | ✅ | Pod `Running` mas `NotReady`; readiness 404; recuperação após correção |
 | ServiceAccount/SecurityContext | ✅ | SA dedicada; token não montado; `RuntimeDefault`; `allowPrivilegeEscalation=false` |
@@ -38,6 +38,7 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 - probes testadas: `/health` e `/ready`;
 - HPA `autoscaling/v2`, target CPU 50%, min 2, max 5;
 - gerador de carga HPA dividido em `gerar-carga.sh` e `parar-carga.sh`;
+- o gerador de carga passou a exigir HPA presente, Pod `hpa-load` Ready e preflight HTTP a `/health` antes de declarar a carga ativa; o stop remove o Pod e a ausência foi confirmada por `NotFound`;
 - removido o watch multi-recurso que falhou no cliente utilizado; o guião usa observação separada de HPA e Pods;
 - cenário opcional de observabilidade preservado como recurso, mas retirado do percurso principal de 80 min;
 - ServiceAccount é criada **antes** do patch de SecurityContext;
@@ -63,6 +64,21 @@ O Metrics Server não estava inicialmente funcional porque os certificados de se
 ### Relógio / Events
 
 Foram observados Events com `AGE <invalid>`. O cluster também apresentava sincronização temporal incompleta. Antes da formação deve ser verificado e corrigido o serviço NTP efetivamente instalado, sem assumir `systemd-timesyncd` ou outro daemon específico.
+
+### Gerador de carga HPA — processo ativo não basta
+
+Na revisão final, o gerador foi reforçado para não concluir `Carga ativa` apenas porque o Pod `hpa-load` ficou `Running/Ready`.
+
+A revalidação confirmou:
+
+```text
+hpa-load criado
+hpa-load Ready
+Preflight HTTP: OK
+Carga ativa e conectividade ao endpoint confirmada.
+```
+
+Após `parar-carga.sh`, o Pod `hpa-load` foi removido e a consulta devolveu `NotFound`.
 
 ### HPA durante rollouts
 
