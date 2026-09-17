@@ -224,6 +224,7 @@ No YAML renderizado, procurar:
 ```text
 kind: Deployment
 kind: Service
+name: symfony-demo-helm
 image: ghcr.io/skullclamp/symfony-demo:1.1.0
 ```
 
@@ -285,19 +286,51 @@ Numa primeira instalação é esperado existir uma revisão inicial. Operações
 
 ## 3.4 Confirmar os objetos no cluster
 
+Neste Chart, o nome do Deployment e do Service é o próprio nome da release.
+
 ```bash
-kubectl -n "$NS" get deployment,service \
-  -l app.kubernetes.io/instance=symfony-demo-helm
+kubectl -n "$NS" get deployment symfony-demo-helm
+kubectl -n "$NS" get service symfony-demo-helm
 ```
 
-Se o Chart usar essa label de release, deverão aparecer os objetos associados. Se não aparecerem, usar `helm status` para identificar os nomes gerados e consultá-los diretamente.
+### Onde olhar
+
+No Deployment:
+
+```text
+READY → 1/1
+```
+
+No Service:
+
+```text
+PORT(S) → 80/TCP
+```
+
+Confirmar também a imagem e o selector:
+
+```bash
+kubectl -n "$NS" get deployment symfony-demo-helm \
+  -o jsonpath='image={.spec.template.spec.containers[0].image}{" replicas="}{.spec.replicas}{"\n"}'
+
+kubectl -n "$NS" get service symfony-demo-helm \
+  -o jsonpath='selector.app={.spec.selector.app}{"\n"}'
+```
+
+Esperado:
+
+```text
+image=ghcr.io/skullclamp/symfony-demo:1.1.0 replicas=1
+selector.app=symfony-demo-helm
+```
 
 ### Comparação importante
 
 ```text
-helm template → YAML local, sem release
+helm template          → YAML local, sem release
 helm upgrade --install → release persistida no cluster
-helm status/history → estado e histórico da release
+helm status/history    → estado e histórico da release
+kubectl get            → objetos concretos criados pela release
 ```
 
 ## 3.5 Remover
