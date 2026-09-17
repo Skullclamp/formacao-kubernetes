@@ -9,6 +9,8 @@ fi
 
 command -v helm >/dev/null 2>&1 || {
   echo "ERRO: Helm não encontrado no PATH."
+  echo "Instalar/validar primeiro com:"
+  echo "  bash 00-precheck/install-helm.sh"
   exit 1
 }
 
