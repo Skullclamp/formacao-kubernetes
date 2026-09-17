@@ -22,6 +22,7 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 | Release candidata | ✅ | `1.2.0-rc1` + readiness inválida criou nova revisão não Ready |
 | Disponibilidade durante falha | ✅ | versão estável continuou a responder pelo Service |
 | Rollback | ✅ | `rollout undo` restaurou `1.1.0`, `/ready` e Deployment 2/2 |
+| Cleanup Sessão 10 | ✅ | HPA e NetworkPolicy removidos; Pods auxiliares removidos; Symfony reposto e confirmado em 2/2; PostgreSQL preservado em 1/1 |
 | Kustomize M6 | ✅ | DEV/PROD renderizados; diferenças de `APP_ENV`, réplicas, CPU request e nomes confirmadas; DEV aplicado com 1 réplica, `APP_ENV=dev`, CPU 50m; EndpointSlice `ready=true`/`serving=true`; cleanup sem afetar a baseline |
 | Helm M6 | ✅ | `helm lint` sem falhas; Chart renderizado; release `symfony-demo-helm` instalada em revisão 1 `deployed`; Deployment 1/1, Service 80/TCP, imagem `1.1.0`, EndpointSlice `ready=true`/`serving=true`; uninstall removeu a release e preservou a baseline |
 
@@ -53,7 +54,8 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 - Helm passou a usar `helm lint`, `--wait` e `--timeout 120s`, seguido de validação de Deployment, Service, Pod e EndpointSlice;
 - Kustomize passou a distinguir explicitamente **nome do recurso** de **label**: `nameSuffix: -dev` altera `metadata.name`, mas a label `app=symfony-demo-kustomize` mantém-se neste cenário;
 - o selector correto para localizar o Pod Kustomize DEV é `-l app=symfony-demo-kustomize`, e não `-l app=symfony-demo-kustomize-dev`;
-- os cleanups de Helm e Kustomize confirmam a remoção dos objetos temporários e a preservação da baseline `symfony-demo` em 2/2.
+- os cleanups de Helm e Kustomize confirmam a remoção dos objetos temporários e a preservação da baseline `symfony-demo` em 2/2;
+- o cleanup final da Sessão 10 remove HPA, NetworkPolicy e Pods/workloads auxiliares, espera pela remoção efetiva dos Pods, repõe explicitamente o Symfony em 2 réplicas e valida Symfony 2/2 e PostgreSQL 1/1.
 
 ## Particularidades observadas no cluster de ensaio
 
@@ -96,6 +98,23 @@ client-blocked → 1/1 Running → access=blocked       → /health termina por 
 ```
 
 Os scripts foram reforçados para validar estas precondições antes de produzir uma conclusão.
+
+### Cleanup final — pedido de delete não significa remoção concluída
+
+Na primeira execução do cleanup reforçado, os Pods auxiliares foram removidos com `--wait=false`. A API aceitou o pedido, mas a validação correu antes de a eliminação convergir e ainda encontrou `client-allowed` e `client-blocked`.
+
+O script foi corrigido para aguardar a remoção efetiva (`--wait=true --timeout=60s`). Na reexecução foi confirmado:
+
+```text
+deployment=symfony-demo replicas=2 readyReplicas=2
+statefulset=postgres replicas=1 readyReplicas=1
+HPA symfony-demo: removido
+NetworkPolicy symfony-demo-ingress: removida
+Pods auxiliares: removidos
+CLEANUP VALIDADO
+```
+
+Isto reforça a distinção entre **pedido aceite** e **convergência concluída**.
 
 ### `rollout undo` depois de `kubectl apply`
 
