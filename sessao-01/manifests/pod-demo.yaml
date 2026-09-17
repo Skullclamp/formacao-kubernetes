@@ -3,10 +3,13 @@ kind: Pod
 metadata:
   name: web-demo
   namespace: formacao
+  # Labels identificam o recurso e serão usadas no laboratório com selectors.
   labels:
     app: web
     environment: formacao
 spec:
+  # O estado desejado deste Pod inclui um único container Web.
   containers:
     - name: web
+      # Imagem utilizada pelo runtime para criar o container do Pod.
       image: nginx
