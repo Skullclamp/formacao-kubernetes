@@ -38,9 +38,15 @@ echo
 
 echo "== Helm =="
 if command -v helm >/dev/null 2>&1; then
-  helm version --short || true
+  if helm version --short; then
+    :
+  else
+    echo "helm: encontrado, mas não foi possível obter a versão."
+    ok=0
+  fi
 else
   echo "helm: INDISPONÍVEL — necessário para a microprática M6."
+  ok=0
 fi
 echo
 
@@ -49,6 +55,7 @@ if kubectl kustomize --help >/dev/null 2>&1; then
   echo "kubectl kustomize: OK"
 else
   echo "kubectl kustomize: INDISPONÍVEL — necessário para a microprática M6."
+  ok=0
 fi
 
 echo
