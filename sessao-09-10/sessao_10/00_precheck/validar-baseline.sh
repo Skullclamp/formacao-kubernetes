@@ -40,8 +40,21 @@ kubectl -n "$NS" exec postgres-0 -- \
 section "PVC"
 kubectl -n "$NS" get pvc \
   -o custom-columns='NAME:.metadata.name,STATUS:.status.phase,SC:.spec.storageClassName,SIZE:.spec.resources.requests.storage'
-if ! kubectl -n "$NS" get pvc -o jsonpath='{range .items[*]}{.status.phase}{"\n"}{end}' | grep -qx 'Bound'; then
-  echo "PVC Bound: NÃO CONFIRMADO"
+
+PVC_NAME="data-postgres-0"
+if PVC_PHASE="$(kubectl -n "$NS" get pvc "$PVC_NAME" -o jsonpath='{.status.phase}' 2>/dev/null)"; then
+  PVC_SC="$(kubectl -n "$NS" get pvc "$PVC_NAME" -o jsonpath='{.spec.storageClassName}' 2>/dev/null)"
+  PVC_SIZE="$(kubectl -n "$NS" get pvc "$PVC_NAME" -o jsonpath='{.spec.resources.requests.storage}' 2>/dev/null)"
+
+  printf '%s: phase=%s storageClass=%s size=%s\n' \
+    "$PVC_NAME" "$PVC_PHASE" "$PVC_SC" "$PVC_SIZE"
+
+  if [ "$PVC_PHASE" != "Bound" ]; then
+    echo "$PVC_NAME: esperado phase=Bound, observado phase=$PVC_PHASE"
+    fail=1
+  fi
+else
+  echo "$PVC_NAME: EM FALTA"
   fail=1
 fi
 
