@@ -2,12 +2,38 @@
 
 ## Módulos 10 e 11 em 4 horas
 
-Este laboratório integra:
+Este diretório mantém o material conjunto que integra:
 
 - **M10 — Alta Disponibilidade, Monitorização e Troubleshooting**;
 - **M11 — Gestão Avançada e Operação**.
 
-A abordagem é deliberadamente prática. O objetivo não é aprofundar todos os tópicos dos dois módulos de forma isolada, mas trabalhar um percurso operacional único:
+O guião principal é [`lab-integrado.md`](lab-integrado.md) e deve ser lido segundo o padrão canónico da formação:
+
+```text
+OBJETIVO / O QUE ESTAMOS A FAZER
+        ↓
+PORQUE É NECESSÁRIO
+        ↓
+CONCEITOS ABORDADOS NESTE CP
+        ↓
+ONDE EXECUTAR
+        ↓
+COMANDO / MANIFESTO
+        ↓
+FLAGS / CAMPOS IMPORTANTES
+        ↓
+OUTPUT / ESTADO ESPERADO
+        ↓
+O QUE OBSERVAR
+        ↓
+FALHA CONTROLADA, quando aplicável
+        ↓
+CHECKPOINT — NÃO AVANÇAR SEM VALIDAR
+        ↓
+EVIDÊNCIA
+```
+
+A abordagem é prática e segue um percurso operacional único:
 
 ```text
 Observar
@@ -23,30 +49,20 @@ Reconciliar
 Validar
 ```
 
-## Duração
+## Conceitos nucleares
 
-**4 horas / 240 minutos**, incluindo 15 minutos de intervalo.
+Ao longo dos checkpoints são trabalhados:
 
-## Ambiente
+- `Running` vs. `Ready` e readiness probes;
+- Service, selector, EndpointSlice e descoberta de backends;
+- Worker `NotReady`, resiliência de workloads e limites do cenário;
+- componentes do Control Plane, `etcd`, HA, backup e recovery;
+- Helm: Chart, Release, Revision, upgrade e rollback;
+- Kustomize: base e overlays;
+- CRD, Custom Resource, Controller/Operator e reconciliação;
+- observabilidade e evidência antes da alteração.
 
-- 1 Control Plane;
-- 2 Worker Nodes;
-- Ubuntu;
-- Kubernetes + `containerd`;
-- Calico;
-- StorageClass `local-path`;
-- Symfony Demo + PostgreSQL 16;
-- Helm;
-- Kustomize;
-- Prometheus Operator preparado previamente pelo formador.
-
-A aplicação usa o namespace `s78-lab`. O `PrometheusRule` pedagógico é criado no namespace `monitoring`, embora a expressão PromQL observe o Deployment no namespace `s78-lab`.
-
-## Laboratório
-
-O guião principal é:
-
-[`lab-integrado.md`](lab-integrado.md)
+## Método de troubleshooting
 
 O laboratório é **acompanhado pelo formador**. Nos incidentes aplica-se sempre:
 
@@ -66,7 +82,24 @@ Correção
 Validação
 ```
 
-> A validação técnica foi efetuada no cenário real de 1 Control Plane + 2 Workers. O guião incorpora os comportamentos observados durante essa execução.
+## Duração e ambiente
+
+**4 horas / 240 minutos**, incluindo 15 minutos de intervalo.
+
+Ambiente de referência:
+
+- 1 Control Plane;
+- 2 Worker Nodes;
+- Ubuntu;
+- Kubernetes + `containerd`;
+- Calico;
+- StorageClass `local-path`;
+- Symfony Demo + PostgreSQL 16;
+- Helm;
+- Kustomize;
+- Prometheus Operator preparado previamente pelo formador.
+
+A aplicação usa o Namespace `s78-lab`. O `PrometheusRule` pedagógico é criado no Namespace `monitoring`, embora a expressão PromQL observe o Deployment em `s78-lab`.
 
 ## Estrutura dos materiais
 
@@ -95,36 +128,16 @@ sessao-07-08/
 
 ```text
 Running ≠ Ready
-
 Service existente ≠ Service com backends
-
 Estado desejado ≠ convergência imediata
-
 Resiliência do workload ≠ HA do Control Plane
-
 Control Plane saudável ≠ Control Plane altamente disponível
-
 HA ≠ Backup ≠ Recovery
-
 Chart ≠ Release ≠ Revision
-
 CRD ≠ Custom Resource
-
 CR + Controller/Operator → reconciliação
-
-Sem evidência não há diagnóstico.
-Sem causa raiz não há troubleshooting completo.
-Sem validação pós-correção não há recuperação demonstrada.
 ```
 
-## Notas operacionais validadas
-
-- um Pod `Running` mas `NotReady` pode continuar representado no EndpointSlice com `ready: false`;
-- um `FailedScheduling` transitório pode aparecer durante rollouts com anti-affinity e não deve ser confundido automaticamente com a causa raiz;
-- parar apenas o `kubelet` num Worker demonstra perda de heartbeat/gestão, não equivale a desligar o Node;
-- um rollback Helm cria uma nova revision;
-- depois da adoção por Helm, não voltar a aplicar Kustomize sobre o Deployment e o Service Symfony;
-- manter apenas um `port-forward` para a porta local `9090` na mesma máquina;
-- remover no fim o `PrometheusRule` `s78-lab-rules`, porque ele existe no namespace `monitoring` e não é eliminado com o namespace `s78-lab`.
-
 > O cluster possui apenas um Control Plane. O laboratório demonstra resiliência de workloads e enquadra HA do Control Plane, mas não simula a falha destrutiva do único Control Plane.
+
+> Para a sequência atual da formação, [`../sessao-07/`](../sessao-07/) contém o laboratório canónico publicado. Este diretório é mantido como material conjunto e não deve evoluir para uma variante pedagógica incompatível.
