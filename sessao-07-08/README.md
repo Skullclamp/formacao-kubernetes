@@ -2,7 +2,7 @@
 
 ## Módulos 10 e 11 em 4 horas
 
-Este diretório mantém o material conjunto que integra:
+Este diretório contém o laboratório integrado que trabalha:
 
 - **M10 — Alta Disponibilidade, Monitorização e Troubleshooting**;
 - **M11 — Gestão Avançada e Operação**.
@@ -82,6 +82,8 @@ Correção
 Validação
 ```
 
+Toda a condução dos incidentes está integrada diretamente em `lab-integrado.md`: objetivo, falha controlada, comandos, evidência esperada, diagnóstico, recuperação e validação. **Não existem guiões Markdown separados por incidente.**
+
 ## Duração e ambiente
 
 **4 horas / 240 minutos**, incluindo 15 minutos de intervalo.
@@ -118,11 +120,12 @@ sessao-07-08/
 ├── helm/
 │   ├── app-lab/
 │   └── values/
-├── incidents/
 ├── monitoring/
 ├── packages/
 └── solutions/
 ```
+
+Os diretórios `app/overlays/incident-*` permanecem porque são **manifests operacionais usados para introduzir as falhas controladas**. O que deixa de existir são documentos Markdown separados para explicar cada incidente.
 
 ## Mensagens-chave
 
@@ -140,4 +143,4 @@ CR + Controller/Operator → reconciliação
 
 > O cluster possui apenas um Control Plane. O laboratório demonstra resiliência de workloads e enquadra HA do Control Plane, mas não simula a falha destrutiva do único Control Plane.
 
-> Para a sequência atual da formação, [`../sessao-07/`](../sessao-07/) contém o laboratório canónico publicado. Este diretório é mantido como material conjunto e não deve evoluir para uma variante pedagógica incompatível.
+> `sessao-07-08/` contém o laboratório integrado das Sessões 7 e 8. A diretoria `../sessao-07/` contém a variante da Sessão 7 recuperada e adaptada separadamente.
