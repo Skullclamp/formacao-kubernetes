@@ -363,6 +363,28 @@ Como o valor atual está acima do target, o HPA tem motivo para aumentar réplic
 ./02_hpa/gerar-carga.sh
 ```
 
+O script não considera a carga válida apenas porque o Pod `hpa-load` está `Running/Ready`. Antes de apresentar `Carga ativa`, confirma:
+
+```text
+HPA symfony-demo existe
+        +
+hpa-load fica Ready
+        +
+hpa-load consegue aceder a http://symfony-demo/health
+        ↓
+carga considerada válida
+```
+
+Esperado no output:
+
+```text
+=== HPA | Preflight HTTP a partir do Pod de carga ===
+Preflight HTTP: OK
+Carga ativa e conectividade ao endpoint confirmada.
+```
+
+Se o Pod estiver `Running` mas não conseguir chegar ao Service, o script termina com erro e remove o Pod de carga. Isto evita confundir **processo de carga em execução** com **pedidos efetivamente enviados à aplicação**.
+
 Noutro terminal:
 
 ```bash

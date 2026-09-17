@@ -6,9 +6,17 @@ if [ -z "$NS" ]; then
   echo "ERRO: namespace não definido em \$NS nem no contexto kubectl atual."
   exit 1
 fi
+
 POD="hpa-load"
 
 echo "=== HPA | Iniciar carga ==="
+
+if ! kubectl -n "$NS" get hpa symfony-demo >/dev/null 2>&1; then
+  echo "ERRO: HPA symfony-demo não existe no namespace $NS."
+  echo "Aplicar 02_hpa/hpa.yaml antes de iniciar a carga."
+  exit 1
+fi
+
 kubectl -n "$NS" delete pod "$POD" --ignore-not-found --wait=true >/dev/null 2>&1 || true
 
 kubectl -n "$NS" run "$POD" \
@@ -26,8 +34,18 @@ kubectl -n "$NS" run "$POD" \
 
 kubectl -n "$NS" wait --for=condition=Ready pod/"$POD" --timeout=60s
 
+echo "=== HPA | Preflight HTTP a partir do Pod de carga ==="
+if kubectl -n "$NS" exec "$POD" -- wget -T 5 -qO- http://symfony-demo/health >/dev/null; then
+  echo "Preflight HTTP: OK"
+else
+  echo "ERRO: o Pod de carga está Running/Ready, mas não consegue chegar a http://symfony-demo/health."
+  echo "A carga não pode ser considerada válida."
+  kubectl -n "$NS" delete pod "$POD" --ignore-not-found --wait=true >/dev/null 2>&1 || true
+  exit 1
+fi
+
 echo
-echo "Carga ativa."
+echo "Carga ativa e conectividade ao endpoint confirmada."
 echo "Observar noutro terminal:"
 echo "  kubectl -n $NS get hpa"
 echo "  kubectl -n $NS top pods"
