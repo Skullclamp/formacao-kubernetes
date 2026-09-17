@@ -32,10 +32,29 @@ fi
 echo
 
 echo "== StorageClass esperada no laboratório =="
-kubectl get storageclass local-path || {
-  echo "AVISO: StorageClass 'local-path' não encontrada. Adaptar o manifesto PostgreSQL."
+if kubectl get storageclass local-path; then
+  SC_PROVISIONER="$(kubectl get storageclass local-path -o jsonpath='{.provisioner}')"
+  SC_RECLAIM_POLICY="$(kubectl get storageclass local-path -o jsonpath='{.reclaimPolicy}')"
+  SC_BINDING_MODE="$(kubectl get storageclass local-path -o jsonpath='{.volumeBindingMode}')"
+  SC_ALLOW_EXPANSION="$(kubectl get storageclass local-path -o jsonpath='{.allowVolumeExpansion}')"
+  SC_ALLOW_EXPANSION="${SC_ALLOW_EXPANSION:-false}"
+
+  printf 'StorageClass: provisioner=%s reclaimPolicy=%s volumeBindingMode=%s allowVolumeExpansion=%s\n' \
+    "$SC_PROVISIONER" "$SC_RECLAIM_POLICY" "$SC_BINDING_MODE" "$SC_ALLOW_EXPANSION"
+
+  if [ "$SC_PROVISIONER" != "rancher.io/local-path" ] || \
+     [ "$SC_RECLAIM_POLICY" != "Delete" ] || \
+     [ "$SC_BINDING_MODE" != "WaitForFirstConsumer" ] || \
+     [ "$SC_ALLOW_EXPANSION" != "false" ]; then
+    echo "ERRO: StorageClass 'local-path' existe, mas não corresponde à configuração validada para o laboratório."
+    ok=0
+  else
+    echo "StorageClass local-path: configuração validada."
+  fi
+else
+  echo "ERRO: StorageClass 'local-path' não encontrada. Adaptar o manifesto PostgreSQL."
   ok=0
-}
+fi
 echo
 
 echo "== IngressClass =="
