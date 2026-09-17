@@ -23,8 +23,45 @@ kubectl get ingressclass || echo "AVISO: sem IngressClass; o laboratório princi
 echo
 
 echo "== CNI / Calico =="
-kubectl -n kube-system get pods -l k8s-app=calico-node 2>/dev/null || \
-  echo "AVISO: não foi possível confirmar Calico por esta label. Confirmar o CNI antes da NetworkPolicy."
+CALICO_DS_NS="$(
+  kubectl get daemonsets -A \
+    -o jsonpath='{range .items[?(@.metadata.name=="calico-node")]}{.metadata.namespace}{"\n"}{end}' \
+    2>/dev/null
+)"
+
+if [ -z "$CALICO_DS_NS" ]; then
+  echo "Calico: DaemonSet calico-node NÃO ENCONTRADO."
+  ok=0
+elif [ "$(printf '%s\n' "$CALICO_DS_NS" | wc -l)" -ne 1 ]; then
+  echo "Calico: foram encontrados vários DaemonSets calico-node; confirmar manualmente:"
+  printf '%s\n' "$CALICO_DS_NS"
+  ok=0
+else
+  echo "namespace=$CALICO_DS_NS"
+  kubectl -n "$CALICO_DS_NS" get daemonset calico-node -o wide || ok=0
+
+  CALICO_STATUS="$(
+    kubectl -n "$CALICO_DS_NS" get daemonset calico-node \
+      -o jsonpath='{.status.desiredNumberScheduled}{"\t"}{.status.currentNumberScheduled}{"\t"}{.status.updatedNumberScheduled}{"\t"}{.status.numberReady}{"\t"}{.status.numberAvailable}{"\n"}' \
+      2>/dev/null
+  )"
+
+  IFS=$'\t' read -r CALICO_DESIRED CALICO_CURRENT CALICO_UPDATED CALICO_READY CALICO_AVAILABLE <<< "$CALICO_STATUS"
+
+  printf 'Calico: desired=%s current=%s updated=%s ready=%s available=%s\n' \
+    "$CALICO_DESIRED" "$CALICO_CURRENT" "$CALICO_UPDATED" "$CALICO_READY" "$CALICO_AVAILABLE"
+
+  if [[ ! "$CALICO_DESIRED" =~ ^[0-9]+$ ]] || [ "$CALICO_DESIRED" -eq 0 ] || \
+     [ "$CALICO_CURRENT" != "$CALICO_DESIRED" ] || \
+     [ "$CALICO_UPDATED" != "$CALICO_DESIRED" ] || \
+     [ "$CALICO_READY" != "$CALICO_DESIRED" ] || \
+     [ "$CALICO_AVAILABLE" != "$CALICO_DESIRED" ]; then
+    echo "Calico: DaemonSet calico-node NÃO ESTÁ totalmente convergido."
+    ok=0
+  else
+    echo "Calico: DaemonSet calico-node totalmente convergido."
+  fi
+fi
 echo
 
 echo "== Metrics API / HPA =="
