@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+configMapGenerator:
+  - name: symfony-demo-kustomize-config
+    literals:
+      - APP_ENV=base
+      - APP_VERSION=1.1.0
+generatorOptions:
+  disableNameSuffixHash: true

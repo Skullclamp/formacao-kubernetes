@@ -1,0 +1,19 @@
+# Exemplo para o cluster de formação validado com IngressClass "traefik".
+# Adaptar o host e a resolução DNS / ficheiro hosts do posto do formando.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: symfony-demo
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: symfony-demo.lab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: symfony-demo
+                port:
+                  number: 80

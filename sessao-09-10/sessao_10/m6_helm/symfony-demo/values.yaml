@@ -1,0 +1,21 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/skullclamp/symfony-demo
+  tag: "1.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  port: 80
+
+config:
+  configMapName: symfony-demo-config
+  secretName: postgres-credentials
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 512Mi

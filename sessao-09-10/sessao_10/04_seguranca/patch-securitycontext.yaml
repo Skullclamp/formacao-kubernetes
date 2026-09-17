@@ -1,0 +1,12 @@
+spec:
+  template:
+    spec:
+      serviceAccountName: symfony-demo
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: symfony
+          securityContext:
+            allowPrivilegeEscalation: false
