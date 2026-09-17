@@ -18,7 +18,7 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 | HPA scale-in | ✅ | 5 → 2 após estabilização; `minReplicas=2` respeitado |
 | Troubleshooting | ✅ | Pod `Running` mas `NotReady`; readiness 404; recuperação após correção |
 | ServiceAccount/SecurityContext | ✅ | SA dedicada; token não montado; `RuntimeDefault`; `allowPrivilegeEscalation=false` |
-| NetworkPolicy | ✅ | cliente autorizado passou; cliente bloqueado terminou em timeout |
+| NetworkPolicy | ✅ | ambos os clientes confirmados `Running/Ready`; labels `access` verificadas; mesmo Service/porta/endpoint `/health`; cliente autorizado respondeu e cliente bloqueado terminou em timeout |
 | Release candidata | ✅ | `1.2.0-rc1` + readiness inválida criou nova revisão não Ready |
 | Disponibilidade durante falha | ✅ | versão estável continuou a responder pelo Service |
 | Rollback | ✅ | `rollout undo` restaurou `1.1.0`, `/ready` e Deployment 2/2 |
@@ -43,6 +43,8 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 - ServiceAccount é criada **antes** do patch de SecurityContext;
 - validação de segurança verifica os Pods da nova revisão e a ausência do token montado;
 - NetworkPolicy exige teste pré-policy, positivo e negativo pós-policy;
+- os clientes da NetworkPolicy usam uma janela de execução longa e os scripts validam explicitamente Pod `Running/Ready`, labels e presença/ausência da policy antes de concluir;
+- uma falha genérica do cliente bloqueado deixou de ser aceite como prova: o teste pós-policy só considera o cenário esperado quando o cliente permitido responde e o cliente bloqueado termina por timeout;
 - release candidata altera imagem + readiness numa única revisão;
 - rollback inclui nota sobre `kubectl apply`/`last-applied-configuration` e recuperação declarativa;
 - comandos de seleção de Pods evitam depender de `.items[0]` durante um RollingUpdate sempre que isso possa selecionar uma revisão antiga;
@@ -65,6 +67,19 @@ Foram observados Events com `AGE <invalid>`. O cluster também apresentava sincr
 ### HPA durante rollouts
 
 Durante a substituição de Pods surgiram avisos transitórios `FailedGetResourceMetric`/`FailedComputeMetricsReplicas` enquanto os novos Pods ainda não tinham métricas. No ensaio desapareceram com o workload estabilizado.
+
+### NetworkPolicy — falha de comando não é prova de bloqueio
+
+Durante a revisão final, os Pods de teste tinham terminado naturalmente e `kubectl exec` falhava porque os containers estavam em `Succeeded/Completed`. Esse erro não foi aceite como evidência da NetworkPolicy.
+
+Após recriar os clientes, foi confirmado:
+
+```text
+client-allowed → 1/1 Running → access=symfony-demo → /health responde
+client-blocked → 1/1 Running → access=blocked       → /health termina por timeout
+```
+
+Os scripts foram reforçados para validar estas precondições antes de produzir uma conclusão.
 
 ### `rollout undo` depois de `kubectl apply`
 
