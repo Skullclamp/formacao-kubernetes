@@ -46,6 +46,8 @@ O laboratório é **acompanhado pelo formador**. Nos incidentes aplica-se sempre
 Sintoma → Evidência → Hipótese → Teste → Causa raiz → Correção → Validação
 ```
 
+Por ser um laboratório acompanhado, **todo o percurso de cada incidente está integrado neste guião**: enquadramento, falha controlada, comandos, observação, perguntas orientadoras, diagnóstico, recuperação e validação. Não existem guiões Markdown separados por incidente.
+
 > **Regra:** primeiro observar; só depois alterar.
 
 > **Limite do cenário:** existe apenas um Control Plane. O laboratório demonstra resiliência de workloads e enquadra HA do Control Plane, mas não provoca a falha destrutiva do único Control Plane.
@@ -295,8 +297,6 @@ Mensagem-chave:
 Running ≠ Ready
 ```
 
-O guião detalhado está em [`incidents/01-probe.md`](incidents/01-probe.md).
-
 ---
 
 ## Incidente B — Service sem backends
@@ -353,8 +353,6 @@ Mensagem-chave:
 ```text
 Service existente ≠ Service com backends
 ```
-
-O guião detalhado está em [`incidents/02-service.md`](incidents/02-service.md).
 
 ---
 
@@ -453,8 +451,6 @@ Mensagem-chave:
 ```text
 Resiliência do workload ≠ HA do Control Plane
 ```
-
-O guião detalhado está em [`incidents/03-node.md`](incidents/03-node.md).
 
 ---
 
@@ -677,8 +673,6 @@ nova revision
   ↓
 validação
 ```
-
-O guião detalhado está em [`incidents/04-release.md`](incidents/04-release.md).
 
 ---
 
