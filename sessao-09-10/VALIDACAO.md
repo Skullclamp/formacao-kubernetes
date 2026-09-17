@@ -15,6 +15,7 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 | Resources/probes | ✅ | requests/limits aplicados; liveness `/health`; readiness `/ready` |
 | Metrics Server | ✅ | `kubectl top` funcional após preparação do cluster |
 | Precheck de nodes | ✅ | 3 nodes encontrados; `Ready=True` nos três; precheck reforçado terminou com `PRECHECK PRINCIPAL: OK` e `EXIT_CODE=0` |
+| Precheck da StorageClass | ✅ | `local-path` com provisioner `rancher.io/local-path`, `Delete` e `WaitForFirstConsumer`; expansão não ativada; precheck terminou com `EXIT_CODE=0` |
 | HPA scale-out | ✅ | 2 → 4 → 5 réplicas com CPU acima do target; gerador revalidado com preflight HTTP ao `/health` antes de declarar carga ativa |
 | HPA scale-in | ✅ | 5 → 2 após estabilização; `minReplicas=2` respeitado |
 | Troubleshooting | ✅ | Pod `Running` mas `NotReady`; readiness 404; recuperação após correção |
@@ -78,6 +79,29 @@ O precheck foi reforçado para exigir o número esperado de nodes (3 por omissã
 ```text
 Nodes encontrados: 3 (esperado: 3)
 Nodes: todos Ready.
+PRECHECK PRINCIPAL: OK
+EXIT_CODE=0
+```
+
+### StorageClass — existir não basta
+
+O precheck inicial confirmava apenas a existência de `local-path`. Na revisão final foi validada a configuração efetiva:
+
+```text
+name=local-path
+provisioner=rancher.io/local-path
+reclaimPolicy=Delete
+volumeBindingMode=WaitForFirstConsumer
+allowVolumeExpansion=<campo ausente>
+```
+
+No output tabular do cluster, `ALLOWVOLUMEEXPANSION` surge como `false`. O script normaliza o campo ausente para `false` e exige os restantes valores validados para este laboratório.
+
+A reexecução confirmou:
+
+```text
+StorageClass: provisioner=rancher.io/local-path reclaimPolicy=Delete volumeBindingMode=WaitForFirstConsumer allowVolumeExpansion=false
+StorageClass local-path: configuração validada.
 PRECHECK PRINCIPAL: OK
 EXIT_CODE=0
 ```
