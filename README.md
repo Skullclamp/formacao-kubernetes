@@ -6,6 +6,28 @@ Repositório de apoio aos **formandos** da formação *Orquestração de Contain
 
 Este repositório reúne os guiões de laboratório, ficheiros de configuração e recursos técnicos utilizados ao longo das sessões práticas.
 
+## Padrão pedagógico dos laboratórios
+
+Os laboratórios seguem o padrão comum documentado em [`docs/padrao-laboratorios-kubernetes.md`](docs/padrao-laboratorios-kubernetes.md), tomando a Sessão 4 como referência de estrutura.
+
+Em cada checkpoint (`CP`) deve ficar claro:
+
+```text
+O que estamos a fazer
+        ↓
+Porque é necessário
+        ↓
+Que conceitos estão a ser trabalhados
+        ↓
+Como interpretar comandos / flags / campos
+        ↓
+Que estado esperamos
+        ↓
+Que evidência prova o resultado
+```
+
+O objetivo é evitar execução mecânica de comandos: **compreender → executar → observar → validar → explicar**.
+
 ## Estrutura atual
 
 ```text
@@ -51,13 +73,14 @@ Endpoints pedagógicos:
 1. Consulte [`docs/pre-requisitos.md`](docs/pre-requisitos.md).
 2. Leia [`docs/como-usar-repositorio.md`](docs/como-usar-repositorio.md).
 3. Confirme o contexto em [`docs/ambiente-laboratorio.md`](docs/ambiente-laboratorio.md).
-4. Sessão 1: [`sessao-01/README.md`](sessao-01/README.md).
-5. Sessão 2: [`sessao-02/README.md`](sessao-02/README.md).
-6. Sessão 3: [`sessao-03/README.md`](sessao-03/README.md).
-7. Sessão 4: [`sessao-04/README.md`](sessao-04/README.md).
-8. Sessão 5: [`sessao-05/README.md`](sessao-05/README.md).
-9. Sessão 6: [`sessao-06/README.md`](sessao-06/README.md).
-10. Sessão 7: [`sessao-07/README.md`](sessao-07/README.md).
+4. Leia o [`padrão canónico dos laboratórios`](docs/padrao-laboratorios-kubernetes.md).
+5. Sessão 1: [`sessao-01/README.md`](sessao-01/README.md).
+6. Sessão 2: [`sessao-02/README.md`](sessao-02/README.md).
+7. Sessão 3: [`sessao-03/README.md`](sessao-03/README.md).
+8. Sessão 4: [`sessao-04/README.md`](sessao-04/README.md).
+9. Sessão 5: [`sessao-05/README.md`](sessao-05/README.md).
+10. Sessão 6: [`sessao-06/README.md`](sessao-06/README.md).
+11. Sessão 7: [`sessao-07/README.md`](sessao-07/README.md).
 
 ## Progressão das sessões publicadas
 
