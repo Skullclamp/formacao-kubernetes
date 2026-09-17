@@ -8,7 +8,27 @@ kubectl config current-context || ok=0
 echo
 
 echo "== Nodes =="
-kubectl get nodes -o wide || ok=0
+EXPECTED_NODES="${EXPECTED_NODES:-3}"
+
+if kubectl get nodes -o wide; then
+  NODE_COUNT="$(kubectl get nodes --no-headers | wc -l | tr -d ' ')"
+  printf 'Nodes encontrados: %s (esperado: %s)\n' "$NODE_COUNT" "$EXPECTED_NODES"
+
+  if [ "$NODE_COUNT" -ne "$EXPECTED_NODES" ]; then
+    echo "ERRO: número de nodes diferente do esperado para este laboratório."
+    ok=0
+  fi
+
+  if kubectl wait --for=condition=Ready node --all --timeout=10s >/dev/null 2>&1; then
+    echo "Nodes: todos Ready."
+  else
+    echo "ERRO: existe pelo menos um node que não está Ready."
+    kubectl get nodes
+    ok=0
+  fi
+else
+  ok=0
+fi
 echo
 
 echo "== StorageClass esperada no laboratório =="
