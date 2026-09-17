@@ -9,7 +9,11 @@ REGRA / OBJETIVO
     ↓
 PORQUE EXISTE
     ↓
+CONCEITOS ABORDADOS NESTE CP
+    ↓
 APLICAR
+    ↓
+INTERPRETAR COMANDOS / FLAGS / CAMPOS
     ↓
 OBSERVAR
     ↓
@@ -18,6 +22,28 @@ PROVOCAR UMA EXCEÇÃO / TESTE NEGATIVO
 RECOLHER EVIDÊNCIA
     ↓
 EXPLICAR
+```
+
+## Conceitos nucleares do percurso
+
+```text
+requests / limits
+        ↓
+ResourceQuota / LimitRange
+        ↓
+Scheduler / placement
+        ↓
+nodeSelector / affinity / anti-affinity
+        ↓
+taints / tolerations
+        ↓
+Authentication / Authorization
+        ↓
+ServiceAccount / RBAC
+        ↓
+SecurityContext / Secrets
+        ↓
+NetworkPolicy / least privilege
 ```
 
 As versões comentadas dos principais YAML encontram-se em [`../manifests/`](../manifests/). Devem ser usadas para estudar **a intenção de cada campo**, não apenas para copiar configuração.
@@ -48,4 +74,4 @@ SecurityContext  → UID/escrita/token observados dentro do Pod
 NetworkPolicy    → um fluxo permitido funciona e um proibido falha
 ```
 
-O sucesso de `kubectl apply` nunca é, sozinho, a prova final de um controlo administrativo.
+O sucesso de `kubectl apply` nunca é, sozinho, a prova final de um controlo administrativo. O formando deve conseguir relacionar o resultado observado com **o conceito do CP e a regra que acabou de aplicar**.
