@@ -14,6 +14,7 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 | Symfony estável | ✅ | Deployment 2/2, imagem `1.1.0`, `/health`, `/ready` e `/info` funcionais |
 | Resources/probes | ✅ | requests/limits aplicados; liveness `/health`; readiness `/ready` |
 | Metrics Server | ✅ | `kubectl top` funcional após preparação do cluster |
+| Precheck de nodes | ✅ | 3 nodes encontrados; `Ready=True` nos três; precheck reforçado terminou com `PRECHECK PRINCIPAL: OK` e `EXIT_CODE=0` |
 | HPA scale-out | ✅ | 2 → 4 → 5 réplicas com CPU acima do target; gerador revalidado com preflight HTTP ao `/health` antes de declarar carga ativa |
 | HPA scale-in | ✅ | 5 → 2 após estabilização; `minReplicas=2` respeitado |
 | Troubleshooting | ✅ | Pod `Running` mas `NotReady`; readiness 404; recuperação após correção |
@@ -58,6 +59,28 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 - o cleanup final da Sessão 10 remove HPA, NetworkPolicy e Pods/workloads auxiliares, espera pela remoção efetiva dos Pods, repõe explicitamente o Symfony em 2 réplicas e valida Symfony 2/2 e PostgreSQL 1/1.
 
 ## Particularidades observadas no cluster de ensaio
+
+### Precheck de nodes — listar não prova readiness
+
+O precheck inicial apenas executava `kubectl get nodes -o wide`, o que prova acesso à API e capacidade de listar os objetos, mas não prova que todos os nodes estejam `Ready`.
+
+Na revisão final foi confirmado em runtime:
+
+```text
+k8s-cp-01 → Ready=True
+k8s-wk-01 → Ready=True
+k8s-wk-03 → Ready=True
+total      → 3 nodes
+```
+
+O precheck foi reforçado para exigir o número esperado de nodes (3 por omissão, configurável por `EXPECTED_NODES`) e `condition=Ready` em todos. A reexecução terminou com:
+
+```text
+Nodes encontrados: 3 (esperado: 3)
+Nodes: todos Ready.
+PRECHECK PRINCIPAL: OK
+EXIT_CODE=0
+```
 
 ### Metrics Server
 
