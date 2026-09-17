@@ -103,6 +103,33 @@ Ambiente de referência:
 
 A aplicação usa o Namespace `s78-lab`. O `PrometheusRule` pedagógico é criado no Namespace `monitoring`, embora a expressão PromQL observe o Deployment em `s78-lab`.
 
+## Pré-requisito — instalar Helm
+
+No Control Plane, antes de preparar o chart de monitorização:
+
+```bash
+cd ~/formacao-kubernetes/sessao-07-08
+chmod +x 00-precheck/install-helm.sh
+./00-precheck/install-helm.sh
+```
+
+Validar:
+
+```bash
+helm version --short
+helm upgrade --help | grep -- '--take-ownership'
+```
+
+O instalador foi preparado para Ubuntu/Debian e configura o repositório APT usado nas instruções atuais do projeto Helm. O `precheck.sh` e o `prepare-chart.sh` indicam este passo quando o binário `helm` não está disponível.
+
+Depois da instalação do Helm, a preparação da monitorização pode continuar com:
+
+```bash
+./monitoring/prepare-chart.sh 91.4.1
+```
+
+Para diagnóstico detalhado da monitorização, consultar [`monitoring/TROUBLESHOOTING.md`](monitoring/TROUBLESHOOTING.md).
+
 ## Estrutura dos materiais
 
 ```text
@@ -111,6 +138,8 @@ sessao-07-08/
 ├── lab-integrado.md
 ├── folha_evidencias.md
 ├── 00-precheck/
+│   ├── install-helm.sh
+│   └── precheck.sh
 ├── app/
 │   ├── base/
 │   └── overlays/
