@@ -13,7 +13,7 @@ echo "=== HPA | Iniciar carga ==="
 
 if ! kubectl -n "$NS" get hpa symfony-demo >/dev/null 2>&1; then
   echo "ERRO: HPA symfony-demo não existe no namespace $NS."
-  echo "Aplicar 02_hpa/hpa.yaml antes de iniciar a carga."
+  echo "Aplicar 01_fiabilidade_escala/hpa/hpa.yaml antes de iniciar a carga."
   exit 1
 fi
 
@@ -51,4 +51,4 @@ echo "  kubectl -n $NS get hpa"
 echo "  kubectl -n $NS top pods"
 echo "  kubectl -n $NS get pods"
 echo
-echo "Terminar com: ./02_hpa/parar-carga.sh"
+echo "Terminar com: ./01_fiabilidade_escala/hpa/parar-carga.sh"
