@@ -235,7 +235,7 @@ Este ponto continua dependente da configuração real do Ingress Controller e da
 
 ### Revalidação estática final — Helm renderizado
 
-O Chart `sessao-09-10/sessao_10/m6_helm/symfony-demo` foi novamente validado em três níveis: `helm lint`, renderização com `helm template` e validação Kubernetes do YAML renderizado com `kubectl apply --dry-run=client --validate=true`.
+O Chart `sessao-09-10/lab-integrado/02_ambientes_releases/helm/symfony-demo` foi novamente validado em três níveis: `helm lint`, renderização com `helm template` e validação Kubernetes do YAML renderizado com `kubectl apply --dry-run=client --validate=true`.
 
 Resultado observado:
 
@@ -341,13 +341,13 @@ Resultado observado:
 ```text
 git status --short → sem alterações locais
 
-OK  sessao-09-10/sessao_10/00_precheck/precheck.sh
-OK  sessao-09-10/sessao_10/00_precheck/validar-baseline.sh
-OK  sessao-09-10/sessao_10/99_cleanup/cleanup.sh
-OK  sessao-09-10/sessao_10/05_networkpolicy/testar-depois.sh
-OK  sessao-09-10/sessao_10/05_networkpolicy/testar-antes.sh
-OK  sessao-09-10/sessao_10/02_hpa/parar-carga.sh
-OK  sessao-09-10/sessao_10/02_hpa/gerar-carga.sh
+OK  sessao-09-10/lab-integrado/preflight/precheck.sh
+OK  sessao-09-10/lab-integrado/preflight/validar-baseline.sh
+OK  sessao-09-10/lab-integrado/cleanup/cleanup.sh
+OK  sessao-09-10/lab-integrado/optional/networkpolicy/testar-depois.sh
+OK  sessao-09-10/lab-integrado/optional/networkpolicy/testar-antes.sh
+OK  sessao-09-10/lab-integrado/01_fiabilidade_escala/hpa/parar-carga.sh
+OK  sessao-09-10/lab-integrado/01_fiabilidade_escala/hpa/gerar-carga.sh
 ```
 
 Não foram observados erros de sintaxe shell.
@@ -368,3 +368,20 @@ Após a consolidação inicial foi executada uma bateria estática sobre o pacot
 **Resultado da bateria estática inicial: 37 verificações OK, 0 erros.**
 
 Os templates Helm que não tinham sido renderizados nesse ambiente foram posteriormente renderizados e instalados no cluster de formação durante a revalidação M6. As micropráticas Kustomize também foram renderizadas, aplicadas e removidas em runtime.
+
+
+## Consolidação estrutural do laboratório — 18/09/2026
+
+As antigas pastas **sessao_9/** e **sessao_10/** foram consolidadas em **lab-integrado/**.
+
+O percurso obrigatório foi reduzido para três checkpoints e 120 minutos:
+
+~~~text
+CP1 — Fiabilidade + escala
+CP2 — Ambientes + releases
+CP3 — Troubleshooting + rollback
+~~~
+
+Os manifests, scripts, Chart Helm e overlays Kustomize movidos para a nova estrutura reutilizam o conteúdo técnico já validado. A NetworkPolicy e o cenário isolado de readiness foram preservados em **optional/**, mas retirados do percurso cronometrado.
+
+A reorganização altera caminhos e guiões pedagógicos. Por isso, a nova árvore deve ser novamente sujeita a uma verificação estática de paths/renderização depois de ser atualizada no clone local. A evidência runtime anterior continua válida para o conteúdo técnico que foi movido sem alteração.

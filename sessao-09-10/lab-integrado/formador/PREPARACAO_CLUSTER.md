@@ -1,4 +1,4 @@
-# Preparação do cluster — Sessão 10
+# Preparação do cluster — Laboratório Integrado Sessões 9–10
 
 ## Ambiente em que o laboratório foi validado
 
@@ -22,9 +22,9 @@ Estes dados descrevem o **cluster de ensaio** e não devem ser assumidos noutro 
 Executar primeiro o precheck principal:
 
 ```bash
-cd ~/formacao-kubernetes/sessao-09-10/sessao_10
+cd ~/formacao-kubernetes/sessao-09-10/lab-integrado
 
-bash 00_precheck/precheck.sh
+bash preflight/precheck.sh
 ```
 
 O precheck deve terminar com:
@@ -87,7 +87,7 @@ Confirmar ainda:
 - Secret `postgres-credentials` preparado em cada namespace/ambiente necessário;
 - espaço/memória suficientes para até 5 formandos;
 - relógio sincronizado em todos os nodes;
-- Helm e `kubectl kustomize` disponíveis se forem executadas as micropráticas M6.
+- Helm e `kubectl kustomize` disponíveis para o CP2 do percurso principal.
 
 ## Metrics Server — particularidade do cluster de ensaio
 
@@ -132,5 +132,5 @@ Para reduzir pressão no cluster:
 
 - usar um namespace por formando ou por par;
 - escalonar no tempo o gerador de carga do HPA;
-- remover as releases temporárias de Kustomize/Helm assim que cada microprática terminar;
+- remover os recursos temporários de Kustomize/Helm assim que o CP2 terminar;
 - não executar simultaneamente 5 geradores de carga sem observar primeiro `kubectl top nodes`.
