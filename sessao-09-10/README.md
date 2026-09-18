@@ -134,7 +134,7 @@ Esta baseline é a referência que será usada para interpretar as alterações 
 
 A componente final fica dividida em dois momentos:
 
-1. **30 min — Micropráticas M6:** Kustomize e Helm (`MICROPRATICAS_M6.md`).
+1. **50 min — Micropráticas M6:** Cloud-native / 12-factor (10 min), Kustomize (20 min) e Helm (20 min) (`MICROPRATICAS_M6.md`).
 2. **80 min — Laboratório integrado acompanhado:** baseline → resources/probes → HPA → segurança → NetworkPolicy → release defeituosa → diagnóstico → rollback.
 
 No laboratório integrado e nas micropráticas, cada bloco identifica explicitamente:
