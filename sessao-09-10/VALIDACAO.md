@@ -232,6 +232,29 @@ Este ponto continua dependente da configuração real do Ingress Controller e da
 
 ## Validação estática da versão final
 
+### Revalidação estática final — Helm renderizado
+
+O Chart `sessao-09-10/sessao_10/m6_helm/symfony-demo` foi novamente validado em três níveis: `helm lint`, renderização com `helm template` e validação Kubernetes do YAML renderizado com `kubectl apply --dry-run=client --validate=true`.
+
+Resultado observado:
+
+```text
+1 chart(s) linted, 0 chart(s) failed
+Renderização: OK
+MANIFESTOS HELM: OK
+```
+
+Os objetos gerados foram:
+
+```text
+kind: Service
+  name: symfony-demo-helm
+kind: Deployment
+  name: symfony-demo-helm
+```
+
+O aviso `Chart.yaml: icon is recommended` é apenas informativo e não representa falha do Chart.
+
 ### Revalidação estática final — Kustomize renderizado
 
 Os overlays DEV e PROD foram novamente renderizados com `kubectl kustomize` e os manifests resultantes foram validados com `kubectl apply --dry-run=client --validate=true`.
