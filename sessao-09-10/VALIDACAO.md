@@ -232,6 +232,29 @@ Este ponto continua dependente da configuração real do Ingress Controller e da
 
 ## Validação estática da versão final
 
+### Revalidação estática final — Kustomize renderizado
+
+Os overlays DEV e PROD foram novamente renderizados com `kubectl kustomize` e os manifests resultantes foram validados com `kubectl apply --dry-run=client --validate=true`.
+
+Resultado observado:
+
+```text
+DEV: OK
+PROD: OK
+```
+
+Os nomes gerados confirmaram os sufixos esperados:
+
+```text
+symfony-demo-kustomize-config-dev
+symfony-demo-kustomize-dev
+
+symfony-demo-kustomize-config-prod
+symfony-demo-kustomize-prod
+```
+
+Isto confirma a renderização válida dos dois overlays e a aplicação consistente dos `nameSuffix` `-dev` e `-prod`.
+
 ### Patch opcional de readiness — dry-run no API Server
 
 O cenário opcional `symfony-troubleshoot` foi criado com a readiness propositadamente inválida `/ready-erro`. O `rollout status` terminou por timeout, comportamento esperado neste cenário porque a única réplica não fica `Ready`.
