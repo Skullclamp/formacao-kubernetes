@@ -2,8 +2,10 @@
 
 ## Cloud-native, Kustomize e Helm
 
-**Duração total:** 30 minutos  
+**Duração total:** 50 minutos  
 **Posição:** bloco anterior ao laboratório integrado final.
+
+**Distribuição recomendada:** Cloud-native / 12-factor — 10 min; Kustomize — 20 min; Helm — 20 min.
 
 Estas micropráticas são **acompanhadas pelo formador**. Em cada comando, o formando deve saber **onde olhar, o que comparar e o que concluir**.
 
@@ -101,7 +103,7 @@ O objetivo não é memorizar uma lista, mas relacionar cada princípio com um ob
 
 ---
 
-# 2. Kustomize — 10 min
+# 2. Kustomize — 20 min
 
 ## O que estamos a fazer
 
@@ -371,7 +373,7 @@ metadata.name ≠ label
 
 ---
 
-# 3. Helm — 10 min
+# 3. Helm — 20 min
 
 ## O que estamos a fazer
 
