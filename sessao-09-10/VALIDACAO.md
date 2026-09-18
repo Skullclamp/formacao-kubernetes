@@ -232,7 +232,24 @@ Este ponto continua dependente da configuração real do Ingress Controller e da
 
 ## Validação estática da versão final
 
-### Revalidação dos patches principais — dry-run no API Server
+### Patch opcional de readiness — dry-run no API Server
+
+O cenário opcional `symfony-troubleshoot` foi criado com a readiness propositadamente inválida `/ready-erro`. O `rollout status` terminou por timeout, comportamento esperado neste cenário porque a única réplica não fica `Ready`.
+
+O patch corretivo foi então validado com `kubectl patch --dry-run=server`:
+
+```text
+deployment.apps/symfony-troubleshoot
+```
+
+Depois do dry-run, o Deployment persistido manteve:
+
+```text
+readiness=/ready-erro
+```
+
+Isto confirma simultaneamente que o API Server aceita o patch `patch-readiness-correta.yaml` e que o dry-run não alterou o recurso real. No final, o Deployment e o Service opcionais foram removidos com sucesso.
+
 
 Os dois patches do percurso principal foram validados contra o Deployment real com `kubectl patch --dry-run=server`, confirmando aceitação pelo API Server sem persistência de alterações.
 
