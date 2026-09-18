@@ -232,7 +232,19 @@ Este ponto continua dependente da configuração real do Ingress Controller e da
 
 ## Validação estática da versão final
 
-### Revalidação estática final — scripts shell
+### Revalidação estática final — manifests standalone
+
+Foi repetida a validação com `kubectl apply --dry-run=client --validate=true` sobre os 12 manifests Kubernetes autónomos das Sessões 9 e 10, excluindo patches, templates Helm e ficheiros `kustomization.yaml`.
+
+Resultado:
+
+```text
+12 manifests → OK
+RESULTADO=0
+```
+
+Incluídos na bateria: ConfigMap, Secret de exemplo, PostgreSQL, Deployment/Service/Ingress Symfony, resources+probes, HPA, cenário opcional de readiness, ServiceAccount, clientes da NetworkPolicy e a própria NetworkPolicy.
+
 
 Após as correções finais, foi repetido `bash -n` sobre todos os scripts `.sh` de `sessao-09-10`, com árvore Git limpa antes da verificação.
 
