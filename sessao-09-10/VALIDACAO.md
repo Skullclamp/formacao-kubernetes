@@ -232,7 +232,31 @@ Este ponto continua dependente da configuração real do Ingress Controller e da
 
 ## Validação estática da versão final
 
-### Revalidação estática final — manifests standalone
+### Revalidação dos patches principais — dry-run no API Server
+
+Os dois patches do percurso principal foram validados contra o Deployment real com `kubectl patch --dry-run=server`, confirmando aceitação pelo API Server sem persistência de alterações.
+
+Estado observado antes:
+
+```text
+image=ghcr.io/skullclamp/symfony-demo:1.1.0 readiness=/ready sa=symfony-demo
+```
+
+Resultado dos dry-runs:
+
+```text
+patch-securitycontext.yaml      → deployment.apps/symfony-demo
+patch-release-candidata.yaml    → deployment.apps/symfony-demo
+```
+
+Estado observado depois:
+
+```text
+image=ghcr.io/skullclamp/symfony-demo:1.1.0 readiness=/ready sa=symfony-demo
+```
+
+Isto confirma que os patches são aceites no contexto real do recurso e que o dry-run não alterou o estado persistido.
+
 
 Foi repetida a validação com `kubectl apply --dry-run=client --validate=true` sobre os 12 manifests Kubernetes autónomos das Sessões 9 e 10, excluindo patches, templates Helm e ficheiros `kustomization.yaml`.
 
