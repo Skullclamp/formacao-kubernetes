@@ -45,6 +45,19 @@ Nível 7 — mostrar a solução
 
 Evitar corrigir YAML ou executar rollback antes de os formandos recolherem evidência.
 
+## Distribuição temporal das micropráticas M6
+
+Reservar **50 minutos** para as micropráticas M6, mantendo a execução acompanhada e a leitura orientada dos outputs:
+
+| Bloco | Tempo | Intenção pedagógica |
+|---|---:|---|
+| Cloud-native / 12-factor | 10 min | relacionar princípios com o cenário Symfony + PostgreSQL |
+| Kustomize | 20 min | renderizar, comparar DEV/PROD, aplicar DEV, validar selectors/endpoints e limpar |
+| Helm | 20 min | lint, template, instalar, validar release/workload/backends e remover |
+| **Total** | **50 min** | manter compreensão e evidência, evitando execução mecânica |
+
+Não reduzir estes blocos a uma sequência de comandos. A prioridade é que o formando consiga identificar **onde olhar, o que comparar e o que concluir**.
+
 ## Checkpoints do percurso principal
 
 | Checkpoint | Onde olhar | Evidência mínima |
