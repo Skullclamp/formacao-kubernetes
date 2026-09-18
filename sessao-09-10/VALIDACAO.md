@@ -54,6 +54,7 @@ Data do ensaio de referência do percurso principal: **16/09/2026**.
 - rollback inclui nota sobre `kubectl apply`/`last-applied-configuration` e recuperação declarativa;
 - comandos de seleção de Pods evitam depender de `.items[0]` durante um RollingUpdate sempre que isso possa selecionar uma revisão antiga;
 - micropráticas M6 passaram a exigir confirmação da pasta de trabalho e da variável `$NS` antes dos comandos relativos;
+- por coerência pedagógica, as micropráticas M6 passaram de 30 para **50 minutos**: 10 min de cloud-native/12-factor, 20 min de Kustomize e 20 min de Helm, sem reduzir o percurso validado;
 - Helm passou a usar `helm lint`, `--wait` e `--timeout 120s`, seguido de validação de Deployment, Service, Pod e EndpointSlice;
 - Kustomize passou a distinguir explicitamente **nome do recurso** de **label**: `nameSuffix: -dev` altera `metadata.name`, mas a label `app=symfony-demo-kustomize` mantém-se neste cenário;
 - o selector correto para localizar o Pod Kustomize DEV é `-l app=symfony-demo-kustomize`, e não `-l app=symfony-demo-kustomize-dev`;
